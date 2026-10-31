@@ -1,0 +1,17 @@
+# Bí mật, tuyệt đối không commit
+.env
+scripts/client_secret.json
+scripts/oauth_*.json
+scripts/token-*.json
+
+# File OAuth tải thẳng từ Google Cloud thường giữ nguyên tên dài
+*.apps.googleusercontent.com.json
+client_secret_*.json
+
+# Trạng thái và log của uploader
+scripts/.uploader-state-*.json
+scripts/.uploader-*.lock
+scripts/logs/
+
+__pycache__/
+*.pyc

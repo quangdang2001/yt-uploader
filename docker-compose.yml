@@ -1,0 +1,58 @@
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # --- Địa chỉ public (qua Cloudflare Tunnel) ---
+      - N8N_HOST=${N8N_DOMAIN}
+      - N8N_PROTOCOL=https
+      - N8N_PORT=5678
+      - WEBHOOK_URL=https://${N8N_DOMAIN}/
+      - N8N_EDITOR_BASE_URL=https://${N8N_DOMAIN}/
+      - N8N_PROXY_HOPS=1
+
+      # --- Bảo mật ---
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+
+      # --- Múi giờ ---
+      - GENERIC_TIMEZONE=Asia/Ho_Chi_Minh
+      - TZ=Asia/Ho_Chi_Minh
+
+      # --- Video lớn: ghi binary xuống đĩa, không giữ trong RAM ---
+      - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
+
+      # --- Tự dọn dữ liệu execution cũ để không đầy ổ ---
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=72          # giờ
+      - EXECUTIONS_DATA_PRUNE_MAX_COUNT=5000
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=none
+      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
+
+      # --- Chạy tuần tự, tránh xử lý nhiều video 1GB cùng lúc ---
+      - N8N_CONCURRENCY_PRODUCTION_LIMIT=1
+
+      - N8N_DIAGNOSTICS_ENABLED=false
+
+      # --- Giới hạn heap Node.js, tránh bị OOM-kill trên VPS nhỏ ---
+      # 1536 cho VPS 2GB, 2560 cho VPS 4GB
+      - NODE_OPTIONS=--max-old-space-size=${N8N_MAX_HEAP_MB:-1536}
+
+      # Ghi chú: n8n 2.x luôn bật task runner cho Code node, không còn biến
+      # N8N_RUNNERS_ENABLED. Log sẽ cảnh báo N8N_RUNNERS_MODE=internal đã
+      # deprecated — vô hại với luồng này, xem docs/setup.md §11.
+    volumes:
+      - n8n_data:/home/node/.n8n   # gồm cả binaryData (video tạm)
+    # Không mở port ra Internet; chỉ cloudflared truy cập nội bộ
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - n8n
+
+volumes:
+  n8n_data:

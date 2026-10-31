@@ -1,0 +1,61 @@
+# Chạy n8n ngay trên máy Windows của bạn — không cần VPS, domain hay Cloudflare.
+# Workflow này không dùng webhook (Drive Trigger là polling) nên không cần n8n
+# truy cập được từ Internet.
+#
+#   docker compose -f docker-compose.local.yml up -d
+#   docker compose -f docker-compose.local.yml logs -f
+#
+# CHỈ chạy MỘT trong hai file compose. Cả hai cùng đặt container_name là "n8n"
+# nên Docker sẽ chặn nếu lỡ chạy cả hai — cố ý để tránh hai tiến trình n8n cùng
+# ghi vào một database SQLite.
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    env_file: .env
+
+    # Chỉ mở trên máy này, không lộ ra mạng LAN
+    ports:
+      - "127.0.0.1:5678:5678"
+
+    environment:
+      # --- Địa chỉ local ---
+      - N8N_HOST=localhost
+      - N8N_PROTOCOL=http
+      - N8N_PORT=5678
+      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_EDITOR_BASE_URL=http://localhost:5678/
+      # Bắt buộc khi vào bằng http thay vì https
+      - N8N_SECURE_COOKIE=false
+
+      # --- Bảo mật ---
+      # Đặt giá trị này ngay từ đầu. Không đặt thì n8n tự sinh key và cất trong
+      # volume; sau này muốn chuyển sang VPS sẽ phải nối lại toàn bộ credential.
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+
+      # --- Múi giờ ---
+      - GENERIC_TIMEZONE=Asia/Ho_Chi_Minh
+      - TZ=Asia/Ho_Chi_Minh
+
+      # --- Video lớn: ghi binary xuống đĩa, không giữ trong RAM ---
+      - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
+
+      # --- Tự dọn dữ liệu execution cũ ---
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=72
+      - EXECUTIONS_DATA_PRUNE_MAX_COUNT=5000
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=none
+      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
+
+      # --- Chạy tuần tự, tránh xử lý nhiều video 1GB cùng lúc ---
+      - N8N_CONCURRENCY_PRODUCTION_LIMIT=1
+
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - NODE_OPTIONS=--max-old-space-size=${N8N_MAX_HEAP_MB:-2048}
+
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+volumes:
+  n8n_data:

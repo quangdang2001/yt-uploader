@@ -1,0 +1,845 @@
+{
+  "name": "YouTube Upload - ten-kenh",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "value": "DIEN_ID_FOLDER_PENDING",
+          "mode": "id"
+        },
+        "event": "fileCreated",
+        "options": {}
+      },
+      "id": "e6f3a6ba-5d0f-4e58-829f-e8987308dcaf",
+      "name": "Trigger Drive pending",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        0
+      ],
+      "notesInFlow": true,
+      "notes": "Doi file moi trong pending/"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5d6b5e13-baee-418e-898a-8a7973b7c48d",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": ".json",
+              "operator": {
+                "type": "string",
+                "operation": "endsWith"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "5b5f72f0-1546-4419-be52-dab3ada9f191",
+      "name": "Chi file JSON",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -20,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "d2b85e59-9f35-434e-8a89-2aa986eec53e",
+      "name": "Bo qua file khac",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        200,
+        180
+      ],
+      "notesInFlow": true,
+      "notes": "mp4/jpg toi truoc, khong lam gi"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "737aa29d-a799-4738-8674-f5ec6585f7fa",
+              "name": "channelName",
+              "value": "ten-kenh",
+              "type": "string"
+            },
+            {
+              "id": "a6d8cf9a-a4ce-471e-bfc3-fefc0cebfdcd",
+              "name": "pendingFolderId",
+              "value": "DIEN_ID_FOLDER_PENDING",
+              "type": "string"
+            },
+            {
+              "id": "6dff462a-f662-45ea-903a-501b91c3c6de",
+              "name": "doneFolderId",
+              "value": "DIEN_ID_FOLDER_DONE",
+              "type": "string"
+            },
+            {
+              "id": "157c515a-1e5a-4691-b057-c47c8ff7f2d6",
+              "name": "failedFolderId",
+              "value": "DIEN_ID_FOLDER_FAILED",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "55b60b5c-c4f9-4a9d-a32e-5dfd0befdf2a",
+      "name": "Cau hinh kenh",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        200,
+        -20
+      ],
+      "notesInFlow": true,
+      "notes": "SUA 4 GIA TRI NAY"
+    },
+    {
+      "parameters": {
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "alt",
+              "value": "media"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "metaRaw"
+            }
+          }
+        }
+      },
+      "id": "edc9be33-1622-4af4-a47a-439327d20f64",
+      "name": "Tai JSON metadata",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        420,
+        -20
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Doc file .json metadata, kiem tra va chuan hoa truoc khi upload.\nconst cfg = $('Cau hinh kenh').first().json;\nconst trigger = $('Trigger Drive pending').first().json;\n\nlet meta;\ntry {\n  meta = JSON.parse($input.first().json.metaRaw);\n} catch (e) {\n  throw new Error(`File ${trigger.name} khong phai JSON hop le: ${e.message}`);\n}\n\nconst baseName = String(trigger.name).replace(/\\.json$/i, '');\nif (!baseName) {\n  throw new Error(`Ten file khong hop le: ${trigger.name}`);\n}\n\nif (!meta.title || !String(meta.title).trim()) {\n  throw new Error(`Thieu truong \"title\" trong ${trigger.name}`);\n}\n\n// YouTube: title toi da 100 ky tu, description 5000\nconst title = String(meta.title).trim().slice(0, 100);\nconst description = String(meta.description || '').slice(0, 5000);\n\n// tags co the la array hoac string phan cach bang dau phay; tong do dai <= 500\nlet tags = meta.tags || [];\nif (typeof tags === 'string') tags = tags.split(',');\ntags = tags.map((t) => String(t).trim()).filter(Boolean);\nwhile (tags.length && tags.join(',').length > 480) tags.pop();\n\nlet privacyStatus = ['private', 'unlisted', 'public'].includes(meta.privacyStatus)\n  ? meta.privacyStatus\n  : 'private';\n\n// publishAt chi hoat dong khi video dang o trang thai private\nif (meta.publishAt) privacyStatus = 'private';\n\n// videos.update voi part=status GHI DE toan bo object status: field nao khong\n// gui se bi reset ve mac dinh. Nen build san mot object status day du o day va\n// dung lai y nguyen o buoc \"Cap nhat status video\".\nconst status = {\n  privacyStatus,\n  selfDeclaredMadeForKids: meta.madeForKids === true,\n  license: meta.license || 'youtube',\n  embeddable: meta.embeddable !== false,\n  publicStatsViewable: meta.publicStatsViewable !== false,\n};\nif (meta.publishAt) status.publishAt = meta.publishAt;\nif (meta.containsSyntheticMedia === true) status.containsSyntheticMedia = true;\n\nreturn [\n  {\n    json: {\n      channelName: cfg.channelName,\n      pendingFolderId: cfg.pendingFolderId,\n      doneFolderId: cfg.doneFolderId,\n      failedFolderId: cfg.failedFolderId,\n      baseName,\n      // escape dau nhay don cho query cua Drive API\n      baseNameQ: baseName.replace(/'/g, \"\\\\'\"),\n      jsonFileId: trigger.id,\n      jsonFileName: trigger.name,\n      title,\n      description,\n      tags: tags.join(','),\n      categoryId: String(meta.categoryId || '22'),\n      status,\n    },\n  },\n];"
+      },
+      "id": "3e71135a-f323-46e9-9e51-f8ebd3b64dbd",
+      "name": "Chuan hoa metadata",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        -20
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "='{{ $json.pendingFolderId }}' in parents and trashed = false and (name = '{{ $json.baseNameQ }}.mp4' or name = '{{ $json.baseNameQ }}.jpg' or name = '{{ $json.baseNameQ }}.jpeg' or name = '{{ $json.baseNameQ }}.png')"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,size,mimeType)"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            },
+            {
+              "name": "includeItemsFromAllDrives",
+              "value": "true"
+            },
+            {
+              "name": "pageSize",
+              "value": "10"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "487e9bb8-5551-4524-b39b-ab76fa09ec6c",
+      "name": "Tim MP4 va JPG",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        860,
+        -20
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Tu ket qua files.list, tach ra file video (bat buoc) va thumbnail (tuy chon).\nconst meta = $('Chuan hoa metadata').first().json;\nconst files = $input.first().json.files || [];\nconst base = meta.baseName.toLowerCase();\n\nconst nameOf = (f) => String(f.name || '');\nconst stem = (f) => nameOf(f).replace(/\\.[^.]+$/, '').toLowerCase();\n\nconst mp4 = files.find((f) => nameOf(f).toLowerCase() === `${base}.mp4`);\nconst thumb = files.find((f) => /\\.(jpe?g|png)$/i.test(nameOf(f)) && stem(f) === base);\n\nif (!mp4) {\n  throw new Error(\n    `Khong tim thay ${meta.baseName}.mp4 trong folder pending. ` +\n      `Pipeline phai upload video TRUOC file .json.`\n  );\n}\n\nreturn [\n  {\n    json: {\n      ...meta,\n      mp4FileId: mp4.id,\n      mp4Name: nameOf(mp4),\n      mp4Size: Number(mp4.size || 0),\n      hasThumb: Boolean(thumb),\n      thumbFileId: thumb ? thumb.id : null,\n      thumbName: thumb ? nameOf(thumb) : null,\n    },\n  },\n];"
+      },
+      "id": "bd7231e7-4e69-40e0-8e34-82938839c76b",
+      "name": "Ghep thong tin file",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        -20
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.mp4FileId }}",
+          "mode": "id"
+        },
+        "options": {
+          "binaryPropertyName": "video"
+        }
+      },
+      "id": "d70ca919-ad23-470f-905e-059e46d2164c",
+      "name": "Tai video tu Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1300,
+        -20
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
+      "notesInFlow": true,
+      "notes": "Ghi xuong dia (filesystem mode)"
+    },
+    {
+      "parameters": {
+        "resource": "video",
+        "operation": "upload",
+        "title": "={{ $('Chuan hoa metadata').first().json.title }}",
+        "regionCode": "VN",
+        "categoryId": "={{ $('Chuan hoa metadata').first().json.categoryId }}",
+        "binaryProperty": "video",
+        "options": {
+          "description": "={{ $('Chuan hoa metadata').first().json.description }}",
+          "tags": "={{ $('Chuan hoa metadata').first().json.tags }}",
+          "privacyStatus": "private",
+          "notifySubscribers": false,
+          "selfDeclaredMadeForKids": "={{ $('Chuan hoa metadata').first().json.status.selfDeclaredMadeForKids }}"
+        }
+      },
+      "id": "3abbef0e-3be7-4586-b40f-798db5a7c1ec",
+      "name": "Upload YouTube",
+      "type": "n8n-nodes-base.youTube",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        -20
+      ],
+      "onError": "continueErrorOutput",
+      "notesInFlow": true,
+      "notes": "Stream 1MiB/chunk, resumable"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://www.googleapis.com/youtube/v3/videos",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "status"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ id: $('Upload YouTube').first().json.id, status: $('Chuan hoa metadata').first().json.status }) }}",
+        "options": {}
+      },
+      "id": "79965755-91fb-4363-9488-d8e21bec913b",
+      "name": "Cap nhat status video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1740,
+        -20
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
+      "notesInFlow": true,
+      "notes": "publishAt + containsSyntheticMedia"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b4bf05ca-3491-463e-a1e6-8ea034088a2e",
+              "leftValue": "={{ $('Ghep thong tin file').first().json.hasThumb }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "64216c01-6073-49c4-8bf0-d28e1635cc18",
+      "name": "Co thumbnail",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1960,
+        -20
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Ghep thong tin file').first().json.thumbFileId }}",
+          "mode": "id"
+        },
+        "options": {
+          "binaryPropertyName": "thumb"
+        }
+      },
+      "id": "9c5bb92f-d718-46da-a35a-4ace956a7514",
+      "name": "Tai thumbnail",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2180,
+        -140
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/upload/youtube/v3/thumbnails/set",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "videoId",
+              "value": "={{ $('Upload YouTube').first().json.id }}"
+            },
+            {
+              "name": "uploadType",
+              "value": "media"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "thumb",
+        "options": {}
+      },
+      "id": "a326e1c9-6d7e-411b-97d4-62ac835b8ba1",
+      "name": "Dat thumbnail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2400,
+        -140
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
+      "notesInFlow": true,
+      "notes": "Kenh phai da xac minh SDT"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Moi file mot item -> node Google Drive se move lan luot tung file.\nconst f = $('Ghep thong tin file').first().json;\nconst up = $('Upload YouTube').first().json;\nconst videoId = up.id || up.uploadId || null;\n\nconst files = [\n  { fileId: f.mp4FileId, name: f.mp4Name },\n  { fileId: f.jsonFileId, name: f.jsonFileName },\n];\nif (f.thumbFileId) files.push({ fileId: f.thumbFileId, name: f.thumbName });\n\nreturn files.map((x) => ({\n  json: {\n    ...x,\n    destFolderId: f.doneFolderId,\n    channelName: f.channelName,\n    baseName: f.baseName,\n    videoId,\n    videoUrl: videoId ? `https://youtu.be/${videoId}` : null,\n  },\n}));"
+      },
+      "id": "fc5a3f65-15d3-4c89-a368-6c4841aec08a",
+      "name": "Danh sach file can chuyen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2620,
+        -20
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.fileId }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.destFolderId }}",
+          "mode": "id"
+        }
+      },
+      "id": "bc6057ab-5f8a-4766-b430-d51de4c847ca",
+      "name": "Chuyen sang done",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2840,
+        -20
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Chay khi bat ky node nao trong luong chinh bao loi.\n// Cac node phia tren co the chua tung chay, nen moi lan doc deu bo trong try.\nconst trigger = $('Trigger Drive pending').first().json;\n\nconst safe = (fn) => {\n  try {\n    return fn();\n  } catch (e) {\n    return null;\n  }\n};\n\nconst cfg = safe(() => $('Cau hinh kenh').first().json) || {};\nconst meta = safe(() => $('Chuan hoa metadata').first().json);\nconst fileInfo = safe(() => $('Ghep thong tin file').first().json);\nconst up = safe(() => $('Upload YouTube').first().json);\nconst videoId = up ? up.id || up.uploadId || null : null;\n\n// Neu video DA len YouTube thi khong day sang failed/: de o failed/ se gay hieu\n// lam la video chua len, upload lai se trung video va ton them 1600 quota.\nconst destFolderId = videoId\n  ? (meta && meta.doneFolderId) || cfg.doneFolderId\n  : (meta && meta.failedFolderId) || cfg.failedFolderId;\n\nconst files = [{ fileId: trigger.id, name: trigger.name }];\nif (fileInfo && fileInfo.mp4FileId) {\n  files.push({ fileId: fileInfo.mp4FileId, name: fileInfo.mp4Name });\n}\nif (fileInfo && fileInfo.thumbFileId) {\n  files.push({ fileId: fileInfo.thumbFileId, name: fileInfo.thumbName });\n}\n\nconst raw = $input.first().json || {};\nlet detail = raw.error || raw.message || 'Loi khong ro';\nif (typeof detail === 'object') {\n  detail = detail.message || JSON.stringify(detail).slice(0, 800);\n}\n\nconst prefix = videoId\n  ? `Video DA len YouTube (id ${videoId}) nhung buoc sau bi loi`\n  : 'Upload that bai';\n\nconst errorMessage =\n  `[${cfg.channelName || '?'}] ${(meta && meta.baseName) || trigger.name}\\n` +\n  `${prefix}: ${detail}\\n` +\n  `File da chuyen sang: ${videoId ? 'done/' : 'failed/'}\\n` +\n  `Execution: ${$execution.id}`;\n\nreturn files.map((x) => ({\n  json: {\n    ...x,\n    destFolderId,\n    videoId,\n    channelName: cfg.channelName || null,\n    baseName: (meta && meta.baseName) || null,\n    executionId: $execution.id,\n    errorMessage,\n  },\n}));"
+      },
+      "id": "486ac12e-7ae4-49b8-a561-9373da2cd811",
+      "name": "Danh sach file loi",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.fileId }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.destFolderId }}",
+          "mode": "id"
+        }
+      },
+      "id": "336a05b9-e134-4336-8c7d-f739af4a7bf4",
+      "name": "Chuyen file loi",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1300,
+        320
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "DIEN_CHAT_ID",
+        "text": "={{ $('Danh sach file loi').first().json.errorMessage }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "edf8e937-8681-42e4-b297-5a2a936efd68",
+      "name": "Thong bao loi",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1520,
+        320
+      ],
+      "executeOnce": true,
+      "disabled": true,
+      "onError": "continueRegularOutput",
+      "notesInFlow": true,
+      "notes": "Bat sau khi co bot Telegram"
+    },
+    {
+      "parameters": {
+        "errorType": "errorMessage",
+        "errorMessage": "={{ $('Danh sach file loi').first().json.errorMessage }}"
+      },
+      "id": "925b215b-bf4c-4baa-9476-089aa3b00ad0",
+      "name": "Bao loi",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        1740,
+        320
+      ],
+      "executeOnce": true,
+      "notesInFlow": true,
+      "notes": "De execution duoc luu lai la failed"
+    }
+  ],
+  "connections": {
+    "Trigger Drive pending": {
+      "main": [
+        [
+          {
+            "node": "Chi file JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chi file JSON": {
+      "main": [
+        [
+          {
+            "node": "Cau hinh kenh",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bo qua file khac",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cau hinh kenh": {
+      "main": [
+        [
+          {
+            "node": "Tai JSON metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tai JSON metadata": {
+      "main": [
+        [
+          {
+            "node": "Chuan hoa metadata",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Danh sach file loi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chuan hoa metadata": {
+      "main": [
+        [
+          {
+            "node": "Tim MP4 va JPG",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Danh sach file loi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tim MP4 va JPG": {
+      "main": [
+        [
+          {
+            "node": "Ghep thong tin file",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Danh sach file loi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ghep thong tin file": {
+      "main": [
+        [
+          {
+            "node": "Tai video tu Drive",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Danh sach file loi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tai video tu Drive": {
+      "main": [
+        [
+          {
+            "node": "Upload YouTube",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Danh sach file loi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload YouTube": {
+      "main": [
+        [
+          {
+            "node": "Cap nhat status video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Danh sach file loi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cap nhat status video": {
+      "main": [
+        [
+          {
+            "node": "Co thumbnail",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Danh sach file loi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Co thumbnail": {
+      "main": [
+        [
+          {
+            "node": "Tai thumbnail",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Danh sach file can chuyen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tai thumbnail": {
+      "main": [
+        [
+          {
+            "node": "Dat thumbnail",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Danh sach file loi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dat thumbnail": {
+      "main": [
+        [
+          {
+            "node": "Danh sach file can chuyen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Danh sach file loi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Danh sach file can chuyen": {
+      "main": [
+        [
+          {
+            "node": "Chuyen sang done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Danh sach file loi": {
+      "main": [
+        [
+          {
+            "node": "Chuyen file loi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chuyen file loi": {
+      "main": [
+        [
+          {
+            "node": "Thong bao loi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Thong bao loi": {
+      "main": [
+        [
+          {
+            "node": "Bao loi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Ho_Chi_Minh",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "tags": []
+}
