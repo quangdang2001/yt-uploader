@@ -213,6 +213,7 @@ docker rm -f n8n-test && docker volume rm n8n_test_data
 - `scripts/push_to_drive.py` — chạy trên máy render, đẩy video/thumb/metadata lên Drive
 - `scripts/requirements.txt`
 - `docs/uploader.md` — triển khai uploader trên VPS Windows
+- `docs/upload-video.md` — hướng dẫn phía máy render: đẩy 3 file lên `pending/`
 - `docs/setup.md` — vẫn dùng **§4 Google Cloud** và **§10 quota/audit**; §0-3 và §5-7 là phần n8n, không còn cần
 - `docs/public-site/` — trang privacy policy, đã đăng tại quangdang2001.github.io/video-analytics-policy
 - `docs/privacy-policy.md` — bản Markdown gốc của trang trên
