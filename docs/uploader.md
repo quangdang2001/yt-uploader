@@ -109,6 +109,18 @@ Cách này an toàn hơn chạy thường trú: nếu một lần chạy chết,
 lại. Script tự chặn chạy chồng bằng lock file, nên Task Scheduler gọi trùng giờ
 cũng không sao.
 
+**Đặt `PYTHONUTF8=1` cho user chạy task:**
+
+```powershell
+setx PYTHONUTF8 1
+```
+
+Qua Task Scheduler, stdout không còn là console nên Python dùng codepage hệ
+thống. Vài dòng log có dấu tiếng Việt sẽ encode không được, logging in
+`--- Logging error ---` rồi bỏ dòng đó. Không làm chết script và file
+`logs/uploader.log` vẫn đủ (handler đó đã ghi UTF-8), nhưng đặt biến này thì
+output trên màn hình cũng sạch.
+
 Muốn chạy thường trú thì dùng `--watch 300` thay cho `--once`.
 
 ## 6. Thông báo Telegram (tuỳ chọn)
@@ -148,10 +160,10 @@ upload và chỉ làm nốt phần còn lại.
 | `Khong thay client_secret.json` | Chép file OAuth loại Desktop app vào cùng thư mục script |
 | Đăng nhập xong 7 ngày sau hỏng | OAuth consent screen còn ở *Testing*. Phải Publish sang *In production* |
 | `thumbnails.set` lỗi 403 | Kênh chưa xác minh số điện thoại. Vào youtube.com/verify. Video vẫn lên bình thường, chỉ thiếu thumbnail |
-| `quotaExceeded` | Hết quota ngày (~5-6 video). Script dừng lại và báo, chạy lại sau 15:00 giờ VN |
+| `quotaExceeded` | Hết quota ngày (~5-6 video). Script dừng vòng lặp, **để nguyên file trong `pending/`** và báo còn bao nhiêu file. Lần chạy sau tự làm lại, không cần can thiệp. Quota reset 15:00 giờ VN |
 | `publishAt` bị từ chối | Project chưa qua audit YouTube nên không được hẹn giờ. Bỏ `publishAt` hoặc nộp form audit |
 | Script báo "Mot tien trinh khac dang chay" | Bình thường, lần chạy trước chưa xong. Lock quá 6 giờ thì tự bỏ qua |
-| Video lên hai lần | Kiểm tra `.uploader-state-<kênh>.json` có bị xoá giữa chừng không |
+| Video lên hai lần | Không nên xảy ra: upload xong là state ghi ngay, và chỉ xoá khi cả bộ file đã sang `done/`. Nếu vẫn gặp, kiểm tra `.uploader-state-<kênh>.json` có bị xoá tay giữa chừng không |
 | Ổ đĩa đầy | Video tải tạm vào thư mục temp hệ thống. Dùng `--temp-dir D:\temp` để đổi chỗ |
 
 Xem log:
@@ -159,3 +171,27 @@ Xem log:
 ```powershell
 Get-Content C:\yt\scripts\logs\uploader.log -Tail 50 -Wait
 ```
+
+---
+
+## Chạy unit test
+
+27 test, không gọi mạng và không tốn quota — chạy được cả trên máy cá nhân:
+
+```bash
+cd scripts
+python -m unittest test_youtube_uploader -v
+```
+
+Test mock các hàm gọi mạng (`download_to`, `upload_video`, `move_file`...) nên
+phần được kiểm tra thật là logic phân luồng `pending/` → `done/` | `failed/`
+và chuyện giữ hay xoá state. Đáng chú ý nhất là hai nhóm:
+
+- `TestQuota` — hết quota thì file phải **ở lại `pending/`**, không bị đẩy sang
+  `failed/`, và vòng lặp phải dừng ngay chứ không thử tiếp các file còn lại.
+- `TestState` — nếu `move_file` hỏng sau khi upload xong thì **phải giữ state**,
+  để lần chạy sau biết video đã lên và không upload lần hai (trùng video, mất
+  thêm 1600 quota).
+
+Cả hai nhóm này tương ứng với lỗi thật đã sửa; chạy chúng trên code trước khi
+sửa thì fail.

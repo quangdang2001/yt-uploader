@@ -132,6 +132,36 @@ Google Drive"* — đọc JSON gốc qua `api.n8n.io/api/templates/workflows/390
 
 Kết luận: không dùng. Vẫn giữ workflow tự viết.
 
+## Hai lỗi đã sửa trong uploader (31/10/2026)
+Cả hai chỉ phát tác khi chạy không người trông — đúng chế độ Scheduled Task —
+nên không lộ ra khi chạy thử bằng tay. Mỗi lỗi có test riêng trong
+`scripts/test_youtube_uploader.py`.
+
+1. **Hết quota bị coi là lỗi của file.** `process_one` bắt `except Exception`,
+   mà `HttpError` cũng là `Exception`, nên nhánh `except HttpError` xử lý
+   `quotaExceeded` ở `run_once` **không bao giờ chạy**. Hậu quả: hết quota giữa
+   phiên thì mọi file còn lại trong `pending/` lần lượt bị đẩy sang `failed/`
+   dù không có gì sai, phải bê tay về.
+   → Thêm `is_quota_error()` + exception `QuotaExceeded` kiểm tra **bên trong**
+   `process_one`: để nguyên file trong `pending/` và dừng cả vòng lặp.
+   Nhận diện `quotaExceeded`, `uploadLimitExceeded`, `dailyLimitExceeded`;
+   **không** tính `rateLimitExceeded` vì đó là lỗi tạm thời đã có retry riêng.
+
+2. **`state.clear()` chạy cả khi `move_file` thất bại.** Nhánh lỗi xoá state vô
+   điều kiện khi đã có `video_id`, nhưng `move_file` có thể hỏng và chỉ được
+   log rồi bỏ qua. Khi đó file vẫn trong `pending/` mà state đã mất → lần chạy
+   sau **upload lại: trùng video + mất thêm 1600 quota**. Đúng cái tình huống
+   class `State` được viết ra để chặn.
+   → Thêm `move_all()` trả về danh sách file còn kẹt và tự bỏ khỏi list những
+   cái đã chuyển xong (nên gọi lại không chuyển trùng). Chỉ `state.clear()` khi
+   không còn file nào kẹt.
+
+Kèm theo: bỏ dấu tiếng Việt ở 3 chuỗi log/notify. Qua Scheduled Task, stdout
+không phải console nên Python dùng codepage hệ thống, `Đ` encode không được →
+logging in `--- Logging error ---` rồi bỏ dòng. Không chết script (file log đã
+ghi UTF-8) nhưng mất dòng trên màn hình. `docs/uploader.md` §5 thêm
+`setx PYTHONUTF8 1`.
+
 ## Quota
 `videos.insert` = 1600 units, `videos.update` = 50, `thumbnails.set` = 50.
 Quota mặc định 10.000 units/ngày → **~5-6 video/ngày cho cả project**. Phải
@@ -179,6 +209,7 @@ docker rm -f n8n-test && docker volume rm n8n_test_data
 ## Files trong thư mục
 **Đang dùng:**
 - `scripts/youtube_uploader.py` — chạy trên VPS, quét Drive và upload YouTube
+- `scripts/test_youtube_uploader.py` — 27 unit test, mock hết phần gọi mạng
 - `scripts/push_to_drive.py` — chạy trên máy render, đẩy video/thumb/metadata lên Drive
 - `scripts/requirements.txt`
 - `docs/uploader.md` — triển khai uploader trên VPS Windows
@@ -195,14 +226,16 @@ docker rm -f n8n-test && docker volume rm n8n_test_data
 - [x] Google Cloud: bật API, khai 8 scope, publish consent screen, tạo 2 OAuth client
 - [x] Privacy policy đã đăng công khai (GitHub Pages)
 - [x] `scripts/push_to_drive.py` — phía pipeline
-- [x] `scripts/youtube_uploader.py` — phía VPS (19 unit test logic metadata pass)
+- [x] `scripts/youtube_uploader.py` — phía VPS
+- [x] 27 unit test cho uploader, đã commit (`python -m unittest test_youtube_uploader`)
+- [x] Sửa 2 lỗi phát hiện khi review (31/10/2026) — xem mục dưới
 - [x] `docs/uploader.md`
 
 Còn lại:
 - [ ] Copy `scripts/` lên VPS, cài Python + requirements — `docs/uploader.md` §1-2
 - [ ] Đăng nhập lần đầu trên VPS (Drive + YouTube) — §3
 - [ ] Chạy thử 1 video ngắn, thử cả nhánh lỗi — §4
-- [ ] Tạo Scheduled Task — §5
+- [ ] Tạo Scheduled Task — §5 (nhớ `setx PYTHONUTF8 1`)
 - [ ] Nộp form audit YouTube để đăng public/hẹn giờ — `docs/setup.md` §10
 - [ ] Kế hoạch thay VPS trước 13/01/2027 (Server 2016 hết hỗ trợ)
 

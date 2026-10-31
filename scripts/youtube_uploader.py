@@ -75,7 +75,24 @@ NETWORK_ERRORS = (
     OSError,
 )
 
+# Quota ngay bi can: khong phai loi cua rieng file nao, va thu lai ngay lap tuc
+# cung vo nghia. Khac han cac loi trong RETRY_STATUS.
+QUOTA_REASONS = (b"quotaExceeded", b"uploadLimitExceeded", b"dailyLimitExceeded")
+
 log = logging.getLogger("uploader")
+
+
+class QuotaExceeded(Exception):
+    """Het quota ngay. File phai duoc de nguyen trong pending/ cho lan sau."""
+
+
+def is_quota_error(exc: BaseException) -> bool:
+    if not isinstance(exc, HttpError) or exc.resp.status not in (403, 429):
+        return False
+    content = exc.content or b""
+    if isinstance(content, str):
+        content = content.encode("utf-8", "replace")
+    return any(reason in content for reason in QUOTA_REASONS)
 
 
 # ------------------------------------------------------------------- tien ich
@@ -320,6 +337,23 @@ def move_file(drive, file_id: str, src: str, dest: str) -> None:
     ).execute()
 
 
+def move_all(drive, items: list[dict], src: str, dest: str) -> list[str]:
+    """Chuyen ca bo file, bo khoi `items` nhung cai da chuyen xong.
+
+    Tra ve ten cac file chuyen khong duoc. Vi `items` bi thu nho lai, goi lan
+    hai chi thu lai dung nhung file con ket, khong chuyen trung cai da xong.
+    """
+    stuck: list[str] = []
+    for f in list(items):
+        try:
+            move_file(drive, f["id"], src, dest)
+            items.remove(f)
+        except Exception as exc:
+            stuck.append(f["name"])
+            log.error("  khong chuyen duoc %s: %s", f["name"], exc)
+    return stuck
+
+
 # -------------------------------------------------------------------- youtube
 
 
@@ -480,7 +514,7 @@ def process_one(drive, youtube, folders: dict, item: dict, state: State,
 
             video_id = upload_video(youtube, local_video, body)
             state.set(base, videoId=video_id, at=datetime.now(timezone.utc).isoformat())
-            log.info("  ĐÃ LÊN YOUTUBE: https://youtu.be/%s", video_id)
+            log.info("  DA LEN YOUTUBE: https://youtu.be/%s", video_id)
 
         if thumb and not saved.get("thumbDone"):
             local_thumb = tmpdir / thumb["name"]
@@ -494,29 +528,40 @@ def process_one(drive, youtube, folders: dict, item: dict, state: State,
                 log.error("  dat thumbnail that bai (%s). Kenh da xac minh SDT chua?",
                           exc.resp.status)
 
-        for f in moved:
-            move_file(drive, f["id"], pending, done)
-        log.info("  da chuyen %d file sang done/", len(moved))
+        total = len(moved)
+        stuck = move_all(drive, moved, pending, done)
+        if stuck:
+            raise IOError("khong chuyen duoc sang done/: " + ", ".join(stuck))
+        log.info("  da chuyen %d file sang done/", total)
         state.clear(base)
 
-        notify(f"[{channel}] {base}\nĐã lên YouTube: https://youtu.be/{video_id}")
+        notify(f"[{channel}] {base}\nDa len YouTube: https://youtu.be/{video_id}")
         return True
 
     except Exception as exc:
+        # Het quota khi chua upload duoc gi: file khong he co loi, day sang
+        # failed/ chi lam mat cong be tay ve. De nguyen trong pending/ va bao
+        # ra ngoai de dung ca vong lap.
+        if video_id is None and is_quota_error(exc):
+            log.error("  het quota: de %s o lai pending/ cho lan chay sau.", item["name"])
+            raise QuotaExceeded(str(exc)) from exc
+
         # Da upload roi thi KHONG day sang failed/: de o do se gay hieu lam la
         # video chua len, upload lai se trung video va ton them 1600 quota.
         dest = done if video_id else failed
         where = "done/" if video_id else "failed/"
         log.exception("  LOI: %s", exc)
-        for f in moved:
-            try:
-                move_file(drive, f["id"], pending, dest)
-            except Exception as move_exc:
-                log.error("  khong chuyen duoc %s: %s", f["name"], move_exc)
-        log.info("  da chuyen %d file sang %s", len(moved), where)
-        if video_id:
+        total = len(moved)
+        stuck = move_all(drive, moved, pending, dest)
+        log.info("  da chuyen %d/%d file sang %s", total - len(stuck), total, where)
+        if video_id and stuck:
+            # Giu state: con file trong pending/ nen lan sau script se nhat lai
+            # bo nay, va no phai biet video DA len roi de khong upload lan hai.
+            log.error("  giu state cho %s: %d file con trong pending/ (%s)",
+                      base, len(stuck), ", ".join(stuck))
+        elif video_id:
             state.clear(base)
-        prefix = (f"Video ĐÃ lên YouTube (id {video_id}) nhung buoc sau loi"
+        prefix = (f"Video DA len YouTube (id {video_id}) nhung buoc sau loi"
                   if video_id else "Upload that bai")
         notify(f"[{channel}] {base}\n{prefix}: {exc}\nFile da chuyen sang {where}")
         return False
@@ -548,16 +593,17 @@ def run_once(args, drive, youtube, folders, state, channel) -> int:
     ok = 0
     with tempfile.TemporaryDirectory(prefix="ytup-", dir=args.temp_dir or None) as td:
         tmpdir = Path(td)
-        for item in items[: args.max_per_run]:
+        batch = items[: args.max_per_run]
+        for n, item in enumerate(batch):
             try:
                 if process_one(drive, youtube, folders, item, state, tmpdir, channel):
                     ok += 1
-            except HttpError as exc:
-                if exc.resp.status == 403 and b"quotaExceeded" in (exc.content or b""):
-                    log.error("Het quota YouTube hom nay, dung lai.")
-                    notify(f"[{channel}] Het quota YouTube hom nay.")
-                    break
-                raise
+            except QuotaExceeded as exc:
+                conlai = len(batch) - n
+                log.error("Het quota hom nay, dung lai. %d file con o pending/.", conlai)
+                notify(f"[{channel}] Het quota hom nay ({exc}).\n"
+                       f"{conlai} file con nguyen trong pending/, se tu lam lai sau.")
+                break
     return ok
 
 
