@@ -123,6 +123,36 @@ output trên màn hình cũng sạch.
 
 Muốn chạy thường trú thì dùng `--watch 300` thay cho `--once`.
 
+## 5b. Xoá file trên Drive thay vì chuyển sang `done/`
+
+Mặc định, upload xong thì cả bộ file chuyển sang `done/`. Nếu bản gốc đã nằm
+trên máy render và bạn không muốn Drive phình ra, thêm `--on-success`:
+
+| Chế độ | Việc làm | Hồi phục |
+|---|---|---|
+| `move` (mặc định) | Chuyển sang `done/` | File vẫn nguyên |
+| `trash` | Bỏ vào thùng rác Drive | **Được, trong 30 ngày** |
+| `delete` | Xoá vĩnh viễn, không qua thùng rác | **Không** |
+
+```powershell
+schtasks /Create /SC MINUTE /MO 5 /TN "YouTube Uploader" /RL HIGHEST /F /TR "python C:\yt\scripts\youtube_uploader.py --channel ten-kenh --once --on-success trash"
+```
+
+Nên dùng `trash` hơn `delete`: vẫn dọn sạch `pending/`, mà upload sai metadata
+hay sai kênh thì còn 30 ngày để lấy lại file từ thùng rác. `delete` chỉ nên
+dùng khi dung lượng Drive thật sự căng.
+
+**Chỉ áp dụng khi upload thành công hoàn toàn.** Hai trường hợp còn lại không
+bị ảnh hưởng, dù bạn đặt chế độ nào:
+
+- Upload thất bại → file sang `failed/`, **không bị xoá**
+- Video đã lên nhưng bước sau lỗi (ví dụ thumbnail) → file sang `done/`, cũng
+  **không bị xoá**, để bạn còn xem lại
+
+Nên `done/` trở thành thư mục "cần để ý", không còn là nơi chứa mọi video đã
+xong. Nếu trash/delete hỏng giữa chừng (mất mạng), file còn kẹt được chuyển
+sang `done/` như phương án dự phòng.
+
 ## 6. Thông báo Telegram (tuỳ chọn)
 
 Đặt hai biến môi trường cho user chạy task:
@@ -142,7 +172,7 @@ Không đặt thì script bỏ qua, không lỗi.
 |---|---|
 | `token-drive.json`, `token-youtube.json` | Token OAuth. **Bí mật** |
 | `logs/uploader.log` | Log, tự xoay vòng 5MB × 5 file |
-| `.uploader-state-<kênh>.json` | Nhớ video đã upload xong nhưng chưa kịp chuyển file |
+| `.uploader-state-<kênh>.json` | Nhớ video đã upload xong nhưng chưa kịp dọn file |
 | `.uploader-<kênh>.lock` | Chặn chạy chồng |
 
 Tất cả đã nằm trong `.gitignore`.

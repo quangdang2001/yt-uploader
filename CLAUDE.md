@@ -162,6 +162,21 @@ logging in `--- Logging error ---` rồi bỏ dòng. Không chết script (file 
 ghi UTF-8) nhưng mất dòng trên màn hình. `docs/uploader.md` §5 thêm
 `setx PYTHONUTF8 1`.
 
+## Dọn file sau khi upload (`--on-success`, 01/11/2026)
+Mặc định vẫn `move` (sang `done/`) để không đổi hành vi của task đang chạy.
+Thêm `trash` (thùng rác Drive, hồi phục 30 ngày) và `delete` (xoá vĩnh viễn).
+
+Lưu ý: `CLAUDE.md` từng ghi việc xoá file nguồn là lý do **loại** template n8n
+#3906 — "hỏng nửa chừng là mất file gốc". Điều đó vẫn đúng khi Drive là bản duy
+nhất. Giờ bản gốc nằm trên máy render nên Drive chỉ là đường vận chuyển, xoá
+được. Vì vậy mặc định là `trash` chứ không `delete` khi bật tính năng này.
+
+Chỉ áp dụng cho **upload thành công hoàn toàn**:
+- Thất bại → `failed/`, không xoá
+- Video đã lên nhưng bước sau lỗi → `done/`, không xoá
+- Trash/delete hỏng giữa chừng → file kẹt được chuyển sang `done/` dự phòng,
+  nên không còn ở `pending/` và không có nguy cơ upload lại
+
 ## Quota
 `videos.insert` = 1600 units, `videos.update` = 50, `thumbnails.set` = 50.
 Quota mặc định 10.000 units/ngày → **~5-6 video/ngày cho cả project**. Phải
@@ -209,10 +224,11 @@ docker rm -f n8n-test && docker volume rm n8n_test_data
 ## Files trong thư mục
 **Đang dùng:**
 - `scripts/youtube_uploader.py` — chạy trên VPS, quét Drive và upload YouTube
-- `scripts/test_youtube_uploader.py` — 27 unit test, mock hết phần gọi mạng
+- `scripts/test_youtube_uploader.py` — 38 unit test, mock hết phần gọi mạng
 - `scripts/push_to_drive.py` — chạy trên máy render, đẩy video/thumb/metadata lên Drive
 - `scripts/requirements.txt`
 - `docs/uploader.md` — triển khai uploader trên VPS Windows
+- `docs/upload-video.md` — hướng dẫn phía máy render: đẩy 3 file lên `pending/`
 - `docs/setup.md` — vẫn dùng **§4 Google Cloud** và **§10 quota/audit**; §0-3 và §5-7 là phần n8n, không còn cần
 - `docs/public-site/` — trang privacy policy, đã đăng tại quangdang2001.github.io/video-analytics-policy
 - `docs/privacy-policy.md` — bản Markdown gốc của trang trên
@@ -227,7 +243,7 @@ docker rm -f n8n-test && docker volume rm n8n_test_data
 - [x] Privacy policy đã đăng công khai (GitHub Pages)
 - [x] `scripts/push_to_drive.py` — phía pipeline
 - [x] `scripts/youtube_uploader.py` — phía VPS
-- [x] 27 unit test cho uploader, đã commit (`python -m unittest test_youtube_uploader`)
+- [x] 38 unit test cho uploader, đã commit (`python -m unittest test_youtube_uploader`)
 - [x] Sửa 2 lỗi phát hiện khi review (31/10/2026) — xem mục dưới
 - [x] `docs/uploader.md`
 
