@@ -219,8 +219,14 @@ upload.
 
 | Kết quả | Dấu hiệu |
 |---|---|
-| Thành công | Cả 3 file chuyển sang `done/`, video hiện trong YouTube Studio |
+| Thành công | Cả 3 file rời khỏi `pending/`, video hiện trong YouTube Studio |
 | Thất bại | Cả 3 file chuyển sang `failed/` |
+
+Thành công thì file đi đâu tuỳ chế độ `--on-success` của task trên VPS: sang
+`done/` (mặc định), vào thùng rác Drive (`trash`), hoặc xoá vĩnh viễn
+(`delete`). Chi tiết: `docs/uploader.md` §5b.
+
+File vào `failed/` thì **không bao giờ bị xoá**, bất kể chế độ nào.
 
 Vài điểm về cơ chế:
 

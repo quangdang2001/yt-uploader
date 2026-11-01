@@ -79,6 +79,9 @@ NETWORK_ERRORS = (
 # cung vo nghia. Khac han cac loi trong RETRY_STATUS.
 QUOTA_REASONS = (b"quotaExceeded", b"uploadLimitExceeded", b"dailyLimitExceeded")
 
+# Lam gi voi bo file sau khi video da len YouTube
+ON_SUCCESS = ("move", "trash", "delete")
+
 log = logging.getLogger("uploader")
 
 
@@ -337,21 +340,49 @@ def move_file(drive, file_id: str, src: str, dest: str) -> None:
     ).execute()
 
 
-def move_all(drive, items: list[dict], src: str, dest: str) -> list[str]:
-    """Chuyen ca bo file, bo khoi `items` nhung cai da chuyen xong.
+def trash_file(drive, file_id: str) -> None:
+    """Vao thung rac Drive — con hoi phuc duoc 30 ngay."""
+    drive.files().update(
+        fileId=file_id, body={"trashed": True}, fields="id", supportsAllDrives=True,
+    ).execute()
 
-    Tra ve ten cac file chuyen khong duoc. Vi `items` bi thu nho lai, goi lan
-    hai chi thu lai dung nhung file con ket, khong chuyen trung cai da xong.
+
+def delete_file(drive, file_id: str) -> None:
+    """Xoa vinh vien, KHONG qua thung rac. Khong hoi phuc duoc."""
+    drive.files().delete(fileId=file_id, supportsAllDrives=True).execute()
+
+
+def apply_all(items: list[dict], action, verb: str) -> list[str]:
+    """Lam `action` cho tung file, bo khoi `items` nhung cai da xong.
+
+    Tra ve ten cac file that bai. Vi `items` bi thu nho lai, goi lan hai chi
+    thu lai dung nhung file con ket, khong lam trung cai da xong.
     """
     stuck: list[str] = []
     for f in list(items):
         try:
-            move_file(drive, f["id"], src, dest)
+            action(f)
             items.remove(f)
         except Exception as exc:
             stuck.append(f["name"])
-            log.error("  khong chuyen duoc %s: %s", f["name"], exc)
+            log.error("  khong %s duoc %s: %s", verb, f["name"], exc)
     return stuck
+
+
+def move_all(drive, items: list[dict], src: str, dest: str) -> list[str]:
+    return apply_all(items, lambda f: move_file(drive, f["id"], src, dest), "chuyen")
+
+
+def finish_all(drive, items: list[dict], pending: str, done: str, mode: str) -> tuple[list[str], str]:
+    """Doc bo file sau khi upload thanh cong, theo `mode`.
+
+    Tra ve (danh sach file con ket, mo ta de ghi log).
+    """
+    if mode == "trash":
+        return apply_all(items, lambda f: trash_file(drive, f["id"]), "bo vao thung rac"), "thung rac Drive"
+    if mode == "delete":
+        return apply_all(items, lambda f: delete_file(drive, f["id"]), "xoa"), "da xoa vinh vien"
+    return move_all(drive, items, pending, done), "done/"
 
 
 # -------------------------------------------------------------------- youtube
@@ -471,7 +502,7 @@ def notify(message: str) -> None:
 
 
 def process_one(drive, youtube, folders: dict, item: dict, state: State,
-                tmpdir: Path, channel: str) -> bool:
+                tmpdir: Path, channel: str, on_success: str = "move") -> bool:
     """Tra ve True neu upload thanh cong."""
     base = re.sub(r"\.json$", "", item["name"], flags=re.IGNORECASE)
     pending, done, failed = folders["pending"], folders["done"], folders["failed"]
@@ -529,10 +560,10 @@ def process_one(drive, youtube, folders: dict, item: dict, state: State,
                           exc.resp.status)
 
         total = len(moved)
-        stuck = move_all(drive, moved, pending, done)
+        stuck, where_ok = finish_all(drive, moved, pending, done, on_success)
         if stuck:
-            raise IOError("khong chuyen duoc sang done/: " + ", ".join(stuck))
-        log.info("  da chuyen %d file sang done/", total)
+            raise IOError(f"khong doc duoc bo file ({where_ok}): " + ", ".join(stuck))
+        log.info("  %d file -> %s", total, where_ok)
         state.clear(base)
 
         notify(f"[{channel}] {base}\nDa len YouTube: https://youtu.be/{video_id}")
@@ -596,7 +627,8 @@ def run_once(args, drive, youtube, folders, state, channel) -> int:
         batch = items[: args.max_per_run]
         for n, item in enumerate(batch):
             try:
-                if process_one(drive, youtube, folders, item, state, tmpdir, channel):
+                if process_one(drive, youtube, folders, item, state, tmpdir, channel,
+                               on_success=args.on_success):
                     ok += 1
             except QuotaExceeded as exc:
                 conlai = len(batch) - n
@@ -621,6 +653,12 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--state-file", default=None, help="Mac dinh: .uploader-state-<kenh>.json")
     p.add_argument("--temp-dir", default=None, help="Noi tai video tam (mac dinh: temp he thong)")
     p.add_argument("--max-per-run", type=int, default=5, help="Toi da bao nhieu video moi lan chay")
+    p.add_argument(
+        "--on-success", choices=ON_SUCCESS, default="move",
+        help="Sau khi video len YouTube: move = chuyen sang done/ (mac dinh); "
+             "trash = bo vao thung rac Drive, hoi phuc duoc 30 ngay; "
+             "delete = xoa vinh vien, KHONG hoi phuc duoc",
+    )
     p.add_argument("--once", action="store_true", help="Chay mot lan roi thoat")
     p.add_argument("--watch", type=int, metavar="GIAY", help="Chay lap, nghi N giay giua cac lan")
     p.add_argument("--dry-run", action="store_true", help="Chi liet ke, khong upload")

@@ -81,6 +81,9 @@ class Harness:
         self.thumb_raises = thumb_raises
         self.meta = meta if meta is not None else meta_json()
         self.moves: list[tuple[str, str]] = []   # (file_id, dest)
+        self.trashed: list[str] = []
+        self.deleted: list[str] = []
+        self.dispose_fails_for: set[str] = set()
         self.uploads = 0
         self.notices: list[str] = []
 
@@ -118,6 +121,16 @@ class Harness:
             raise OSError(f"mang hong khi chuyen {file_id}")
         self.moves.append((file_id, dest))
 
+    def trash_file(self, drive, file_id):
+        if file_id in self.dispose_fails_for:
+            raise OSError(f"mang hong khi bo vao thung rac {file_id}")
+        self.trashed.append(file_id)
+
+    def delete_file(self, drive, file_id):
+        if file_id in self.dispose_fails_for:
+            raise OSError(f"mang hong khi xoa {file_id}")
+        self.deleted.append(file_id)
+
     def notify(self, message):
         self.notices.append(message)
 
@@ -130,6 +143,8 @@ class Harness:
             upload_video=self.upload_video,
             set_thumbnail=self.set_thumbnail,
             move_file=self.move_file,
+            trash_file=self.trash_file,
+            delete_file=self.delete_file,
             notify=self.notify,
         )
 
@@ -147,10 +162,11 @@ class Base(unittest.TestCase):
     def item(self, name="v001.json", fid="json-file"):
         return {"id": fid, "name": name}
 
-    def run_one(self, h, item=None):
+    def run_one(self, h, item=None, on_success="move"):
         with h.patches():
             return yu.process_one(mock.Mock(), mock.Mock(), FOLDERS,
-                                  item or self.item(), self.state, self.tmp, "kenh")
+                                  item or self.item(), self.state, self.tmp, "kenh",
+                                  on_success=on_success)
 
 
 # ------------------------------------------------------- loi 1: het quota
@@ -285,6 +301,97 @@ class TestLuongChinh(Base):
         h = Harness(self.tmp)
         self.assertTrue(self.run_one(h, self.item("V001.JSON")))
         self.assertEqual(h.dests(), {"D"})
+
+
+# ------------------------------------------- doc bo file sau khi upload xong
+
+class TestOnSuccess(Base):
+    def test_move_la_mac_dinh(self):
+        """Khong truyen gi thi giu nguyen hanh vi cu — khong xoa gi."""
+        h = Harness(self.tmp, with_thumb=True)
+        self.assertTrue(self.run_one(h))
+        self.assertEqual(h.dests(), {"D"})
+        self.assertEqual(h.trashed, [])
+        self.assertEqual(h.deleted, [])
+
+    def test_trash_bo_ca_bo_vao_thung_rac(self):
+        h = Harness(self.tmp, with_thumb=True)
+        self.assertTrue(self.run_one(h, on_success="trash"))
+        self.assertEqual(sorted(h.trashed), ["json-file", "thumb-file", "vid-file"])
+        self.assertEqual(h.moves, [], "trash thi khong chuyen sang done/")
+        self.assertEqual(h.deleted, [])
+        self.assertIsNone(self.state.get("v001"))
+
+    def test_delete_xoa_ca_bo(self):
+        h = Harness(self.tmp, with_thumb=True)
+        self.assertTrue(self.run_one(h, on_success="delete"))
+        self.assertEqual(sorted(h.deleted), ["json-file", "thumb-file", "vid-file"])
+        self.assertEqual(h.moves, [])
+        self.assertEqual(h.trashed, [])
+        self.assertIsNone(self.state.get("v001"))
+
+    def test_trash_hong_thi_file_ket_lai_roi_vao_done(self):
+        """Trash hong -> nhanh loi van kip chuyen file con ket sang done/.
+
+        File khong con o pending/ nua nen khong co nguy co upload lai, va xoa
+        state la dung. File nao trash duoc thi da trash roi, khong bi chuyen.
+        """
+        h = Harness(self.tmp)
+        h.dispose_fails_for = {"json-file"}
+        self.assertFalse(self.run_one(h, on_success="trash"))
+        self.assertEqual(h.trashed, ["vid-file"], "vid-file trash duoc thi cu trash")
+        self.assertEqual(h.moves, [("json-file", "D")], "cai ket lai duoc cuu sang done/")
+        self.assertIsNone(self.state.get("v001"), "khong con o pending/ -> xoa state")
+
+    def test_trash_hong_va_done_cung_hong_thi_giu_state(self):
+        """Ket that: ca trash ca fallback done/ deu hong -> file con o pending/.
+
+        Day moi la luc PHAI giu state, de lan sau khong upload lan hai.
+        """
+        h = Harness(self.tmp, move_fails_for={"json-file"})
+        h.dispose_fails_for = {"json-file"}
+        self.assertFalse(self.run_one(h, on_success="trash"))
+        saved = self.state.get("v001")
+        self.assertIsNotNone(saved, "con file o pending/ thi PHAI giu state")
+        self.assertEqual(saved["videoId"], "YTID123")
+
+    def test_lan_chay_sau_khong_upload_lai_khi_trash(self):
+        h1 = Harness(self.tmp, move_fails_for={"json-file"})
+        h1.dispose_fails_for = {"json-file"}
+        self.run_one(h1, on_success="trash")
+        h2 = Harness(self.tmp)                     # mang da thong
+        self.assertTrue(self.run_one(h2, on_success="trash"))
+        self.assertEqual(h2.uploads, 0, "video da len roi, khong upload lan hai")
+        self.assertIsNone(self.state.get("v001"))
+
+    def test_loi_van_di_failed_khong_bi_xoa(self):
+        """Upload that bai thi file phai con de xem lai, bat ke on_success."""
+        h = Harness(self.tmp, upload_raises=http_error(403, "forbidden"))
+        self.assertFalse(self.run_one(h, on_success="delete"))
+        self.assertEqual(h.dests(), {"F"})
+        self.assertEqual(h.deleted, [], "that bai thi khong duoc xoa file nguon")
+        self.assertEqual(h.trashed, [])
+
+    def test_loi_sau_upload_van_ve_done_khong_bi_xoa(self):
+        """Video da len nhung buoc sau loi -> ve done/ de con xem lai."""
+        h = Harness(self.tmp, with_thumb=True, thumb_raises=OSError("mang hong"))
+        self.assertFalse(self.run_one(h, on_success="delete"))
+        self.assertEqual(h.dests(), {"D"})
+        self.assertEqual(h.deleted, [])
+
+
+class TestOnSuccessArg(unittest.TestCase):
+    def test_mac_dinh_la_move(self):
+        self.assertEqual(yu.parse_args(["--channel", "k"]).on_success, "move")
+
+    def test_nhan_du_ba_che_do(self):
+        for mode in ("move", "trash", "delete"):
+            args = yu.parse_args(["--channel", "k", "--on-success", mode])
+            self.assertEqual(args.on_success, mode)
+
+    def test_tu_choi_gia_tri_la(self):
+        with self.assertRaises(SystemExit):
+            yu.parse_args(["--channel", "k", "--on-success", "xoa-het"])
 
 
 class TestBuildBody(unittest.TestCase):
