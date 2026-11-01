@@ -238,6 +238,18 @@ Vài điểm về cơ chế:
 - **Hết quota thì file ở lại `pending/`**, không bị đẩy sang `failed/`, và lần
   chạy sau tự làm lại. Không cần can thiệp.
 
+### Theo dõi từ máy bạn
+
+Mở Drive → folder kênh → **`upload-history.csv`**. Mỗi video một dòng: thời
+gian, tên file, title, video ID, link, trạng thái, ghi chú. Bấm
+**Open with → Google Sheets** để lọc và sắp xếp.
+
+Trạng thái `OK-LOI-SAU` nghĩa là video đã lên YouTube nhưng bước sau lỗi
+(thường là thumbnail) — video vẫn dùng được.
+
+Nếu VPS đã bật Telegram thì bạn còn nhận thông báo ngay mỗi khi một video lên
+xong hoặc lỗi (`docs/uploader.md` §6).
+
 ### Xem log trên VPS
 
 ```powershell

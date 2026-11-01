@@ -39,7 +39,7 @@ def tearDownModule():
     logging.disable(logging.NOTSET)
 
 
-FOLDERS = {"pending": "P", "done": "D", "failed": "F"}
+FOLDERS = {"pending": "P", "done": "D", "failed": "F", "channel": "C"}
 VIDEO_BYTES = b"x" * 2048
 
 
@@ -84,6 +84,8 @@ class Harness:
         self.trashed: list[str] = []
         self.deleted: list[str] = []
         self.dispose_fails_for: set[str] = set()
+        self.history: list[dict] = []
+        self.history_raises = None
         self.uploads = 0
         self.notices: list[str] = []
 
@@ -134,6 +136,11 @@ class Harness:
     def notify(self, message):
         self.notices.append(message)
 
+    def append_history(self, drive, chan_folder, row):
+        if self.history_raises:
+            raise self.history_raises
+        self.history.append(dict(zip(yu.HISTORY_COLS, row)) | {"_folder": chan_folder})
+
     def patches(self):
         return mock.patch.multiple(
             yu,
@@ -145,6 +152,7 @@ class Harness:
             move_file=self.move_file,
             trash_file=self.trash_file,
             delete_file=self.delete_file,
+            append_history=self.append_history,
             notify=self.notify,
         )
 
@@ -430,6 +438,122 @@ class TestMaxPerRun(Base):
     def test_van_dat_duoc_gia_tri_lon_hon(self):
         self.assertEqual(
             yu.parse_args(["--channel", "k", "--max-per-run", "5"]).max_per_run, 5)
+
+
+# ------------------------------------------------------- so ghi chep CSV
+
+class TestHistoryRows(Base):
+    def test_ghi_dong_OK_khi_thanh_cong(self):
+        h = Harness(self.tmp, with_thumb=True, meta=meta_json(title="Phim hay"))
+        self.assertTrue(self.run_one(h))
+        self.assertEqual(len(h.history), 1)
+        r = h.history[0]
+        self.assertEqual(r["trang_thai"], "OK")
+        self.assertEqual(r["ten_goc"], "v001")
+        self.assertEqual(r["title"], "Phim hay")
+        self.assertEqual(r["video_id"], "YTID123")
+        self.assertEqual(r["url"], "https://youtu.be/YTID123")
+        self.assertEqual(r["_folder"], "C", "phai ghi vao folder kenh")
+        self.assertTrue(r["thoi_gian"], "phai co thoi gian")
+
+    def test_ghi_dong_LOI_khi_that_bai(self):
+        h = Harness(self.tmp, no_video=True)
+        self.assertFalse(self.run_one(h))
+        r = h.history[0]
+        self.assertEqual(r["trang_thai"], "LOI")
+        self.assertEqual(r["video_id"], "", "chua upload thi khong co id")
+        self.assertEqual(r["url"], "")
+        self.assertIn("failed/", r["ghi_chu"])
+
+    def test_ghi_dong_OK_LOI_SAU_khi_len_roi_moi_loi(self):
+        h = Harness(self.tmp, with_thumb=True, thumb_raises=OSError("mang hong"))
+        self.assertFalse(self.run_one(h))
+        r = h.history[0]
+        self.assertEqual(r["trang_thai"], "OK-LOI-SAU")
+        self.assertEqual(r["video_id"], "YTID123", "video da len thi phai co id")
+        self.assertIn("done/", r["ghi_chu"])
+
+    def test_giu_title_du_loi_xay_ra_sau_khi_doc_metadata(self):
+        h = Harness(self.tmp, meta=meta_json(title="Con title"),
+                    upload_raises=OSError("mang hong"))
+        self.assertFalse(self.run_one(h))
+        self.assertEqual(h.history[0]["title"], "Con title")
+
+    def test_ghi_so_hong_KHONG_lam_hong_upload(self):
+        """Quan trong nhat: mot dong CSV khong dang gia bang mot video da len."""
+        h = Harness(self.tmp)
+        h.history_raises = OSError("Drive hong")
+        self.assertTrue(self.run_one(h), "upload van phai duoc bao la thanh cong")
+        self.assertEqual(h.dests(), {"D"})
+        self.assertEqual(h.history, [])
+
+    def test_khong_co_folder_kenh_thi_bo_qua(self):
+        """Folder cu khong co key 'channel' — khong duoc sup."""
+        h = Harness(self.tmp)
+        folders = {"pending": "P", "done": "D", "failed": "F"}
+        with h.patches():
+            ok = yu.process_one(mock.Mock(), mock.Mock(), folders,
+                                self.item(), self.state, self.tmp, "kenh")
+        self.assertTrue(ok)
+        self.assertEqual(h.history, [])
+
+
+class TestCsvCell(unittest.TestCase):
+    def test_de_nguyen_chuoi_thuong(self):
+        self.assertEqual(yu.csv_cell("abc"), "abc")
+
+    def test_boc_dau_nhay_khi_co_dau_phay(self):
+        self.assertEqual(yu.csv_cell("a,b"), '"a,b"')
+
+    def test_nhan_doi_dau_nhay(self):
+        self.assertEqual(yu.csv_cell('He said "hi"'), '"He said ""hi"""')
+
+    def test_xoa_xuong_dong(self):
+        """Mot dong CSV khong duoc vo thanh hai dong."""
+        self.assertNotIn("\n", yu.csv_cell("dong 1\ndong 2"))
+        self.assertNotIn("\r", yu.csv_cell("dong 1\r\ndong 2"))
+
+    def test_None_thanh_rong(self):
+        self.assertEqual(yu.csv_cell(None), "")
+
+
+class TestAppendHistory(unittest.TestCase):
+    def row(self):
+        return ["2026-11-01 09:00:00", "kenh", "v001", "Title",
+                "YTID", "https://youtu.be/YTID", "OK", "done/"]
+
+    def test_tao_moi_kem_header(self):
+        drive = mock.Mock()
+        with mock.patch.object(yu, "find_child", return_value=None), \
+             mock.patch.object(yu, "_csv_media", side_effect=lambda t: t):
+            yu.append_history(drive, "C", self.row())
+        body = drive.files().create.call_args.kwargs["media_body"]
+        self.assertTrue(body.startswith(",".join(yu.HISTORY_COLS)))
+        self.assertIn("v001", body)
+        self.assertEqual(body.count("\n"), 2, "header + 1 dong")
+        drive.files().update.assert_not_called()
+
+    def test_noi_vao_file_co_san(self):
+        cu = ",".join(yu.HISTORY_COLS) + "\n2026-10-31 08:00:00,kenh,v000,X,ID0,u,OK,done/\n"
+        drive = mock.Mock()
+        with mock.patch.object(yu, "find_child", return_value={"id": "hist"}), \
+             mock.patch.object(yu, "download_text", return_value=cu), \
+             mock.patch.object(yu, "_csv_media", side_effect=lambda t: t):
+            yu.append_history(drive, "C", self.row())
+        body = drive.files().update.call_args.kwargs["media_body"]
+        self.assertIn("v000", body, "dong cu phai con")
+        self.assertIn("v001", body, "dong moi phai co")
+        self.assertEqual(body.count("\n"), 3, "header + 2 dong")
+        drive.files().create.assert_not_called()
+
+    def test_them_newline_neu_file_cu_thieu(self):
+        drive = mock.Mock()
+        with mock.patch.object(yu, "find_child", return_value={"id": "hist"}), \
+             mock.patch.object(yu, "download_text", return_value="a,b,c"), \
+             mock.patch.object(yu, "_csv_media", side_effect=lambda t: t):
+            yu.append_history(drive, "C", self.row())
+        body = drive.files().update.call_args.kwargs["media_body"]
+        self.assertIn("a,b,c\n2026-11-01", body, "khong duoc dinh lien hai dong")
 
 
 class TestBuildBody(unittest.TestCase):

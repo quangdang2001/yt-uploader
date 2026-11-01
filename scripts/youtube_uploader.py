@@ -43,7 +43,8 @@ try:
     from google_auth_oauthlib.flow import InstalledAppFlow
     from googleapiclient.discovery import build
     from googleapiclient.errors import HttpError
-    from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
+    from googleapiclient.http import (MediaFileUpload, MediaIoBaseDownload,
+                                      MediaIoBaseUpload)
 except ImportError:
     sys.exit(
         "Thieu thu vien. Chay:\n"
@@ -78,6 +79,11 @@ NETWORK_ERRORS = (
 # Quota ngay bi can: khong phai loi cua rieng file nao, va thu lai ngay lap tuc
 # cung vo nghia. Khac han cac loi trong RETRY_STATUS.
 QUOTA_REASONS = (b"quotaExceeded", b"uploadLimitExceeded", b"dailyLimitExceeded")
+
+# So ghi chep tren Drive: moi video mot dong, mo bang Google Sheets de xem
+HISTORY_NAME = "upload-history.csv"
+HISTORY_COLS = ("thoi_gian", "kenh", "ten_goc", "title",
+                "video_id", "url", "trang_thai", "ghi_chu")
 
 # Lam gi voi bo file sau khi video da len YouTube
 ON_SUCCESS = ("move", "trash", "delete")
@@ -115,6 +121,10 @@ def setup_logging(log_file: Path, verbose: bool) -> None:
     )
     rotating.setFormatter(fmt)
     log.addHandler(rotating)
+
+
+def now_str() -> str:
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def backoff(attempt: int) -> float:
@@ -260,7 +270,9 @@ def ensure_folder(drive, name: str, parent: str) -> str:
 def resolve_folders(drive, root_name: str, channel: str) -> dict:
     root = ensure_folder(drive, root_name, "root")
     chan = ensure_folder(drive, channel, root)
-    return {n: ensure_folder(drive, n, chan) for n in SUBFOLDERS}
+    out = {n: ensure_folder(drive, n, chan) for n in SUBFOLDERS}
+    out["channel"] = chan      # noi dat upload-history.csv
+    return out
 
 
 def list_pending_json(drive, pending: str) -> list[dict]:
@@ -383,6 +395,60 @@ def finish_all(drive, items: list[dict], pending: str, done: str, mode: str) -> 
     if mode == "delete":
         return apply_all(items, lambda f: delete_file(drive, f["id"]), "xoa"), "da xoa vinh vien"
     return move_all(drive, items, pending, done), "done/"
+
+
+# ------------------------------------------------------------- so ghi chep
+
+
+def csv_cell(value) -> str:
+    text = str("" if value is None else value).replace("\r", " ").replace("\n", " ")
+    if any(c in text for c in ',"'):
+        text = '"' + text.replace('"', '""') + '"'
+    return text
+
+
+def _csv_media(text: str):
+    return MediaIoBaseUpload(io.BytesIO(text.encode("utf-8")),
+                             mimetype="text/csv", resumable=False)
+
+
+def append_history(drive, chan_folder: str, row: list) -> None:
+    """Ghi mot dong vao upload-history.csv trong folder kenh.
+
+    Drive khong co API append, nen phai tai ve - noi them - day len lai. Moi
+    video mot dong nen file rat nho, cach nay chap nhan duoc.
+    """
+    line = ",".join(csv_cell(c) for c in row) + "\n"
+    header = ",".join(HISTORY_COLS) + "\n"
+    found = find_child(drive, HISTORY_NAME, chan_folder)
+    if not found:
+        drive.files().create(
+            body={"name": HISTORY_NAME, "parents": [chan_folder], "mimeType": "text/csv"},
+            media_body=_csv_media(header + line), fields="id", supportsAllDrives=True,
+        ).execute()
+        log.info("  da tao %s", HISTORY_NAME)
+        return
+    old = download_text(drive, found["id"]) or header
+    if not old.endswith("\n"):
+        old += "\n"
+    drive.files().update(
+        fileId=found["id"], media_body=_csv_media(old + line),
+        fields="id", supportsAllDrives=True,
+    ).execute()
+
+
+def log_history(drive, chan_folder, **kw) -> None:
+    """Luon nuot loi: ghi so sach that bai KHONG duoc lam hong ket qua upload.
+
+    Neu de loi thoat ra o nhanh thanh cong, mot video da len YouTube se bi
+    coi la that bai — dat gia hon nhieu so voi mot dong CSV bi thieu.
+    """
+    if not chan_folder:
+        return
+    try:
+        append_history(drive, chan_folder, [kw.get(c, "") for c in HISTORY_COLS])
+    except Exception as exc:
+        log.warning("  khong ghi duoc %s: %s", HISTORY_NAME, exc)
 
 
 # -------------------------------------------------------------------- youtube
@@ -512,6 +578,8 @@ def process_one(drive, youtube, folders: dict, item: dict, state: State,
     moved: list[dict] = [{"id": item["id"], "name": item["name"]}]
     video_id = None
     local_video = local_thumb = None
+    title = ""
+    chan = folders.get("channel")
 
     try:
         saved = state.get(base) or {}
@@ -521,6 +589,7 @@ def process_one(drive, youtube, folders: dict, item: dict, state: State,
         if not isinstance(meta, dict):
             raise ValueError("File JSON khong phai object")
         body = build_body(meta)
+        title = body["snippet"]["title"]
 
         video, thumb = find_media(drive, pending, base)
         if not video:
@@ -566,6 +635,10 @@ def process_one(drive, youtube, folders: dict, item: dict, state: State,
         log.info("  %d file -> %s", total, where_ok)
         state.clear(base)
 
+        log_history(drive, chan, thoi_gian=now_str(), kenh=channel, ten_goc=base,
+                    title=title, video_id=video_id,
+                    url=f"https://youtu.be/{video_id}",
+                    trang_thai="OK", ghi_chu=where_ok)
         notify(f"[{channel}] {base}\nDa len YouTube: https://youtu.be/{video_id}")
         return True
 
@@ -592,6 +665,11 @@ def process_one(drive, youtube, folders: dict, item: dict, state: State,
                       base, len(stuck), ", ".join(stuck))
         elif video_id:
             state.clear(base)
+        log_history(drive, chan, thoi_gian=now_str(), kenh=channel, ten_goc=base,
+                    title=title, video_id=video_id or "",
+                    url=f"https://youtu.be/{video_id}" if video_id else "",
+                    trang_thai="OK-LOI-SAU" if video_id else "LOI",
+                    ghi_chu=f"{exc} (file -> {where})")
         prefix = (f"Video DA len YouTube (id {video_id}) nhung buoc sau loi"
                   if video_id else "Upload that bai")
         notify(f"[{channel}] {base}\n{prefix}: {exc}\nFile da chuyen sang {where}")
@@ -712,7 +790,14 @@ def main(argv=None) -> int:
         state = State(state_file)
 
         if args.once:
-            n = run_once(args, drive, youtube, folders, state, args.channel)
+            try:
+                n = run_once(args, drive, youtube, folders, state, args.channel)
+            except Exception as exc:
+                # Khong co cho nay thi uploader chet la im lang hoan toan:
+                # khong video nao len, va khong ai biet.
+                log.exception("Uploader loi, khong chay duoc")
+                notify(f"[{args.channel}] Uploader LOI, khong chay duoc: {exc}")
+                return 1
             log.info("Xong. %d video upload thanh cong.", n)
             return 0
 
@@ -723,8 +808,9 @@ def main(argv=None) -> int:
             except KeyboardInterrupt:
                 log.info("Dung theo yeu cau.")
                 return 0
-            except Exception:
+            except Exception as exc:
                 log.exception("Loi ngoai vong xu ly, se thu lai o lan sau.")
+                notify(f"[{args.channel}] Uploader LOI: {exc}\nSe thu lai lan sau.")
             time.sleep(args.watch)
 
 
