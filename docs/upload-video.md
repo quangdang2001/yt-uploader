@@ -231,7 +231,8 @@ File vào `failed/` thì **không bao giờ bị xoá**, bất kể chế độ 
 Vài điểm về cơ chế:
 
 - **Độ trễ tối đa 5 phút** (bằng chu kỳ task).
-- **Tối đa 5 video mỗi lần chạy**, xử lý cũ nhất trước.
+- **1 video mỗi lần chạy** (mặc định), xử lý cũ nhất trước. Đẩy 10 video vào
+  `pending/` thì chúng lên dần, mỗi 5 phút một cái.
 - **Không chạy chồng**: video 1GB upload 20 phút thì các lần task gọi chen vào
   tự thoát ngay, không sinh tiến trình trùng.
 - **Hết quota thì file ở lại `pending/`**, không bị đẩy sang `failed/`, và lần

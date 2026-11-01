@@ -109,6 +109,10 @@ Cách này an toàn hơn chạy thường trú: nếu một lần chạy chết,
 lại. Script tự chặn chạy chồng bằng lock file, nên Task Scheduler gọi trùng giờ
 cũng không sao.
 
+Mỗi lần chạy xử lý **1 video** (mặc định `--max-per-run 1`). Video 1GB mất hàng
+chục phút, nên để 1 thì mỗi lần chạy ngắn, giữ lock ít, và hỏng giữa chừng thì
+mất ít tiến độ. Muốn nhiều hơn thì `--max-per-run 3`. Giá trị phải ≥ 1.
+
 **Đặt `PYTHONUTF8=1` cho user chạy task:**
 
 ```powershell

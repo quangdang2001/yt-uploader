@@ -177,6 +177,14 @@ Chỉ áp dụng cho **upload thành công hoàn toàn**:
 - Trash/delete hỏng giữa chừng → file kẹt được chuyển sang `done/` dự phòng,
   nên không còn ở `pending/` và không có nguy cơ upload lại
 
+## `--max-per-run` (01/11/2026)
+Mặc định đổi từ 5 → **1 video mỗi lần chạy**. Video 1GB mất hàng chục phút nên
+mỗi lần chạy ngắn thì giữ lock ít, hỏng giữa chừng mất ít tiến độ.
+
+Kèm theo sửa một chỗ nhận giá trị lạ: `items[:n]` với `n = 0` thì im lặng không
+làm gì, còn `n` âm thì **cắt từ đầu đến gần cuối** — `--max-per-run -1` xử lý
+9/10 video, ngược hẳn ý nghĩa "giới hạn". Giờ parser bắt buộc ≥ 1.
+
 ## Quota
 `videos.insert` = 1600 units, `videos.update` = 50, `thumbnails.set` = 50.
 Quota mặc định 10.000 units/ngày → **~5-6 video/ngày cho cả project**. Phải
@@ -224,7 +232,7 @@ docker rm -f n8n-test && docker volume rm n8n_test_data
 ## Files trong thư mục
 **Đang dùng:**
 - `scripts/youtube_uploader.py` — chạy trên VPS, quét Drive và upload YouTube
-- `scripts/test_youtube_uploader.py` — 38 unit test, mock hết phần gọi mạng
+- `scripts/test_youtube_uploader.py` — 44 unit test, mock hết phần gọi mạng
 - `scripts/push_to_drive.py` — chạy trên máy render, đẩy video/thumb/metadata lên Drive
 - `scripts/requirements.txt`
 - `docs/uploader.md` — triển khai uploader trên VPS Windows
@@ -243,7 +251,7 @@ docker rm -f n8n-test && docker volume rm n8n_test_data
 - [x] Privacy policy đã đăng công khai (GitHub Pages)
 - [x] `scripts/push_to_drive.py` — phía pipeline
 - [x] `scripts/youtube_uploader.py` — phía VPS
-- [x] 38 unit test cho uploader, đã commit (`python -m unittest test_youtube_uploader`)
+- [x] 44 unit test cho uploader, đã commit (`python -m unittest test_youtube_uploader`)
 - [x] Sửa 2 lỗi phát hiện khi review (31/10/2026) — xem mục dưới
 - [x] `docs/uploader.md`
 

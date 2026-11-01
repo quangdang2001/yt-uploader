@@ -394,6 +394,44 @@ class TestOnSuccessArg(unittest.TestCase):
             yu.parse_args(["--channel", "k", "--on-success", "xoa-het"])
 
 
+class TestMaxPerRun(Base):
+    def test_mac_dinh_la_1(self):
+        self.assertEqual(yu.parse_args(["--channel", "k"]).max_per_run, 1)
+
+    def test_chi_xu_ly_1_video_du_pending_co_nhieu(self):
+        h = Harness(self.tmp)
+        items = [self.item(f"v{i}.json", f"json-{i}") for i in range(5)]
+        args = mock.Mock(dry_run=False, max_per_run=1, temp_dir=None, on_success="move")
+        with h.patches(), mock.patch.object(yu, "list_pending_json", return_value=items):
+            ok = yu.run_once(args, mock.Mock(), mock.Mock(), FOLDERS, self.state, "kenh")
+        self.assertEqual(ok, 1)
+        self.assertEqual(h.uploads, 1, "chi duoc upload 1 video moi lan chay")
+        self.assertEqual(len(h.moves), 2, "chi 1 bo file (json + mp4) duoc doc")
+
+    def test_lay_file_cu_nhat_truoc(self):
+        """list_pending_json sap theo createdTime, nen phan tu dau la cu nhat."""
+        h = Harness(self.tmp)
+        items = [self.item(f"v{i}.json", f"json-{i}") for i in range(3)]
+        args = mock.Mock(dry_run=False, max_per_run=1, temp_dir=None, on_success="move")
+        with h.patches(), mock.patch.object(yu, "list_pending_json", return_value=items):
+            yu.run_once(args, mock.Mock(), mock.Mock(), FOLDERS, self.state, "kenh")
+        self.assertIn(("json-0", "D"), h.moves, "phai xu ly v0.json truoc")
+
+    def test_tu_choi_0_va_so_am(self):
+        """items[:0] im lang khong lam gi; items[:-1] xu ly gan het — ca hai sai."""
+        for bad in ("0", "-1", "-3"):
+            with self.subTest(bad=bad), self.assertRaises(SystemExit):
+                yu.parse_args(["--channel", "k", "--max-per-run", bad])
+
+    def test_tu_choi_gia_tri_khong_phai_so(self):
+        with self.assertRaises(SystemExit):
+            yu.parse_args(["--channel", "k", "--max-per-run", "abc"])
+
+    def test_van_dat_duoc_gia_tri_lon_hon(self):
+        self.assertEqual(
+            yu.parse_args(["--channel", "k", "--max-per-run", "5"]).max_per_run, 5)
+
+
 class TestBuildBody(unittest.TestCase):
     def test_bat_buoc_co_title(self):
         for bad in ({}, {"title": ""}, {"title": "   "}):

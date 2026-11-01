@@ -639,6 +639,21 @@ def run_once(args, drive, youtube, folders, state, channel) -> int:
     return ok
 
 
+def so_duong(value: str) -> int:
+    """Chan `--max-per-run 0` (im lang khong lam gi) va so am.
+
+    `items[:n]` voi n am cat tu dau den gan cuoi, nen -1 se xu ly gan het
+    danh sach — nguoc han y nghia "gioi han".
+    """
+    try:
+        n = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"phai la so nguyen: {value!r}")
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"phai >= 1, nhan duoc {n}")
+    return n
+
+
 def parse_args(argv=None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Upload video tu Google Drive len YouTube",
@@ -652,7 +667,12 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--log-file", default=str(SCRIPT_DIR / "logs" / "uploader.log"))
     p.add_argument("--state-file", default=None, help="Mac dinh: .uploader-state-<kenh>.json")
     p.add_argument("--temp-dir", default=None, help="Noi tai video tam (mac dinh: temp he thong)")
-    p.add_argument("--max-per-run", type=int, default=5, help="Toi da bao nhieu video moi lan chay")
+    p.add_argument(
+        "--max-per-run", type=so_duong, default=1, metavar="N",
+        help="Toi da bao nhieu video moi lan chay (mac dinh 1). "
+             "Video 1GB mat hang chuc phut, de 1 thi moi lan chay ngan, "
+             "giu lock it, va hong giua chung thi mat it tien do",
+    )
     p.add_argument(
         "--on-success", choices=ON_SUCCESS, default="move",
         help="Sau khi video len YouTube: move = chuyen sang done/ (mac dinh); "
