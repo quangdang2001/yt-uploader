@@ -185,6 +185,23 @@ Kèm theo sửa một chỗ nhận giá trị lạ: `items[:n]` với `n = 0` th
 làm gì, còn `n` âm thì **cắt từ đầu đến gần cuối** — `--max-per-run -1` xử lý
 9/10 video, ngược hẳn ý nghĩa "giới hạn". Giờ parser bắt buộc ≥ 1.
 
+## Theo dõi: Telegram + CSV trên Drive (01/11/2026)
+**Thông báo** — `notify()` qua Telegram đã có từ đầu, chỉ cần 2 biến môi
+trường. Thêm tình huống thứ 4: **uploader chết hẳn**. Không có nó thì token hết
+hạn hay Drive đổi quyền là im lặng hoàn toàn, không ai biết.
+
+**Dashboard** — `YouTube-Upload/<kênh>/upload-history.csv`, mỗi video một dòng,
+8 cột. Mở bằng Google Sheets để lọc. Dùng đúng scope `drive` đang có nên không
+phải đăng nhập lại. Drive không có API append nên phải tải về - nối - đẩy lên;
+file nhỏ nên chấp nhận được.
+
+Trạng thái: `OK` | `LOI` | `OK-LOI-SAU` (video đã lên, bước sau lỗi).
+
+**`log_history()` luôn nuốt lỗi.** Ghi sổ thất bại không được làm hỏng kết quả
+upload — để lỗi thoát ra ở nhánh thành công thì một video đã lên YouTube bị coi
+là thất bại, đắt hơn nhiều so với một dòng CSV bị thiếu. Có test riêng cho
+chuyện này.
+
 ## Quota
 `videos.insert` = 1600 units, `videos.update` = 50, `thumbnails.set` = 50.
 Quota mặc định 10.000 units/ngày → **~5-6 video/ngày cho cả project**. Phải
@@ -232,7 +249,7 @@ docker rm -f n8n-test && docker volume rm n8n_test_data
 ## Files trong thư mục
 **Đang dùng:**
 - `scripts/youtube_uploader.py` — chạy trên VPS, quét Drive và upload YouTube
-- `scripts/test_youtube_uploader.py` — 44 unit test, mock hết phần gọi mạng
+- `scripts/test_youtube_uploader.py` — 58 unit test, mock hết phần gọi mạng
 - `scripts/push_to_drive.py` — chạy trên máy render, đẩy video/thumb/metadata lên Drive
 - `scripts/requirements.txt`
 - `docs/uploader.md` — triển khai uploader trên VPS Windows
@@ -251,7 +268,7 @@ docker rm -f n8n-test && docker volume rm n8n_test_data
 - [x] Privacy policy đã đăng công khai (GitHub Pages)
 - [x] `scripts/push_to_drive.py` — phía pipeline
 - [x] `scripts/youtube_uploader.py` — phía VPS
-- [x] 44 unit test cho uploader, đã commit (`python -m unittest test_youtube_uploader`)
+- [x] 58 unit test cho uploader, đã commit (`python -m unittest test_youtube_uploader`)
 - [x] Sửa 2 lỗi phát hiện khi review (31/10/2026) — xem mục dưới
 - [x] `docs/uploader.md`
 

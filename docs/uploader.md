@@ -157,6 +157,36 @@ Nên `done/` trở thành thư mục "cần để ý", không còn là nơi ch�
 xong. Nếu trash/delete hỏng giữa chừng (mất mạng), file còn kẹt được chuyển
 sang `done/` như phương án dự phòng.
 
+## 5c. Dashboard: `upload-history.csv` trên Drive
+
+Mỗi video upload xong (hoặc lỗi) script ghi thêm một dòng vào
+`YouTube-Upload/<kênh>/upload-history.csv`. Không cần bật gì, tự động chạy.
+
+| Cột | Nội dung |
+|---|---|
+| `thoi_gian` | Giờ local của VPS |
+| `kenh` | Tên kênh |
+| `ten_goc` | Tên gốc bộ file, ví dụ `v001` |
+| `title` | Tiêu đề đã gửi lên YouTube |
+| `video_id` | ID video, rỗng nếu chưa upload được |
+| `url` | `https://youtu.be/<id>` |
+| `trang_thai` | `OK` / `LOI` / `OK-LOI-SAU` |
+| `ghi_chu` | Nơi file được chuyển tới, hoặc nội dung lỗi |
+
+`OK-LOI-SAU` nghĩa là video **đã lên YouTube** nhưng bước sau lỗi (thường là
+thumbnail). Video vẫn dùng được, chỉ cần xem lại phần thiếu.
+
+**Cách xem:** mở Drive → folder kênh → `upload-history.csv`. Drive xem trước
+được ngay; muốn lọc và sắp xếp thì bấm **Open with → Google Sheets**. Bookmark
+file đó là có dashboard, xem được cả trên điện thoại.
+
+Drive không có API ghi thêm vào cuối file, nên script tải file về, nối dòng mới
+rồi đẩy lên lại. Mỗi video một dòng nên file rất nhỏ, không đáng lo.
+
+**Ghi sổ thất bại không làm hỏng upload.** Nếu Drive lỗi lúc ghi CSV, script chỉ
+ghi cảnh báo vào log rồi đi tiếp — một dòng CSV bị thiếu không đáng để biến một
+video đã lên YouTube thành thất bại.
+
 ## 6. Thông báo Telegram (tuỳ chọn)
 
 Đặt hai biến môi trường cho user chạy task:
@@ -167,6 +197,25 @@ setx TELEGRAM_CHAT_ID "123456789"
 ```
 
 Không đặt thì script bỏ qua, không lỗi.
+
+Nhớ **gửi cho bot một tin nhắn bất kỳ trước**, không thì Telegram chặn bot gửi
+tin đầu tiên. Lấy chat id nhanh bằng [@userinfobot](https://t.me/userinfobot).
+
+`setx` chỉ áp dụng cho tiến trình mới, nên mở lại PowerShell trước khi thử. Và
+phải đặt bằng đúng user mà Scheduled Task dùng để chạy.
+
+Script gửi thông báo ở 4 tình huống:
+
+| Khi nào | Nội dung |
+|---|---|
+| Video lên xong | Tên file + link `youtu.be` |
+| Video lỗi | Lỗi gì, file đã chuyển đi đâu |
+| Hết quota ngày | Còn bao nhiêu file đang chờ trong `pending/` |
+| Uploader chết hẳn | Lỗi khiến không chạy được lần nào |
+
+Tình huống cuối quan trọng hơn vẻ ngoài: không có nó thì uploader hỏng (token
+hết hạn, Drive đổi quyền, Python lỗi) là **im lặng hoàn toàn** — không video nào
+lên và không ai biết.
 
 ---
 
