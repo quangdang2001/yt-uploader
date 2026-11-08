@@ -87,6 +87,7 @@ class Harness:
         self.history: list[dict] = []
         self.history_raises = None
         self.uploads = 0
+        self.notify_flags: list[bool] = []   # notifySubscribers gui cho videos.insert
         self.notices: list[str] = []
 
     # --- cac ham duoc patch ---
@@ -108,8 +109,9 @@ class Harness:
         else:
             dest.write_bytes(VIDEO_BYTES)
 
-    def upload_video(self, youtube, path, body):
+    def upload_video(self, youtube, path, body, notify=True):
         self.uploads += 1
+        self.notify_flags.append(notify)
         if self.upload_raises:
             raise self.upload_raises
         return "YTID123"
@@ -309,6 +311,38 @@ class TestLuongChinh(Base):
         h = Harness(self.tmp)
         self.assertTrue(self.run_one(h, self.item("V001.JSON")))
         self.assertEqual(h.dests(), {"D"})
+
+
+# ------------------------------------------------ notifySubscribers
+
+class TestNotifySubscribers(Base):
+    """O "Xuat ban len trang Kenh dang ky va thong bao..." trong Studio."""
+
+    def check(self, meta, expected):
+        h = Harness(self.tmp, meta=meta)
+        self.assertTrue(self.run_one(h))
+        self.assertEqual(h.notify_flags, [expected])
+
+    def test_thieu_truong_thi_bat(self):
+        self.check(meta_json(), True)
+
+    def test_true_thi_bat(self):
+        self.check(meta_json(notifySubscribers=True), True)
+
+    def test_chi_false_moi_tat(self):
+        self.check(meta_json(notifySubscribers=False), False)
+
+    def test_insert_nhan_dung_co(self):
+        """upload_video that phai chuyen co xuong videos.insert."""
+        for flag in (True, False):
+            with self.subTest(flag=flag):
+                yt = mock.Mock()
+                yt.videos.return_value.insert.return_value.next_chunk.return_value = (None, {"id": "X"})
+                path = self.tmp / "v.mp4"
+                path.write_bytes(VIDEO_BYTES)
+                with mock.patch.object(yu, "MediaFileUpload"):
+                    yu.upload_video(yt, path, {"snippet": {}, "status": {}}, notify=flag)
+                self.assertIs(yt.videos.return_value.insert.call_args.kwargs["notifySubscribers"], flag)
 
 
 # ------------------------------------------- doc bo file sau khi upload xong
