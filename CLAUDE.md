@@ -60,11 +60,14 @@ Schema JSON:
   "categoryId": "27",
   "privacyStatus": "private",
   "publishAt": "2026-11-05T12:00:00Z",
-  "containsSyntheticMedia": true,
-  "madeForKids": false
+  "containsSyntheticMedia": false,
+  "madeForKids": false,
+  "notifySubscribers": true
 }
 ```
-Chỉ `title` là bắt buộc. Có `publishAt` thì `privacyStatus` bị ép về
+Chỉ `title` là bắt buộc. `notifySubscribers` (ô "Xuất bản lên trang Kênh đăng ký và
+thông báo đến người đăng ký") thiếu thì uploader coi là `true`; chỉ `false` mới tắt.
+Kênh Bare Skull: `containsSyntheticMedia` luôn `false` (chủ kênh 08/11/2026). Có `publishAt` thì `privacyStatus` bị ép về
 `private` (YouTube chỉ cho hẹn giờ video private). Chi tiết: `docs/setup.md` §8.
 
 ## Workflow n8n (đã viết)

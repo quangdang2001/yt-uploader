@@ -493,13 +493,17 @@ def build_body(meta: dict) -> dict:
     }
 
 
-def upload_video(youtube, path: Path, body: dict) -> str:
-    """Upload resumable. Khac n8n: loi giua chung van resume dung cho dang do."""
+def upload_video(youtube, path: Path, body: dict, notify: bool = True) -> str:
+    """Upload resumable. Khac n8n: loi giua chung van resume dung cho dang do.
+
+    notify = o "Xuat ban len trang Kenh dang ky va thong bao den nguoi dang ky"
+    trong Studio. Mac dinh BAT; chi tat khi JSON ghi "notifySubscribers": false.
+    """
     size = path.stat().st_size
     media = MediaFileUpload(str(path), chunksize=UPLOAD_CHUNK, resumable=True,
                             mimetype="video/mp4")
     request = youtube.videos().insert(
-        part="snippet,status", body=body, media_body=media, notifySubscribers=False
+        part="snippet,status", body=body, media_body=media, notifySubscribers=notify
     )
 
     response = None
@@ -612,7 +616,8 @@ def process_one(drive, youtube, folders: dict, item: dict, state: State,
             if expected and actual != expected:
                 raise IOError(f"Tai thieu: {actual:,}/{expected:,} bytes")
 
-            video_id = upload_video(youtube, local_video, body)
+            video_id = upload_video(youtube, local_video, body,
+                                    notify=meta.get("notifySubscribers") is not False)
             state.set(base, videoId=video_id, at=datetime.now(timezone.utc).isoformat())
             log.info("  DA LEN YOUTUBE: https://youtu.be/%s", video_id)
 
