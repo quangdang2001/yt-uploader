@@ -187,6 +187,12 @@ rồi đẩy lên lại. Mỗi video một dòng nên file rất nhỏ, không �
 ghi cảnh báo vào log rồi đi tiếp — một dòng CSV bị thiếu không đáng để biến một
 video đã lên YouTube thành thất bại.
 
+## 5d. Số liệu kênh: `fetch_analytics.py`
+
+Muốn có thêm bảng lượt xem / thời gian xem / người đăng ký / doanh thu theo ngày
+và theo video, chạy script thứ hai: xem `analytics.md`. Nó dùng quota riêng của
+Analytics API nên không ảnh hưởng tới số video upload được mỗi ngày.
+
 ## 6. Thông báo Telegram (tuỳ chọn)
 
 Đặt hai biến môi trường cho user chạy task:

@@ -11,6 +11,7 @@ client_secret_*.json
 # Trạng thái và log của uploader
 scripts/.uploader-state-*.json
 scripts/.uploader-*.lock
+scripts/.analytics-*.lock
 scripts/logs/
 
 __pycache__/

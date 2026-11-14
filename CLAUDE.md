@@ -205,6 +205,35 @@ upload — để lỗi thoát ra ở nhánh thành công thì một video đã l
 là thất bại, đắt hơn nhiều so với một dòng CSV bị thiếu. Có test riêng cho
 chuyện này.
 
+## Lấy analytics kênh (`fetch_analytics.py`, 14/11/2026)
+Dùng **YouTube Analytics API** (`reports.query`), quota bucket **riêng** nên
+không đụng vào 10.000 units/ngày đang dành cho `videos.insert`. Mặc định cửa sổ
+**28 ngày tính cả hôm nay** (giống chế độ nâng cao của Studio).
+
+Ghi 2 file vào `YouTube-Upload/<kênh>/`:
+- `analytics-daily.csv` — một dòng/ngày, **gộp** với dữ liệu cũ (ngày trong cửa
+  sổ bị ghi đè, ngày cũ hơn giữ nguyên) → lịch sử tích luỹ dài hơn 28 ngày.
+- `analytics-videos.csv` — top 200 video theo view trong cửa sổ, **ghi đè** mỗi
+  lần vì đó là ảnh chụp của một khoảng cụ thể.
+
+Ba quyết định đáng nhớ:
+- **Lấy lại cả 28 ngày mỗi lần chạy**, không chỉ lấy hôm qua. YouTube chốt số
+  trễ 2-3 ngày (doanh thu còn trễ hơn) nên số cũ phải được sửa lại, không phải
+  được bảo tồn. Đó là lý do `merge_daily()` ghi đè theo khoá `ngay`.
+- **403 doanh thu không làm hỏng cả báo cáo.** Kênh chưa bật kiếm tiền thì query
+  có `estimatedRevenue` trả 403; `query_with_money()` bắt riêng 403 và query lại
+  không kèm cột đó. Mất một cột còn hơn mất tất cả.
+- **Token riêng `token-analytics.json`**, không đè lên token Drive/YouTube của
+  uploader → thêm tính năng này không bắt uploader đăng nhập lại.
+
+**Impressions và CTR không lấy tự động được.** Hai cột "Số lượt hiển thị hình
+thu nhỏ" và "Tỷ lệ nhấp" chỉ có trong giao diện Studio, không có trong cả
+Analytics API lẫn Reporting API. Phải xuất tay. Không dùng browser automation
+cho việc này.
+
+Chi tiết: `docs/analytics.md`. 31 unit test trong
+`scripts/test_fetch_analytics.py`.
+
 ## Quota
 `videos.insert` = 1600 units, `videos.update` = 50, `thumbnails.set` = 50.
 Quota mặc định 10.000 units/ngày → **~5-6 video/ngày cho cả project**. Phải
@@ -252,10 +281,13 @@ docker rm -f n8n-test && docker volume rm n8n_test_data
 ## Files trong thư mục
 **Đang dùng:**
 - `scripts/youtube_uploader.py` — chạy trên VPS, quét Drive và upload YouTube
-- `scripts/test_youtube_uploader.py` — 58 unit test, mock hết phần gọi mạng
+- `scripts/test_youtube_uploader.py` — 62 unit test, mock hết phần gọi mạng
+- `scripts/fetch_analytics.py` — lấy analytics kênh, ghi CSV lên Drive
+- `scripts/test_fetch_analytics.py` — 31 unit test
 - `scripts/push_to_drive.py` — chạy trên máy render, đẩy video/thumb/metadata lên Drive
 - `scripts/requirements.txt`
 - `docs/uploader.md` — triển khai uploader trên VPS Windows
+- `docs/analytics.md` — lấy số liệu kênh hằng ngày
 - `docs/upload-video.md` — hướng dẫn phía máy render: đẩy 3 file lên `pending/`
 - `docs/setup.md` — vẫn dùng **§4 Google Cloud** và **§10 quota/audit**; §0-3 và §5-7 là phần n8n, không còn cần
 - `docs/public-site/` — trang privacy policy, đã đăng tại quangdang2001.github.io/video-analytics-policy
@@ -280,6 +312,8 @@ Còn lại:
 - [ ] Đăng nhập lần đầu trên VPS (Drive + YouTube) — §3
 - [ ] Chạy thử 1 video ngắn, thử cả nhánh lỗi — §4
 - [ ] Tạo Scheduled Task — §5 (nhớ `setx PYTHONUTF8 1`)
+- [ ] Thêm 2 scope `yt-analytics*` vào consent screen, đăng nhập analytics lần
+      đầu, tạo Scheduled Task thứ hai — `docs/analytics.md` §3, §8
 - [ ] Nộp form audit YouTube để đăng public/hẹn giờ — `docs/setup.md` §10
 - [ ] Kế hoạch thay VPS trước 13/01/2027 (Server 2016 hết hỗ trợ)
 
