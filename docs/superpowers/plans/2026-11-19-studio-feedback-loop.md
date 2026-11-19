@@ -48,13 +48,13 @@ alternates and the feature rows.
   fractions from JSON; when only text exists, parse both decimal separators, and refuse "K/M" rounding for the CTR
   math (→ `FAIL read`). Test in Task 2.
 - **A video goes public late (uploaded private, flipped public days later).** Expected: age counts from the public
-  time, so it gets the 2-hourly window after going public. Test in Task 6.
+  time, so it gets the 2-hourly window after going public. Test in Task 5.
 - **Two runs overlap (a slow run, or Task Scheduler fires again).** Expected: the second exits at once on
-  `studio.lock` and writes nothing. Test in Task 6.
+  `studio.lock` and writes nothing. Test in Task 5.
 - **The owner swaps a thumbnail by hand mid-test.** Expected: variant becomes `manual`, 7-day pause, no revert to
-  the loop's variant. Test in Task 3.
+  the loop's variant. Tests in Task 6 (pause) and Task 8 (detection).
 - **`thumbnails.set` fails (quota, 5xx) during a swap.** Expected: alternate not marked used, swap not logged as
-  done, Telegram sent, next run may retry. Test in Task 5.
+  done, Telegram sent, the request lands in `actions/failed/` so this PC can re-request. Test in Task 4.
 
 ---
 
