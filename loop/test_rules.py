@@ -62,7 +62,7 @@ class RulesTest(unittest.TestCase):
                    variant_stats={"main": (5000, 0.052), "alt1": (2500, 0.030)})
         self.assertEqual(run(snap(ctr=0.030, impr=7500), st)[0], Verdict.REVERT)
         st.reverts = 1
-        self.assertNotEqual(run(snap(ctr=0.030, impr=7500), st)[0], Verdict.REVERT)
+        self.assertEqual(run(snap(ctr=0.030, impr=7500), st)[0], Verdict.SWAP)
 
     def test_change_title_after_alts(self):
         v, reason = run(snap(), state(swaps=2, alts_left=[]))
@@ -76,21 +76,34 @@ class RulesTest(unittest.TestCase):
                    variant_stats={"main": (5000, 0.052), "manual": (2500, 0.030)})
         self.assertEqual(run(snap(ctr=0.030, impr=7500), st)[0], Verdict.PAUSED)
         st.manual_until = NOW - timedelta(seconds=1)
-        self.assertNotEqual(run(snap(ctr=0.030, impr=7500), st)[0], Verdict.PAUSED)
+        self.assertEqual(run(snap(ctr=0.030, impr=7500), st)[0], Verdict.REVERT)
 
     def test_not_packaging(self):
-        v, _ = run(snap(ctr=0.060, impr=2500), state(), typical=10000)
-        self.assertEqual(v, Verdict.KEEP)  # KEEP wins above the keep line
+        v, reason = run(snap(ctr=0.060, impr=2500), state(), typical=10000)
+        self.assertEqual(v, Verdict.NOT_PACKAGING)
+        self.assertIn("CTR 6.0% >= bar 5.3% at 2,500 impr", reason)
+        self.assertIn("10,000", reason)
         v, _ = run(snap(ctr=0.055, impr=2500), state(), typical=10000)
         self.assertEqual(v, Verdict.NOT_PACKAGING)
         v, _ = run(snap(ctr=0.055, impr=5000), state(), typical=10000)
         self.assertEqual(v, Verdict.WATCH)
 
     def test_opening(self):
-        v, _ = run(snap(ctr=0.055, impr=5000, ret=0.40), state(), med_ret=0.50)
+        v, reason = run(snap(ctr=0.055, impr=5000, ret=0.40), state(), med_ret=0.50)
         self.assertEqual(v, Verdict.OPENING)
+        self.assertIn("CTR 5.5% >= bar 5.3% at 5,000 impr", reason)
+        self.assertIn("40.0%", reason)
+        self.assertIn("50.0%", reason)
         v, _ = run(snap(ctr=0.055, impr=5000, ret=0.60), state(), med_ret=0.50)
         self.assertEqual(v, Verdict.WATCH)
+
+    def test_opening_on_good_ctr(self):
+        v, _ = run(snap(ctr=0.060, impr=5000, ret=0.40), state(), typical=5000, med_ret=0.50)
+        self.assertEqual(v, Verdict.OPENING)
+
+    def test_keep_when_no_alert(self):
+        v, _ = run(snap(ctr=0.060, impr=5000, ret=0.60), state(), typical=5000, med_ret=0.50)
+        self.assertEqual(v, Verdict.KEEP)
 
     def test_swap_bar_median(self):
         def hist(n):
@@ -110,8 +123,8 @@ class RulesTest(unittest.TestCase):
 
     def test_wilson_known_value(self):
         lo, hi = ctr_interval(0.05, 1000)
-        self.assertAlmostEqual(lo, 0.0396, places=3)
-        self.assertAlmostEqual(hi, 0.0628, places=3)
+        self.assertAlmostEqual(lo, 0.0398, places=4)
+        self.assertAlmostEqual(hi, 0.0626, places=4)
         self.assertEqual(ctr_interval(0.0, 0), (0.0, 1.0))
 
 

@@ -110,7 +110,7 @@ def _should_revert(snap: dict, state: VideoState) -> str | None:
 
 
 def _swap_allowed(snap: dict, state: VideoState, now: datetime) -> bool:
-    if state.swaps >= MAX_SWAPS or not state.alts_left or state.pending_action or snap["test_running"]:
+    if state.swaps >= MAX_SWAPS or not state.alts_left or state.pending_action or snap.get("test_running", False):
         return False
     if state.last_swap_utc is None:
         return True
@@ -129,6 +129,13 @@ def decide(snap: dict, state: VideoState, bar: float, now: datetime,
     rev = _should_revert(snap, state)
     if rev:
         return Verdict.REVERT, rev
+    if ctr >= bar:
+        if typical_impr is not None and impr < 0.5 * typical_impr:
+            return Verdict.NOT_PACKAGING, "%s, typical %s impr" % (_fmt_ok(snap, bar), format(round(typical_impr), ","))
+        ret = snap.get("ret_30s")
+        if median_ret_30s is not None and ret is not None and ret < median_ret_30s:
+            return Verdict.OPENING, "%s, 30s retention %.1f%% < median %.1f%%" % (
+                _fmt_ok(snap, bar), ret * 100, median_ret_30s * 100)
     if ctr >= KEEP_CTR:
         return Verdict.KEEP, _fmt_ok(snap, bar)
     clearly_low = ctr_interval(ctr, impr)[1] < bar
@@ -137,11 +144,4 @@ def decide(snap: dict, state: VideoState, bar: float, now: datetime,
             return Verdict.SWAP, _fmt(snap, bar)
         if state.swaps >= MAX_SWAPS or not state.alts_left:
             return Verdict.CHANGE_TITLE, _fmt(snap, bar) + ", no swap left"
-    if ctr >= bar:
-        if typical_impr is not None and impr < 0.5 * typical_impr:
-            return Verdict.NOT_PACKAGING, "%s, typical %s impr" % (_fmt_ok(snap, bar), format(round(typical_impr), ","))
-        ret = snap.get("ret_30s")
-        if median_ret_30s is not None and ret is not None and ret < median_ret_30s:
-            return Verdict.OPENING, "%s, 30s retention %.1f%% < median %.1f%%" % (
-                _fmt_ok(snap, bar), ret * 100, median_ret_30s * 100)
     return Verdict.WATCH, "CTR %.1f%% at %s impr, bar %.1f%%" % (ctr * 100, format(impr, ","), bar * 100)
