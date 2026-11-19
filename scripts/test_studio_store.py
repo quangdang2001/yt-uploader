@@ -138,9 +138,7 @@ class StudioStoreTest(unittest.TestCase):
         ss.append_snapshot_rows(self.drive, self.folders, "d", cols,
                                 [{"video_id": "a", "views": 1}])
         text = self.drive.named("d.csv", self.folders["snapshots"])[0]["data"].decode()
-        self.assertEqual(text, "video_id,views
-a,1
-")
+        self.assertEqual(text, "video_id,views\na,1\n")
 
     def test_snapshot_append_keeps_rows(self):
         cols = ("video_id", "title")

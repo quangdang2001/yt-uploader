@@ -81,8 +81,7 @@ def append_snapshot_rows(drive, folders: dict, day: str, cols: tuple, rows: list
             media_body=yu._csv_media(text), fields="id", supportsAllDrives=True,
         ).execute()
         return
-    old = yu.download_text(drive, found["id"]) or (",".join(cols) + "
-")
+    old = yu.download_text(drive, found["id"]) or (",".join(cols) + "\n")
     if old and not old.endswith("\n"):
         old += "\n"
     drive.files().update(
