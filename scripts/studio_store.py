@@ -65,6 +65,7 @@ def append_snapshot_rows(drive, folders: dict, day: str, cols: tuple, rows: list
     """Them dong vao snapshots/<day>.csv; ghi header o lan dau.
 
     Drive khong co API append: tai ve, noi them, day len lai (nhu append_history).
+    Chi mot nguoi ghi (VPS), khong co khoa, giong append_history.
     """
     if not rows:
         return
@@ -80,7 +81,8 @@ def append_snapshot_rows(drive, folders: dict, day: str, cols: tuple, rows: list
             media_body=yu._csv_media(text), fields="id", supportsAllDrives=True,
         ).execute()
         return
-    old = yu.download_text(drive, found["id"])
+    old = yu.download_text(drive, found["id"]) or (",".join(cols) + "
+")
     if old and not old.endswith("\n"):
         old += "\n"
     drive.files().update(

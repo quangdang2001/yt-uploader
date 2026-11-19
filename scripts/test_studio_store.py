@@ -132,6 +132,16 @@ class StudioStoreTest(unittest.TestCase):
         self.assertEqual(text.count("video_id,views"), 1)
         self.assertTrue(text.startswith("video_id,views\n"))
 
+    def test_existing_empty_csv_gets_header(self):
+        cols = ("video_id", "views")
+        self.drive._add("d.csv", [self.folders["snapshots"]], "text/csv", b"")
+        ss.append_snapshot_rows(self.drive, self.folders, "d", cols,
+                                [{"video_id": "a", "views": 1}])
+        text = self.drive.named("d.csv", self.folders["snapshots"])[0]["data"].decode()
+        self.assertEqual(text, "video_id,views
+a,1
+")
+
     def test_snapshot_append_keeps_rows(self):
         cols = ("video_id", "title")
         ss.append_snapshot_rows(self.drive, self.folders, "d", cols,
