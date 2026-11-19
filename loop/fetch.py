@@ -14,13 +14,17 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import logging
+import os
 import sys
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 REPO = Path(__file__).resolve().parent.parent
 SCRIPTS = REPO / "scripts"
 if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
+    sys.path.append(str(SCRIPTS))
 
 import studio_store as ss  # noqa: E402
 
@@ -33,8 +37,19 @@ BOOL_COLS = {"test_running"}
 
 
 def _write(path: Path, text: str) -> None:
+    """Ghi nguyen tu: ghi <ten>.tmp roi os.replace, crash giua chung khong de file cut."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8", newline="")
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8", newline="")
+    os.replace(tmp, path)
+
+
+def _parses(path: Path) -> bool:
+    try:
+        json.loads(path.read_text(encoding="utf-8"))
+        return True
+    except (OSError, ValueError):
+        return False
 
 
 def _load_state(cache: Path) -> dict:
@@ -68,7 +83,7 @@ def fetch(drive, chan_folder: str, cache: Path) -> dict:
             if not f["name"].endswith(".json"):
                 continue
             dest = cache / "actions" / sub / f["name"]
-            if dest.exists():
+            if dest.exists() and _parses(dest):
                 continue
             _write(dest, ss.read_text(drive, f["id"]))
             acts += 1
@@ -76,6 +91,9 @@ def fetch(drive, chan_folder: str, cache: Path) -> dict:
     pending = [f["name"] for f in ss.list_files(drive, folders["actions_pending"])
                if f["name"].endswith(".json")]
     _write(cache / "actions" / "pending.txt", "".join(n + "\n" for n in pending))
+
+    unreadable = sum(1 for sub in ("done", "failed")
+                     for p in (cache / "actions" / sub).glob("*.json") if not _parses(p))
 
     health_status = "missing"
     root_files = {f["name"]: f for f in ss.list_files(drive, folders["studio"])}
@@ -90,12 +108,14 @@ def fetch(drive, chan_folder: str, cache: Path) -> dict:
     health = cache / ss.HEALTH_NAME
     if ss.HEALTH_NAME in root_files and health.exists():
         try:
-            health_status = str(json.loads(health.read_text(encoding="utf-8")).get("status", "missing"))
-        except ValueError:
-            health_status = "missing"
+            obj = json.loads(health.read_text(encoding="utf-8"))
+            health_status = str(obj["status"]) if isinstance(obj, dict) and "status" in obj else "corrupt"
+        except (ValueError, OSError):
+            health_status = "corrupt"
 
     _write(cache / ".state.json", json.dumps(state, indent=2))
     return {"snapshots_downloaded": snaps, "actions_downloaded": acts,
+            "actions_unreadable": unreadable,
             "pending": len(pending), "health_status": health_status}
 
 
@@ -126,7 +146,14 @@ def load_actions(cache: Path) -> list:
     out = []
     for state in ("done", "failed"):
         for p in sorted((Path(cache) / "actions" / state).glob("*.json")):
-            obj = json.loads(p.read_text(encoding="utf-8"))
+            try:
+                obj = json.loads(p.read_text(encoding="utf-8"))
+            except (ValueError, OSError) as exc:
+                log.warning("bo qua action khong doc duoc %s: %s", p, exc)
+                continue
+            if not isinstance(obj, dict):
+                log.warning("bo qua action khong phai object: %s", p)
+                continue
             obj["_state"] = state
             out.append(obj)
     out.sort(key=lambda a: a.get("requested_utc") or "")

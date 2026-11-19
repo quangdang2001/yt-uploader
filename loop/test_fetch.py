@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS))
+sys.path.append(str(SCRIPTS))
 
 import studio_store as ss  # noqa: E402
 from test_studio_store import FakeDrive  # noqa: E402
@@ -47,6 +47,7 @@ class FetchTest(unittest.TestCase):
         self.put("health.json", self.f["studio"], json.dumps({"status": "ok"}))
         res = lf.fetch(self.drive, "CHAN", self.cache)
         self.assertEqual(res, {"snapshots_downloaded": 1, "actions_downloaded": 2,
+                               "actions_unreadable": 0,
                                "pending": 1, "health_status": "ok"})
         self.assertEqual((self.cache / "actions" / "pending.txt").read_text().split(), ["p1.json"])
         self.assertTrue((self.cache / "thumbnail-features.csv").exists())
@@ -94,6 +95,33 @@ class FetchTest(unittest.TestCase):
     def test_health_fail_surfaces_in_counts(self):
         self.put("health.json", self.f["studio"], json.dumps({"status": "fail"}))
         self.assertEqual(lf.fetch(self.drive, "CHAN", self.cache)["health_status"], "fail")
+
+    def test_partial_action_file_is_refetched_or_skipped(self):
+        self.put("a1.json", self.f["actions_done"], json.dumps({"requested_utc": "x"}))
+        self.put("bad.json", self.f["actions_failed"], '{"requested_')  # hong ngay tren Drive
+        partial = self.cache / "actions" / "done" / "a1.json"
+        partial.parent.mkdir(parents=True)
+        partial.write_text('{"requested_', encoding="utf-8")  # file cut do crash
+        res = lf.fetch(self.drive, "CHAN", self.cache)
+        self.assertEqual(res["actions_downloaded"], 2)       # a1 duoc tai lai
+        self.assertEqual(res["actions_unreadable"], 1)       # bad.json van hong
+        acts = lf.load_actions(self.cache)
+        self.assertEqual(len(acts), 1)
+        self.assertEqual(acts[0]["_state"], "done")
+        self.assertFalse(list(self.cache.rglob("*.tmp")))
+
+    def test_health_corrupt(self):
+        self.put("health.json", self.f["studio"], '{"stat')
+        self.assertEqual(lf.fetch(self.drive, "CHAN", self.cache)["health_status"], "corrupt")
+        self.drive.items[next(i for i, f in self.drive.items.items()
+                              if f["name"] == "health.json")]["data"] = b"{}"
+        self.drive.items[next(i for i, f in self.drive.items.items()
+                              if f["name"] == "health.json")]["modifiedTime"] = "2026-12-01T00:00:00Z"
+        self.assertEqual(lf.fetch(self.drive, "CHAN", self.cache)["health_status"], "corrupt")
+
+    def test_health_non_dict(self):
+        self.put("health.json", self.f["studio"], "[1, 2]")
+        self.assertEqual(lf.fetch(self.drive, "CHAN", self.cache)["health_status"], "corrupt")
 
     def test_health_missing(self):
         self.assertEqual(lf.fetch(self.drive, "CHAN", self.cache)["health_status"], "missing")
