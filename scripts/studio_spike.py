@@ -2,21 +2,29 @@
 
 Chay:  python studio_spike.py --profile C:/yt/studio-profile --video <id> [--headless]
 Chi doc. Khong dien form, khong go vao trang. Chi luu BODY cua response JSON
-(khong luu header, cookie, token).
-Exit: 0 ok, 3 gap trang dang nhap Google.
+(khong luu header, cookie, token; cac key nhay cam bi thay bang "<scrubbed>").
+Exit: 0 ok, 3 gap trang dang nhap / thu thach Google, 4 khong mo duoc trang,
+1 watchdog het gio (300 s).
 """
 import argparse
 import json
+import os
 import re
 import sys
-import time
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
 TABS = ("tab-reach_viewers", "tab-interest_viewers")
 KEY_RE = re.compile(r"impression|ctr|view|averageviewduration|retention", re.I)
+SCRUB_RE = re.compile(r"token|xsrf|session|auth|cookie|visitordata", re.I)
+URL_BAD_RE = re.compile(r"/sorry/|challenge|signin|servicelogin|consent", re.I)
+TEXT_BAD_RE = re.compile(
+    r"verify it.?s you|confirm it.?s you|unusual traffic|not a robot|captcha|"
+    r"sign in to continue|choose an account", re.I)
 SETTLE_MS = 8000
+WATCHDOG_S = 300
 
 
 def utc_stamp():
@@ -24,8 +32,11 @@ def utc_stamp():
 
 
 def wanted(url):
-    host = urlparse(url).hostname or ""
-    return host.endswith("studio.youtube.com") or "youtubei" in url
+    u = urlparse(url)
+    host = (u.hostname or "").lower()
+    if host == "studio.youtube.com":
+        return True
+    return host in ("youtube.com", "www.youtube.com") and u.path.startswith("/youtubei/")
 
 
 def slug(url):
@@ -34,30 +45,63 @@ def slug(url):
     return re.sub(r"[^A-Za-z0-9_.-]", "-", s)[:60]
 
 
+def scrub(node):
+    if isinstance(node, dict):
+        return {k: ("<scrubbed>" if SCRUB_RE.search(k) else scrub(v)) for k, v in node.items()}
+    if isinstance(node, list):
+        return [scrub(v) for v in node]
+    return node
+
+
 def walk(node, path=""):
     if isinstance(node, dict):
         for k, v in node.items():
             p = f"{path}.{k}" if path else k
-            if KEY_RE.search(k) and not isinstance(v, (dict, list)):
-                yield p, v
+            if KEY_RE.search(k):
+                if isinstance(v, (dict, list)):
+                    yield p, json.dumps(v, ensure_ascii=False, separators=(",", ":"))[:200]
+                else:
+                    yield p, v
             yield from walk(v, p)
     elif isinstance(node, list):
         for i, v in enumerate(node):
             yield from walk(v, f"{path}[{i}]")
 
 
-def is_signin(page):
-    host = urlparse(page.url).hostname or ""
-    if host == "accounts.google.com":
-        return True
+def blocked_reason(page):
+    """Tra ve ly do neu trang khong phai Studio binh thuong, nguoc lai None."""
+    host = (urlparse(page.url).hostname or "").lower()
+    if host != "studio.youtube.com":
+        return f"host la {host or '(trong)'}, khong phai studio.youtube.com ({page.url[:120]})"
+    if URL_BAD_RE.search(page.url):
+        return f"URL co dau hieu dang nhap/thu thach ({page.url[:120]})"
     try:
-        return page.locator("input[type=password], input[type=email]").count() > 0 \
-            and "studio.youtube.com" not in host
+        if page.locator("input[type=password]").count() > 0:
+            return "trang co o nhap mat khau"
+        txt = page.inner_text("body")
+        m = TEXT_BAD_RE.search(txt)
+        if m:
+            return f"noi dung trang co '{m.group(0)}'"
     except Exception:
-        return False
+        pass
+    return None
+
+
+def bail(ctx, reason):
+    print("CHUA DANG NHAP / BI THU THACH: " + reason + ". "
+          "Chay lai khong --headless va dang nhap hoac xac minh tay trong cua so Chrome.")
+    try:
+        ctx.close()
+    except Exception:
+        pass
+    sys.exit(3)
 
 
 def main():
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--profile", required=True, help="thu muc profile Chrome ben vung")
     ap.add_argument("--video", required=True, help="video id")
@@ -67,18 +111,28 @@ def main():
 
     from playwright.sync_api import sync_playwright
 
+    def _timeout():
+        print(f"WATCHDOG: qua {WATCHDOG_S} s, thoat.", flush=True)
+        os._exit(1)
+
+    wd = threading.Timer(WATCHDOG_S, _timeout)
+    wd.daemon = True
+    wd.start()
+
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     stamp = utc_stamp()
-    saved = []  # (path, url)
+    saved = []  # (path, url, data)
     seen = {}
 
     def on_response(resp):
         try:
-            if not wanted(resp.url):
+            if resp.status != 200 or not wanted(resp.url):
                 return
-            body = resp.body()
-            data = json.loads(body.decode("utf-8"))
+            ctype = (resp.headers.get("content-type") or "").lower()
+            if "json" not in ctype:
+                return
+            data = scrub(json.loads(resp.body().decode("utf-8")))
         except Exception:
             return  # khong phai JSON, bo qua
         n = seen.get(resp.url, 0)
@@ -101,18 +155,24 @@ def main():
             print(f"mo {url}")
             try:
                 page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            except Exception as e:
+                print(f"LOI mo trang {url}: {e}")
                 try:
-                    page.wait_for_load_state("networkidle", timeout=30000)
+                    ctx.close()
                 except Exception:
                     pass
-            except Exception as e:
-                print(f"loi mo trang: {e}")
-            if is_signin(page):
-                print("CHUA DANG NHAP: trang dang o accounts.google.com / form dang nhap. "
-                      "Chay lai khong --headless va dang nhap tay trong cua so Chrome.")
-                ctx.close()
-                sys.exit(3)
+                sys.exit(4)
+            try:
+                page.wait_for_load_state("networkidle", timeout=30000)
+            except Exception:
+                pass
+            why = blocked_reason(page)
+            if why:
+                bail(ctx, why)
             page.wait_for_timeout(SETTLE_MS)
+            why = blocked_reason(page)  # chuyen huong muon sau khi cho
+            if why:
+                bail(ctx, why)
             try:
                 txt = page.inner_text("body")
                 for line in txt.splitlines():
@@ -121,6 +181,7 @@ def main():
             except Exception:
                 pass
         ctx.close()
+    wd.cancel()
 
     print(f"\nda luu {len(saved)} file JSON vao {out}")
     print("\nendpoint  key  value")
