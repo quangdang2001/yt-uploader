@@ -82,10 +82,27 @@ class BuildStatesTest(unittest.TestCase):
 
     def test_hash_change_with_done_action_is_not_manual(self):
         snaps = [snap("v1", "2026-11-18T10:00:00Z", 10, 1000, 0.04),
-                 snap("v1", "2026-11-18T20:00:00Z", 20, 3000, 0.04, h="h1")]
+                 snap("v1", "2026-11-18T20:00:00Z", 20, 3000, 0.04, h="h1"),
+                 snap("v1", "2026-11-18T22:00:00Z", 22, 3500, 0.04, h="h1")]
         st = an.build_states(snaps, [done("v1", "alt1", "main", "2026-11-18T15:00:00Z")], [], self.NOW)["v1"]
         self.assertEqual(st.variant, "alt1")
         self.assertIsNone(st.manual_until)
+
+    def test_hash_first_seen_before_24h_confirmed_after_is_ours(self):
+        # action 11-19 11:00; new hash first seen 11-20 10:00 (23 h), confirmed 11-20 12:00 (25 h)
+        snaps = [snap("v1", "2026-11-19T10:00:00Z", 30, 1000, 0.04),
+                 snap("v1", "2026-11-20T10:00:00Z", 54, 3000, 0.04, h="h1"),
+                 snap("v1", "2026-11-20T12:00:00Z", 56, 3500, 0.04, h="h1")]
+        st = an.build_states(snaps, [done("v1", "alt1", "main", "2026-11-19T11:00:00Z")], [], self.NOW)["v1"]
+        self.assertEqual(st.variant, "alt1")
+        self.assertIsNone(st.manual_until)
+
+    def test_hash_first_seen_after_24h_is_manual(self):
+        snaps = [snap("v1", "2026-11-19T10:00:00Z", 30, 1000, 0.04),
+                 snap("v1", "2026-11-20T12:00:00Z", 56, 3000, 0.04, h="h1"),
+                 snap("v1", "2026-11-20T14:00:00Z", 58, 3500, 0.04, h="h1")]
+        st = an.build_states(snaps, [done("v1", "alt1", "main", "2026-11-19T11:00:00Z")], [], self.NOW)["v1"]
+        self.assertEqual(st.variant, "manual")
 
     def test_revert_counted_and_pending(self):
         snaps = [snap("v1", "2026-11-18T10:00:00Z", 10, 1000, 0.04),

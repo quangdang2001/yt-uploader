@@ -99,8 +99,6 @@ def _build_one(snaps: list, acts: list, feature_variants: set, pending: bool,
             ai += 1
         if switched:
             impr_last = s["impressions"]
-        if expect_since is not None and t - expect_since > timedelta(hours=EXPECT_H):
-            expect_since = None
         if h:
             if prev_hash is None or h == prev_hash:
                 prev_hash, cand_hash, cand_count = prev_hash or h, None, 0
@@ -118,6 +116,12 @@ def _build_one(snaps: list, acts: list, feature_variants: set, pending: bool,
                         variant = "manual"
                         manual_until = cand_first + timedelta(days=MANUAL_PAUSE_D)
                     prev_hash, cand_hash, cand_count = h, None, 0
+        # The 24 h window is keyed to the FIRST sighting of a pending new hash (not to the confirming snapshot):
+        # a hash first seen at 23 h and confirmed at 25 h still belongs to the action. Expire only after `ours`.
+        if expect_since is not None:
+            ref = cand_first if (cand_hash is not None and cand_first is not None) else t
+            if ref - expect_since > timedelta(hours=EXPECT_H):
+                expect_since = None
         impr = s["impressions"]
         clicks = (s.get("ctr") or 0.0) * impr
         # Khoang giua hai snapshot ma action roi vao giua duoc tinh cho bien the MOI, co chu y:
