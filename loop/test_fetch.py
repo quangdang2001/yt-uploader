@@ -123,6 +123,21 @@ class FetchTest(unittest.TestCase):
         self.put("health.json", self.f["studio"], "[1, 2]")
         self.assertEqual(lf.fetch(self.drive, "CHAN", self.cache)["health_status"], "corrupt")
 
+    def test_history_downloaded_and_latest_row_wins(self):
+        text = ("thoi_gian,kenh,ten_goc,title,video_id,url,trang_thai,ghi_chu\n"
+                "t1,Bare Skull,gunA,T1,v1,u,ok,\n"
+                "t2,Bare Skull,gunB,T2,,u,error,\n"
+                "t3,Bare Skull,gunC,T3,v1,u,ok,\n"
+                "t4,Bare Skull,gunD,T4,v2,u,ok,\n")
+        self.put("upload-history.csv", "CHAN", text)
+        lf.fetch(self.drive, "CHAN", self.cache)
+        self.assertEqual(lf.load_history(self.cache), {"v1": "gunC", "v2": "gunD"})
+        self.assertFalse(list(self.cache.rglob("*.tmp")))
+
+    def test_history_missing_is_empty(self):
+        lf.fetch(self.drive, "CHAN", self.cache)
+        self.assertEqual(lf.load_history(self.cache), {})
+
     def test_health_missing(self):
         self.assertEqual(lf.fetch(self.drive, "CHAN", self.cache)["health_status"], "missing")
 

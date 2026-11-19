@@ -142,6 +142,11 @@ def put_json(drive, folder_id: str, name: str, obj: dict) -> str:
     return _upsert(drive, folder_id, name, _json_bytes(obj), "application/json")
 
 
+def put_text(drive, folder_id: str, name: str, text: str, mimetype: str = "text/csv") -> str:
+    """Tao hoac ghi de file van ban (mac dinh CSV) trong folder. Tra ve id."""
+    return _upsert(drive, folder_id, name, text.encode("utf-8"), mimetype)
+
+
 def move_json(drive, file_id: str, src: str, dest: str, obj: dict) -> None:
     """Ghi lai noi dung bang `obj` roi chuyen file tu src sang dest, mot lan update."""
     drive.files().update(

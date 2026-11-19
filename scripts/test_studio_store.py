@@ -186,6 +186,14 @@ class StudioStoreTest(unittest.TestCase):
         self.assertEqual([f["name"] for f in after], ["d.json", "e.json"])
         self.assertEqual(set(after[0]), {"id", "name", "modifiedTime"})
 
+    def test_put_text_creates_then_overwrites(self):
+        fid = ss.put_text(self.drive, self.folders["studio"], "verdicts.csv", "a,b\n1,2\n")
+        again = ss.put_text(self.drive, self.folders["studio"], "verdicts.csv", "a,b\n3,4\n")
+        self.assertEqual(fid, again)
+        self.assertEqual(len(self.drive.named("verdicts.csv", self.folders["studio"])), 1)
+        self.assertEqual(self.drive.items[fid]["data"].decode(), "a,b\n3,4\n")
+        self.assertEqual(self.drive.items[fid]["mimeType"], "text/csv")
+
     def test_move_json_updates_and_moves(self):
         fid = ss.put_json(self.drive, self.folders["actions_pending"], "r.json", {"a": 1})
         ss.move_json(self.drive, fid, self.folders["actions_pending"],

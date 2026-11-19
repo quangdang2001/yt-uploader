@@ -30,6 +30,7 @@ import studio_store as ss  # noqa: E402
 
 DEFAULT_CACHE = REPO / "loop" / "cache"
 FEATURES_NAME = "thumbnail-features.csv"
+HISTORY_NAME = "upload-history.csv"
 
 INT_COLS = {"impressions", "views", "unique_viewers"}
 FLOAT_COLS = {"age_hours", "ctr", "avd_s", "apv_pct", "ret_30s", "ret_60s"}
@@ -113,6 +114,14 @@ def fetch(drive, chan_folder: str, cache: Path) -> dict:
         except (ValueError, OSError):
             health_status = "corrupt"
 
+    for f in ss.list_files(drive, chan_folder):
+        if f["name"] == HISTORY_NAME:
+            dest = cache / HISTORY_NAME
+            if not dest.exists() or state.get(HISTORY_NAME) != f["modifiedTime"]:
+                _write(dest, ss.read_text(drive, f["id"]))
+                state[HISTORY_NAME] = f["modifiedTime"]
+            break
+
     _write(cache / ".state.json", json.dumps(state, indent=2))
     return {"snapshots_downloaded": snaps, "actions_downloaded": acts,
             "actions_unreadable": unreadable,
@@ -140,6 +149,20 @@ def load_snapshots(cache: Path) -> list:
                 rows.append({k: _typed(k, v) for k, v in r.items() if k is not None})
     rows.sort(key=lambda r: r.get("captured_at_utc") or "")
     return rows
+
+
+def load_history(cache: Path) -> dict:
+    """video_id -> base (cot ten_goc); dong sau thang dong truoc, bo dong khong co video_id."""
+    out: dict = {}
+    p = Path(cache) / HISTORY_NAME
+    if not p.exists():
+        return out
+    with p.open(encoding="utf-8", newline="") as fh:
+        for r in csv.DictReader(fh):
+            vid = (r.get("video_id") or "").strip()
+            if vid:
+                out[vid] = (r.get("ten_goc") or "").strip()
+    return out
 
 
 def load_actions(cache: Path) -> list:

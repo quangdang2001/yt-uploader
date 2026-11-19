@@ -16,6 +16,8 @@ scripts/.analytics-*.lock
 scripts/logs/
 
 loop/cache/
+loop/token-*.json
+loop/config.json
 
 __pycache__/
 *.pyc
