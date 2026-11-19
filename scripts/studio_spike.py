@@ -3,6 +3,7 @@
 Chay:  python studio_spike.py --profile C:/yt/studio-profile --video <id> [--headless]
 Chi doc. Khong dien form, khong go vao trang. Chi luu BODY cua response JSON
 (khong luu header, cookie, token; cac key nhay cam bi thay bang "<scrubbed>").
+Dang nhap mot lan: --login (co cua so, doi toi 15 phut, khong go/bam gi).
 Exit: 0 ok, 3 gap trang dang nhap / thu thach Google, 4 khong mo duoc trang,
 1 watchdog het gio (300 s).
 """
@@ -12,6 +13,7 @@ import os
 import re
 import sys
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -25,6 +27,7 @@ TEXT_BAD_RE = re.compile(
     r"sign in to continue|choose an account", re.I)
 SETTLE_MS = 8000
 WATCHDOG_S = 300
+LOGIN_WAIT_S = 900
 
 
 def utc_stamp():
@@ -97,6 +100,34 @@ def bail(ctx, reason):
     sys.exit(3)
 
 
+def login(profile):
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        ctx = p.chromium.launch_persistent_context(profile, channel="chrome", headless=False)
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        try:
+            page.goto("https://studio.youtube.com", wait_until="domcontentloaded", timeout=60000)
+        except Exception as e:
+            print(f"canh bao mo trang: {e}")
+        print("Sign in by hand in the Chrome window; waiting up to 15 min", flush=True)
+        end = time.time() + LOGIN_WAIT_S
+        while time.time() < end:
+            try:
+                if blocked_reason(page) is None:
+                    print("Signed in; profile saved")
+                    ctx.close()
+                    return 0
+            except Exception:
+                pass
+            time.sleep(5)
+        try:
+            ctx.close()
+        except Exception:
+            pass
+    print("Het 15 phut ma chua dang nhap.")
+    return 3
+
+
 def main():
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -104,10 +135,17 @@ def main():
         pass
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--profile", required=True, help="thu muc profile Chrome ben vung")
-    ap.add_argument("--video", required=True, help="video id")
+    ap.add_argument("--video", help="video id (bat buoc tru khi --login)")
+    ap.add_argument("--login", action="store_true", help="dang nhap tay mot lan, luu profile")
     ap.add_argument("--headless", action="store_true")
     ap.add_argument("--out", default="scripts/fixtures/studio")
     a = ap.parse_args()
+    if a.login:
+        if a.headless:
+            ap.error("--login can cua so that, khong dung duoc voi --headless")
+        return login(a.profile)
+    if not a.video:
+        ap.error("--video la bat buoc (tru khi --login)")
 
     from playwright.sync_api import sync_playwright
 

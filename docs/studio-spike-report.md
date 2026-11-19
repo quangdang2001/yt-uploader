@@ -5,9 +5,9 @@ Status: SKELETON. Steps 2-6 need the channel owner, the VPS and real uploads.
 ## How to run
 
 1. Install: `pip install -r scripts/requirements.txt` then `python -m playwright install chrome` (or have Chrome installed).
-2. Sign in once over RDP (headed, owner signs in by hand):
-   `python scripts/studio_spike.py --profile C:\yt\studio-profile --video <id>`
-   Re-run the same command: it must reach Studio without a prompt. Exit 3 means still signed out.
+2. Sign in once over RDP (headed; owner signs in by hand, the script only waits, up to 15 min):
+   `python scripts/studio_spike.py --profile C:\yt\studio-profile --login`
+   Then re-run without `--login` on any video to confirm: `python scripts/studio_spike.py --profile C:\yt\studio-profile --video <id>` must exit 0 (exit 3 means still signed out).
 3. Freshness runs, after the next upload goes public, at about 2, 6, 12, 24 h, plus once on a video over 7 days old:
    `python scripts/studio_spike.py --profile C:\yt\studio-profile --video <id>`
    `yt-dlp --print view_count https://www.youtube.com/watch?v=<id>`
