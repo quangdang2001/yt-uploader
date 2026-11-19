@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 sys.path.append(str(SCRIPTS))
@@ -102,10 +103,11 @@ class FetchTest(unittest.TestCase):
         partial = self.cache / "actions" / "done" / "a1.json"
         partial.parent.mkdir(parents=True)
         partial.write_text('{"requested_', encoding="utf-8")  # file cut do crash
-        res = lf.fetch(self.drive, "CHAN", self.cache)
+        with self.assertLogs("loop.fetch", level="WARNING"):
+            res = lf.fetch(self.drive, "CHAN", self.cache)
+            acts = lf.load_actions(self.cache)
         self.assertEqual(res["actions_downloaded"], 2)       # a1 duoc tai lai
         self.assertEqual(res["actions_unreadable"], 1)       # bad.json van hong
-        acts = lf.load_actions(self.cache)
         self.assertEqual(len(acts), 1)
         self.assertEqual(acts[0]["_state"], "done")
         self.assertFalse(list(self.cache.rglob("*.tmp")))
@@ -133,6 +135,18 @@ class FetchTest(unittest.TestCase):
         lf.fetch(self.drive, "CHAN", self.cache)
         self.assertEqual(lf.load_history(self.cache), {"v1": "gunC", "v2": "gunD"})
         self.assertFalse(list(self.cache.rglob("*.tmp")))
+
+    def test_pending_listed_before_done(self):
+        order = []
+        real = ss.list_files
+
+        def spy(drive, folder_id, since_name=None):
+            order.append(folder_id)
+            return real(drive, folder_id, since_name)
+        with mock.patch.object(ss, "list_files", spy):
+            lf.fetch(self.drive, "CHAN", self.cache)
+        self.assertLess(order.index(self.f["actions_pending"]), order.index(self.f["actions_done"]))
+        self.assertLess(order.index(self.f["actions_pending"]), order.index(self.f["actions_failed"]))
 
     def test_history_missing_is_empty(self):
         lf.fetch(self.drive, "CHAN", self.cache)

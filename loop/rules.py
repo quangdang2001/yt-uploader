@@ -16,6 +16,7 @@ MAX_SWAPS = 2
 MAX_REVERTS = 1
 MANUAL_PAUSE_D = 7
 Z90 = 1.645
+REVERT_TARGETS = ("main", "alt1", "alt2")  # "manual" khong phai file de VPS dat lai
 
 _BUCKETS = ((6, "0-6"), (12, "6-12"), (24, "12-24"), (48, "24-48"), (72, "48-72"))
 
@@ -97,7 +98,7 @@ def _should_revert(snap: dict, state: VideoState) -> str | None:
     cur_hi = ctr_interval(cur[1], cur[0])[1]
     best = None
     for name, (n, c) in state.variant_stats.items():
-        if name == state.variant or n < MIN_IMPR:
+        if name == state.variant or name not in REVERT_TARGETS or n < MIN_IMPR:
             continue
         if best is None or c > best[2]:
             best = (name, n, c)

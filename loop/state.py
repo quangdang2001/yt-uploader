@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from loop.rules import MANUAL_PAUSE_D, VideoState
 
 ALTS = ("alt1", "alt2")
+EXPECT_H = 24
 
 
 def parse_utc(text) -> datetime | None:
@@ -33,9 +34,13 @@ def since_published(snapshots: list) -> dict:
             continue
         if not s.get("video_id") or not s.get("captured_at_utc"):
             continue
+        try:
+            parse_utc(s["captured_at_utc"])
+        except ValueError:
+            continue
         out.setdefault(s["video_id"], []).append(s)
     for rows in out.values():
-        rows.sort(key=lambda r: r["captured_at_utc"])
+        rows.sort(key=lambda r: parse_utc(r["captured_at_utc"]))
     return out
 
 
@@ -46,7 +51,10 @@ def ok_actions(actions: list) -> dict:
         res = a.get("result") or {}
         if a.get("_state") != "done" or res.get("status") != "ok":
             continue
-        at = parse_utc(res.get("at_utc"))
+        try:
+            at = parse_utc(res.get("at_utc"))
+        except ValueError:
+            at = None
         if at is None or not a.get("video_id") or not a.get("to_variant"):
             continue
         out.setdefault(a["video_id"], []).append((at, a))
@@ -66,42 +74,63 @@ def _build_one(snaps: list, acts: list, feature_variants: set, pending: bool,
     stats: dict = {}
     prev_impr, prev_clicks, prev_hash = 0, 0.0, None
     ai = 0
+    expect_since = None           # luc action ok gan nhat: hash doi dau tien sau do la cua action
+    cand_hash, cand_count, cand_first = None, 0, None
 
-    def apply(at, act):
-        nonlocal variant, before_last, swaps, reverts, last_swap
+    def apply(at, act) -> bool:
+        nonlocal variant, before_last, swaps, reverts, last_swap, expect_since
         to = act["to_variant"]
+        if to == variant:           # action trung lap: khong doi gi
+            return False
         if to == "main" or (before_last is not None and to == before_last):
             reverts += 1
         elif to in ALTS:
             swaps += 1
         used.add(to)
-        before_last, variant, last_swap = variant, to, at
+        before_last, variant, last_swap, expect_since = variant, to, at, at
+        return True
 
     for s in snaps:
         t = parse_utc(s["captured_at_utc"])
         h = s.get("thumb_hash") or None
         switched = False
         while ai < len(acts) and acts[ai][0] <= t:
-            apply(*acts[ai])
+            switched = apply(*acts[ai]) or switched
             ai += 1
-            switched = True
         if switched:
             impr_last = s["impressions"]
-        elif prev_hash and h and h != prev_hash:
-            variant = "manual"
-            manual_until = t + timedelta(days=MANUAL_PAUSE_D)
+        if expect_since is not None and t - expect_since > timedelta(hours=EXPECT_H):
+            expect_since = None
+        if h:
+            if prev_hash is None or h == prev_hash:
+                prev_hash, cand_hash, cand_count = prev_hash or h, None, 0
+            else:
+                # CDN tre: hash moi phai giu 2 snapshot lien tiep moi tinh la doi that
+                if cand_hash == h:
+                    cand_count += 1
+                else:
+                    cand_hash, cand_count, cand_first = h, 1, t
+                if cand_count >= 2:
+                    ours = expect_since is not None and cand_first - expect_since <= timedelta(hours=EXPECT_H)
+                    if ours:
+                        expect_since = None
+                    else:
+                        variant = "manual"
+                        manual_until = cand_first + timedelta(days=MANUAL_PAUSE_D)
+                    prev_hash, cand_hash, cand_count = h, None, 0
         impr = s["impressions"]
         clicks = (s.get("ctr") or 0.0) * impr
+        # Khoang giua hai snapshot ma action roi vao giua duoc tinh cho bien the MOI, co chu y:
+        # VPS thuc hien ngay sau mot lan chup, nen khoang do gan nhu toan bo la thumbnail moi.
         if impr > prev_impr:
             cur = stats.setdefault(variant, [0, 0.0])
             cur[0] += impr - prev_impr
             cur[1] += max(0.0, clicks - prev_clicks)
         prev_impr, prev_clicks = impr, clicks
-        prev_hash = h or prev_hash
-    while ai < len(acts) and acts[ai][0] <= now:
-        apply(*acts[ai])
+    while ai < len(acts):           # action done luon dung, ke ca at_utc sau `now` (lech dong ho)
+        if apply(*acts[ai]):
+            impr_last = prev_impr
         ai += 1
-        impr_last = prev_impr
     return VideoState(
         variant=variant, swaps=swaps, reverts=reverts, last_swap_utc=last_swap,
         impr_at_last_swap=impr_last,

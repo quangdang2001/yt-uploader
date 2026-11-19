@@ -17,14 +17,18 @@ from pathlib import Path
 from statistics import median
 
 from loop import fetch as lf
-from loop.rules import (BASE_BAR, KEEP_CTR, MIN_IMPR, Verdict, age_bucket, decide, swap_bar)
-from loop.state import ALTS, aware, build_states, ok_actions, since_published  # noqa: F401
+from zoneinfo import ZoneInfo
+
+from loop.rules import (BASE_BAR, KEEP_CTR, MIN_IMPR, REVERT_TARGETS, Verdict, age_bucket, decide,
+                        swap_bar)
+from loop.state import ALTS, aware, build_states, ok_actions, parse_utc, since_published  # noqa: F401
 
 import studio_store as ss  # noqa: E402  (fetch da them scripts/ vao sys.path)
 import youtube_uploader as yu  # noqa: E402
 
 DEFAULT_REPORT_DIR = "D:/Youtube/video_footage_re_create/Bare Skull - 2nd brain/van-hanh/bao-cao/studio"
-DEFAULT_CONFIG = lf.REPO / "loop" / "config.json"
+DEFAULT_TZ = "Asia/Ho_Chi_Minh"
+DEFAULT_CONFIG =lf.REPO / "loop" / "config.json"
 NOTIFY_VERDICTS = {Verdict.SWAP, Verdict.REVERT, Verdict.CHANGE_TITLE, Verdict.NOT_PACKAGING,
                    Verdict.OPENING, Verdict.PAUSED}
 VERDICT_COLS = ("video_id", "base", "verdict", "reason", "ctr", "impressions", "bar", "variant",
@@ -69,8 +73,29 @@ def alert_only(cfg: dict, now: datetime) -> bool:
     gl = cfg.get("go_live")
     if not gl:
         return True
-    start = datetime.combine(date.fromisoformat(str(gl)), datetime.min.time(), tzinfo=timezone.utc)
+    text = str(gl).strip()
+    if len(text) <= 10:     # chi ngay: 00:00 gio dia phuong
+        start = datetime.combine(date.fromisoformat(text), datetime.min.time(), tzinfo=_tz(cfg))
+    else:
+        start = parse_utc(text)
     return now < start + timedelta(days=int(cfg.get("alert_only_days", 7)))
+
+
+def _tz(cfg: dict) -> ZoneInfo:
+    return ZoneInfo(cfg.get("tz") or DEFAULT_TZ)
+
+
+def _failed_recently(actions: list, vid: str, target: str, now: datetime) -> bool:
+    for a in actions:
+        if a.get("_state") != "failed" or a.get("video_id") != vid or a.get("to_variant") != target:
+            continue
+        try:
+            at = parse_utc((a.get("result") or {}).get("at_utc") or a.get("requested_utc"))
+        except ValueError:
+            continue
+        if at is not None and now - at < timedelta(hours=24):
+            return True
+    return False
 
 
 def _peer_median(vid: str, snap: dict, latest: dict, key: str) -> float | None:
@@ -82,7 +107,7 @@ def _peer_median(vid: str, snap: dict, latest: dict, key: str) -> float | None:
 
 def _revert_target(state) -> str | None:
     others = [(c, v) for v, (n, c) in state.variant_stats.items()
-              if v != state.variant and n >= MIN_IMPR]
+              if v != state.variant and v in REVERT_TARGETS and n >= MIN_IMPR]
     return max(others)[1] if others else None
 
 
@@ -212,6 +237,8 @@ def analyse(cache: Path, cfg: dict, now: datetime, drive=None, folders: dict | N
                 reason = "would %s to %s: %s" % (word, target, reason)
             elif st.pending_action:
                 reason = "%s to %s already requested: %s" % (word, target, reason)
+            elif _failed_recently(actions, vid, target, now):
+                reason = "%s to %s failed within 24 h, not retried: %s" % (word, target, reason)
             else:
                 reason = "%s to %s: %s" % (word, target, reason)
                 requests.append({"video_id": vid, "base": bases.get(vid, ""), "to_variant": target,
@@ -224,11 +251,12 @@ def analyse(cache: Path, cfg: dict, now: datetime, drive=None, folders: dict | N
 
     health = _health(cache)
     why = None
-    if now.weekday() == 0 or cfg.get("why"):
+    local = now.astimezone(_tz(cfg))
+    if local.weekday() == 0 or cfg.get("why"):
         why = _why(rows, states, features, bases, ok_actions(actions), bars)
-    report = _report(rows, health, now, why)
+    report = _report(rows, health, local, why)
     report_dir = Path(cfg.get("report_dir") or DEFAULT_REPORT_DIR)
-    report_path = report_dir / ("%s.md" % now.strftime("%Y-%m-%d"))
+    report_path = report_dir / ("%s.md" % local.strftime("%Y-%m-%d"))
     lf._write(report_path, report)
 
     if dry_run:
@@ -243,14 +271,22 @@ def analyse(cache: Path, cfg: dict, now: datetime, drive=None, folders: dict | N
     if drive is not None and folders is not None:
         ss.put_text(drive, folders["studio"], "verdicts.csv", _verdicts_csv(rows))
 
-    if not _healthy(health[0]):
-        notify("Studio loop health: %s %s" % health)
     last_path = cache / LAST_VERDICTS
-    last = _read_json(last_path, {})
+    last_obj = _read_json(last_path, {})
+    last = last_obj.get("verdicts", {}) if isinstance(last_obj, dict) else {}
+    missing_day = last_obj.get("missing_notified") if isinstance(last_obj, dict) else None
+    today = local.strftime("%Y-%m-%d")
+    if not _healthy(health[0]):
+        if health[0] != "missing":
+            notify("Studio loop health: %s %s" % health)
+        elif missing_day != today:      # "missing" nhieu khi chi la chua co file: moi ngay mot lan
+            notify("Studio loop health: missing")
+            missing_day = today
     for r in rows:
         if r["verdict"] != last.get(r["video_id"]) and Verdict(r["verdict"]) in NOTIFY_VERDICTS:
             notify("%s (%s): %s - %s" % (r["base"] or r["video_id"], r["video_id"], r["verdict"], r["reason"]))
-    lf._write(last_path, json.dumps({r["video_id"]: r["verdict"] for r in rows}, indent=2))
+    lf._write(last_path, json.dumps({"verdicts": {r["video_id"]: r["verdict"] for r in rows},
+                                     "missing_notified": missing_day}, indent=2))
     return rows
 
 

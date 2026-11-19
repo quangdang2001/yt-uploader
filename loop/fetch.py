@@ -78,6 +78,11 @@ def fetch(drive, chan_folder: str, cache: Path) -> dict:
         state[key] = f["modifiedTime"]
         snaps += 1
 
+    # pending/ truoc done/: VPS chuyen pending -> done, nen liet ke nguoc lai co the thay yeu cau
+    # o ca hai cho hoac khong thay o cho nao
+    pending = [f["name"] for f in ss.list_files(drive, folders["actions_pending"])
+               if f["name"].endswith(".json")]
+
     acts = 0
     for sub, fid in (("done", folders["actions_done"]), ("failed", folders["actions_failed"])):
         for f in ss.list_files(drive, fid):
@@ -89,8 +94,6 @@ def fetch(drive, chan_folder: str, cache: Path) -> dict:
             _write(dest, ss.read_text(drive, f["id"]))
             acts += 1
 
-    pending = [f["name"] for f in ss.list_files(drive, folders["actions_pending"])
-               if f["name"].endswith(".json")]
     _write(cache / "actions" / "pending.txt", "".join(n + "\n" for n in pending))
 
     unreadable = sum(1 for sub in ("done", "failed")

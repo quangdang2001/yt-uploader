@@ -2,6 +2,8 @@
 
 Chay tu goc repo:  python -m unittest loop.test_analyse -v
 """
+import contextlib
+import io
 import json
 import sys
 import tempfile
@@ -17,6 +19,7 @@ import studio_store as ss  # noqa: E402
 from test_studio_store import FakeDrive  # noqa: E402
 
 from loop import analyse as an  # noqa: E402
+from loop.rules import Verdict, VideoState, decide  # noqa: E402
 
 SNAP_COLS = ("captured_at_utc,video_id,age_hours,period,impressions,ctr,views,unique_viewers,avd_s,"
              "apv_pct,ret_30s,ret_60s,src_browse,src_suggested,src_search,src_other,thumb_hash,"
@@ -71,7 +74,8 @@ class BuildStatesTest(unittest.TestCase):
 
     def test_manual_change_detected(self):
         snaps = [snap("v1", "2026-11-18T10:00:00Z", 10, 1000, 0.04),
-                 snap("v1", "2026-11-18T20:00:00Z", 20, 3000, 0.04, h="other")]
+                 snap("v1", "2026-11-18T20:00:00Z", 20, 3000, 0.04, h="other"),
+                 snap("v1", "2026-11-18T22:00:00Z", 22, 3500, 0.04, h="other")]
         st = an.build_states(snaps, [], [], self.NOW)["v1"]
         self.assertEqual(st.variant, "manual")
         self.assertEqual(st.manual_until, utc("2026-11-25T20:00:00Z"))
@@ -96,6 +100,67 @@ class BuildStatesTest(unittest.TestCase):
         self.assertTrue(st.pending_action)
 
 
+class HashTimelineTest(unittest.TestCase):
+    NOW = utc("2026-11-20T12:00:00Z")
+
+    def states(self, snaps, acts=(), pending=()):
+        return an.build_states(snaps, list(acts), [feat("g", "alt1"), feat("g", "alt2")], self.NOW,
+                               bases={"v1": "g"}, pending=pending)["v1"]
+
+    def test_cdn_lag_after_action_is_not_manual(self):
+        snaps = [snap("v1", "2026-11-19T10:00:00Z", 10, 1000, 0.04),
+                 snap("v1", "2026-11-19T12:00:00Z", 12, 2000, 0.04),
+                 snap("v1", "2026-11-19T14:00:00Z", 14, 3000, 0.04, h="h1"),
+                 snap("v1", "2026-11-19T16:00:00Z", 16, 4000, 0.04, h="h1")]
+        st = self.states(snaps, [done("v1", "alt1", "main", "2026-11-19T11:00:00Z")])
+        self.assertEqual(st.variant, "alt1")
+        self.assertIsNone(st.manual_until)
+
+    def test_expectation_lapses_after_24h(self):
+        snaps = [snap("v1", "2026-11-19T10:00:00Z", 10, 1000, 0.04),
+                 snap("v1", "2026-11-20T14:00:00Z", 38, 3000, 0.04, h="h1"),
+                 snap("v1", "2026-11-20T16:00:00Z", 40, 4000, 0.04, h="h1")]
+        st = self.states(snaps, [done("v1", "alt1", "main", "2026-11-19T11:00:00Z")])
+        self.assertEqual(st.variant, "manual")
+        self.assertEqual(st.manual_until, utc("2026-11-27T14:00:00Z"))  # tu lan thay dau tien
+
+    def test_one_snapshot_blip_is_not_manual(self):
+        snaps = [snap("v1", "2026-11-19T10:00:00Z", 10, 1000, 0.04),
+                 snap("v1", "2026-11-19T12:00:00Z", 12, 2000, 0.04, h="blip"),
+                 snap("v1", "2026-11-19T14:00:00Z", 14, 3000, 0.04)]
+        st = self.states(snaps)
+        self.assertEqual(st.variant, "main")
+        self.assertIsNone(st.manual_until)
+
+    def test_two_consecutive_new_hashes_are_manual(self):
+        snaps = [snap("v1", "2026-11-19T10:00:00Z", 10, 1000, 0.04),
+                 snap("v1", "2026-11-19T12:00:00Z", 12, 2000, 0.04, h="x"),
+                 snap("v1", "2026-11-19T14:00:00Z", 14, 3000, 0.04, h="x")]
+        st = self.states(snaps)
+        self.assertEqual(st.variant, "manual")
+        self.assertEqual(st.manual_until, utc("2026-11-26T12:00:00Z"))
+
+    def test_duplicate_ok_action_counts_once(self):
+        snaps = [snap("v1", "2026-11-19T10:00:00Z", 10, 1000, 0.04),
+                 snap("v1", "2026-11-19T20:00:00Z", 20, 3000, 0.04, h="h1")]
+        acts = [done("v1", "alt1", "main", "2026-11-19T11:00:00Z"),
+                done("v1", "alt1", "main", "2026-11-19T11:30:00Z")]
+        st = self.states(snaps, acts)
+        self.assertEqual((st.swaps, st.reverts), (1, 0))
+        self.assertEqual(st.last_swap_utc, utc("2026-11-19T11:00:00Z"))
+
+    def test_action_after_now_is_still_applied(self):
+        snaps = [snap("v1", "2026-11-19T10:00:00Z", 10, 1000, 0.04)]
+        st = self.states(snaps, [done("v1", "alt1", "main", "2026-11-20T12:00:05Z")])
+        self.assertEqual((st.variant, st.swaps), ("alt1", 1))
+        self.assertEqual(st.alts_left, ["alt2"])
+
+    def test_snapshots_sorted_by_time_not_string(self):
+        snaps = [snap("v1", "2026-11-19T10:00:00+07:00", 10, 1000, 0.04),
+                 snap("v1", "2026-11-19T05:00:00Z", 9, 500, 0.04)]
+        self.assertEqual(an.since_published(snaps)["v1"][0]["impressions"], 1000)
+
+
 class AnalyseTest(unittest.TestCase):
     NOW = utc("2026-11-19T12:00:00Z")  # thu Nam
 
@@ -110,6 +175,8 @@ class AnalyseTest(unittest.TestCase):
         self.folders = ss.studio_folders(self.drive, "CHAN")
         self.snaps, self.feats, self.hist = [], [], []
         self.health = {"status": "ok"}
+        self.notify = mock.patch.object(an, "notify").start()
+        self.addCleanup(mock.patch.stopall)
 
     def write(self):
         self.cache.mkdir(parents=True, exist_ok=True)
@@ -169,9 +236,11 @@ class AnalyseTest(unittest.TestCase):
 
     def test_dry_run_touches_neither_drive_nor_telegram(self):
         self.low_video()
-        with mock.patch.object(an, "notify") as n:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
             self.run_an(dry_run=True)
-        n.assert_not_called()
+        self.assertIn("report:", out.getvalue())
+        self.notify.assert_not_called()
         self.assertEqual(self.pending_files(), [])
         self.assertEqual(self.drive.named("verdicts.csv", self.folders["studio"]), [])
         self.assertTrue((self.root / "reports" / "2026-11-19.md").exists())
@@ -190,26 +259,79 @@ class AnalyseTest(unittest.TestCase):
         self.assertEqual(rows[0]["verdict"], "REVERT")
         self.assertEqual(self.pending_files(), [])
 
+    def test_revert_never_targets_manual(self):
+        st = VideoState(variant="alt1", swaps=1, reverts=0, last_swap_utc=None, impr_at_last_swap=0,
+                        variant_stats={"alt1": (5000, 0.02), "manual": (6000, 0.09)})
+        self.assertIsNone(an._revert_target(st))
+        snap_ = snap("v1", "2026-11-19T10:00:00Z", 40, 11000, 0.05)
+        verdict, _ = decide(snap_, st, 0.053, self.NOW, None, None)
+        self.assertNotEqual(verdict, Verdict.REVERT)
+        st.variant_stats["main"] = (4000, 0.06)
+        self.assertEqual(an._revert_target(st), "main")
+
+    def test_failed_request_not_repeated_within_24h(self):
+        self.low_video()
+        failed = done("v1", "alt1", "main", "2026-11-19T02:00:00Z", status="error", base="gunA")
+        failed["_state"] = "failed"
+        (self.cache / "actions" / "failed").mkdir(parents=True)
+        (self.cache / "actions" / "failed" / "f.json").write_text(
+            json.dumps({k: v for k, v in failed.items() if k != "_state"}), encoding="utf-8")
+        rows = self.run_an()
+        self.assertEqual(self.pending_files(), [])
+        self.assertIn("failed within 24 h", rows[0]["reason"])
+        self.run_an(now=utc("2026-11-20T04:00:00Z"))  # 26 h sau: duoc thu lai
+        self.assertEqual(len(self.pending_files()), 1)
+
+    def test_report_uses_local_date_and_monday(self):
+        sunday_night = utc("2026-11-22T20:00:00Z")   # thu Hai 03:00 tai Ho Chi Minh
+        self.low_video()
+        self.run_an(now=sunday_night)
+        self.assertIn("## Why", self.report_local("2026-11-23"))
+        tuesday = utc("2026-11-23T20:00:00Z")        # thu Ba 03:00 local
+        self.run_an(now=tuesday)
+        self.assertNotIn("## Why", self.report_local("2026-11-24"))
+
+    def report_local(self, day):
+        return (self.root / "reports" / (day + ".md")).read_text(encoding="utf-8")
+
+    def test_go_live_accepts_full_datetime(self):
+        self.cfg["go_live"] = "2026-11-12T00:00:00Z"
+        self.cfg["alert_only_days"] = 7
+        self.assertFalse(an.alert_only(self.cfg, self.NOW))
+        self.cfg["go_live"] = "2026-11-13T00:00:00Z"
+        self.assertTrue(an.alert_only(self.cfg, self.NOW))
+
+    def test_missing_health_notified_once_per_local_day(self):
+        self.low_video()
+        (self.cache / "health.json").unlink()
+        self.run_an()
+        self.run_an(now=utc("2026-11-19T13:00:00Z"))
+        msgs = [c.args[0] for c in self.notify.call_args_list if "missing" in c.args[0]]
+        self.assertEqual(len(msgs), 1)
+        self.run_an(now=utc("2026-11-20T13:00:00Z"))
+        msgs = [c.args[0] for c in self.notify.call_args_list if "missing" in c.args[0]]
+        self.assertEqual(len(msgs), 2)
+
     def test_notify_once_per_verdict_change(self):
         self.low_video()
-        with mock.patch.object(an, "notify") as n:
-            self.run_an()
-            self.assertEqual(n.call_count, 1)
-            self.run_an()
-            self.assertEqual(n.call_count, 1)
-            self.snaps = [snap("v1", "2026-11-19T11:00:00Z", 31, 7000, 0.07)]
-            self.write()
-            self.run_an()
-            self.assertEqual(n.call_count, 1)  # KEEP khong bao
-            self.low_video()
-            self.run_an()
-            self.assertEqual(n.call_count, 2)  # SWAP lai sau khi doi
+        n = self.notify
+        self.run_an()
+        self.assertEqual(n.call_count, 1)
+        self.run_an()
+        self.assertEqual(n.call_count, 1)
+        self.snaps = [snap("v1", "2026-11-19T11:00:00Z", 31, 7000, 0.07)]
+        self.write()
+        self.run_an()
+        self.assertEqual(n.call_count, 1)  # KEEP khong bao
+        self.low_video()
+        self.run_an()
+        self.assertEqual(n.call_count, 2)  # SWAP lai sau khi doi
 
     def test_health_fail_auth_reported_first(self):
         self.health = {"status": "fail_auth", "detail": "token expired"}
         self.low_video()
-        with mock.patch.object(an, "notify") as n:
-            self.run_an()
+        self.run_an()
+        n = self.notify
         self.assertIn("fail_auth", n.call_args_list[0].args[0])
         rep = self.report()
         self.assertLess(rep.index("fail_auth"), rep.index("| video_id"))
