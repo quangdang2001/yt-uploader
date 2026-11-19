@@ -15,5 +15,7 @@ scripts/.studio-*.lock
 scripts/.analytics-*.lock
 scripts/logs/
 
+loop/cache/
+
 __pycache__/
 *.pyc
