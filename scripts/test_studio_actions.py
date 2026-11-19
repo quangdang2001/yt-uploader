@@ -65,8 +65,8 @@ class StudioActionsTest(unittest.TestCase):
             self.addCleanup(p.stop)
         self.addCleanup(self.tmp.cleanup)
 
-    def request(self, name="vid1__20261119T010000Z.json", **over):
-        req = {"video_id": "vid1", "base": "b1", "to_variant": "alt1",
+    def request(self, name="vid001__20261119T010000Z.json", **over):
+        req = {"video_id": "vid001", "base": "b1", "to_variant": "alt1",
                "from_variant": "main", "reason": "test",
                "requested_utc": "2026-11-19T01:00:00Z"}
         req.update(over)
@@ -87,12 +87,12 @@ class StudioActionsTest(unittest.TestCase):
         self.alt()
         fid = self.request()
         self.assertEqual(self.run_it(), (1, 0))
-        self.assertEqual(self.set_calls, [("vid1", b"ALT1")])
+        self.assertEqual(self.set_calls, [("vid001", b"ALT1")])
         self.assertEqual(self.drive.items[fid]["parents"], [self.folders["actions_done"]])
         res = self.result_of(fid)
         self.assertEqual(res["status"], "ok")
         self.assertTrue(res["at_utc"].endswith("Z"))
-        self.assertEqual(self.sent, ["Swap vid1 -> alt1: ok"])
+        self.assertEqual(self.sent, ["Swap vid001 -> alt1: ok"])
 
     def test_missing_alt_moves_to_failed(self):
         fid = self.request()
@@ -102,7 +102,7 @@ class StudioActionsTest(unittest.TestCase):
         res = self.result_of(fid)
         self.assertEqual(res["status"], "error")
         self.assertIn("b1.alt1.jpg", res["detail"])
-        self.assertTrue(self.sent[0].startswith("Swap vid1 -> alt1: FAILED"))
+        self.assertTrue(self.sent[0].startswith("Swap vid001 -> alt1: FAILED"))
 
     def test_set_error_moves_to_failed_and_notifies(self):
         self.alt()
@@ -127,40 +127,104 @@ class StudioActionsTest(unittest.TestCase):
         self.assertIn("video_id", self.result_of(b)["detail"])
         self.assertIn("base", self.result_of(c)["detail"])
 
-    def test_unparseable_json_failed(self):
+    def test_unparseable_keeps_raw_text(self):
+        raw = b"{not json"
         fid = self.drive._add("bad.json", [self.folders["actions_pending"]],
-                              "application/json", b"{not json")
-        self.assertEqual(self.run_it(), (0, 1))
-        self.assertEqual(self.drive.items[fid]["parents"], [self.folders["actions_failed"]])
-        self.assertEqual(self.result_of(fid)["status"], "error")
+                              "application/json", raw)
+        lst = self.drive._add("list.json", [self.folders["actions_pending"]],
+                              "application/json", b'["a", 1]')
+        self.assertEqual(self.run_it(), (0, 2))
+        for f, text in ((fid, raw.decode()), (lst, '["a", 1]')):
+            self.assertEqual(self.drive.items[f]["parents"], [self.folders["actions_failed"]])
+            obj = json.loads(self.drive.items[f]["data"])
+            self.assertEqual(obj["raw_text"], text)
+            self.assertEqual(obj["result"]["status"], "error")
+
+    def test_read_error_leaves_pending(self):
+        self.alt()
+        fid = self.request()
+        real = ss.read_text
+
+        def flaky(drive, file_id):
+            raise http_error(503)
+        with mock.patch.object(ss, "read_text", flaky):
+            self.assertEqual(self.run_it(), (0, 0))
+        self.assertEqual(self.drive.items[fid]["parents"], [self.folders["actions_pending"]])
+        self.assertEqual(self.set_calls, [])
+        self.assertEqual(self.drive.update_calls, [])
+        # lan sau doc duoc thi xu ly binh thuong
+        self.assertEqual(self.run_it(), (1, 0))
+
+    def test_bad_video_id_rejected(self):
+        self.alt()
+        ids = [self.request(name=f"{i}.json", video_id=v)
+               for i, v in enumerate(["../../x", "a/b/cdefgh", "abc", "x" * 30])]
+        with mock.patch.object(yu, "download_to", side_effect=AssertionError("download")):
+            self.assertEqual(self.run_it(), (0, 4))
+        for fid in ids:
+            self.assertEqual(self.drive.items[fid]["parents"], [self.folders["actions_failed"]])
+            self.assertIn("video_id", self.result_of(fid)["detail"])
+
+    def test_bad_base_rejected(self):
+        ids = [self.request(name=f"{i}.json", base=b)
+               for i, b in enumerate(["../x", "a/b", "a\\b", "a..b"])]
+        with mock.patch.object(yu, "download_to", side_effect=AssertionError("download")):
+            self.assertEqual(self.run_it(), (0, 4))
+        for fid in ids:
+            self.assertEqual(self.drive.items[fid]["parents"], [self.folders["actions_failed"]])
+            self.assertIn("base", self.result_of(fid)["detail"])
+
+    def test_whitespace_stripped(self):
+        self.alt()
+        self.request(video_id=" vid001 ", base=" b1 ")
+        self.assertEqual(self.run_it(), (1, 0))
+
+    def test_move_failure_notifies_once_across_passes(self):
+        self.alt()
+        self.request()
+        state = sa.new_state()
+        with mock.patch.object(ss, "move_json", side_effect=http_error(500)):
+            for _ in range(3):
+                sa.run_actions(self.drive, None, "CHAN", self.done, self.tmpdir, state)
+        self.assertEqual(len(self.sent), 1)
+
+    def test_quota_notifies_once_per_day(self):
+        self.alt()
+        self.request()
+        body = json.dumps({"error": {"errors": [{"reason": "quotaExceeded"}]}}).encode()
+        self.set_error = http_error(403, body)
+        state = sa.new_state()
+        for _ in range(3):
+            sa.run_actions(self.drive, None, "CHAN", self.done, self.tmpdir, state)
+        self.assertEqual(len(self.sent), 1)
 
     def test_main_uses_done_jpg(self):
         self.drive._add("b1.jpg", [self.done], "image/jpeg", b"MAIN")
         self.alt()  # alt1 co mat nhung khong duoc dung
         fid = self.request(to_variant="main")
         self.assertEqual(self.run_it(), (1, 0))
-        self.assertEqual(self.set_calls, [("vid1", b"MAIN")])
+        self.assertEqual(self.set_calls, [("vid001", b"MAIN")])
         self.assertEqual(self.drive.items[fid]["parents"], [self.folders["actions_done"]])
 
     def test_order_oldest_first(self):
         self.alt()
         # ten sap xep nguoc voi requested_utc: phai theo requested_utc
-        self.request(name="a.json", video_id="newer", requested_utc="2026-11-19T05:00:00Z")
-        self.request(name="b.json", video_id="older", requested_utc="2026-11-19T01:00:00Z")
+        self.request(name="a.json", video_id="newer1", requested_utc="2026-11-19T05:00:00Z")
+        self.request(name="b.json", video_id="older1", requested_utc="2026-11-19T01:00:00Z")
         self.run_it()
-        self.assertEqual([c[0] for c in self.set_calls], ["older", "newer"])
+        self.assertEqual([c[0] for c in self.set_calls], ["older1", "newer1"])
 
     def test_same_utc_tie_broken_by_name(self):
         self.alt()
-        self.request(name="z.json", video_id="zed")
-        self.request(name="a.json", video_id="aye")
+        self.request(name="z.json", video_id="zed001")
+        self.request(name="a.json", video_id="aye001")
         self.run_it()
-        self.assertEqual([c[0] for c in self.set_calls], ["aye", "zed"])
+        self.assertEqual([c[0] for c in self.set_calls], ["aye001", "zed001"])
 
     def test_quota_error_leaves_pending(self):
         self.alt()
-        first = self.request(name="a.json", video_id="one", requested_utc="2026-11-19T01:00:00Z")
-        second = self.request(name="b.json", video_id="two", requested_utc="2026-11-19T02:00:00Z")
+        first = self.request(name="a.json", video_id="one001", requested_utc="2026-11-19T01:00:00Z")
+        second = self.request(name="b.json", video_id="two001", requested_utc="2026-11-19T02:00:00Z")
         body = json.dumps({"error": {"errors": [{"reason": "quotaExceeded"}]}}).encode()
         self.set_error = http_error(403, body)
         self.assertEqual(self.run_it(), (0, 0))

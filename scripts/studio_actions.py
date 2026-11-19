@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import re
 import sys
 import tempfile
 import time
@@ -36,14 +37,26 @@ def _utc() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,20}$")
+
+
 def _validate(req) -> str | None:
-    """Tra ve chuoi mo ta loi, hoac None neu yeu cau hop le."""
+    """Tra ve chuoi mo ta loi, hoac None neu yeu cau hop le.
+
+    Cat khoang trang cua video_id va base ngay tai cho (sua req).
+    """
     if not isinstance(req, dict):
         return "request is not a JSON object"
     for field in ("video_id", "base"):
         v = req.get(field)
         if not isinstance(v, str) or not v.strip():
             return f"missing {field}"
+        req[field] = v.strip()
+    if not VIDEO_ID_RE.match(req["video_id"]):
+        return f"invalid video_id {req['video_id']!r}"
+    base = req["base"]
+    if "/" in base or "\\" in base or ".." in base:
+        return f"invalid base {base!r}"
     if req.get("to_variant") not in VARIANTS:
         return f"unknown to_variant {req.get('to_variant')!r}"
     return None
@@ -56,12 +69,26 @@ def _target_name(req: dict) -> str:
 
 
 def _load(drive, f: dict) -> dict:
-    """Doc mot file pending thanh dict de xu ly; file hong van tra ve de dua sang failed/."""
+    """Doc mot file pending. Loi tai (mang, 5xx) tach rieng khoi loi noi dung JSON:
+    loi tai de nguyen file o pending/, chi JSON hong/khong phai object moi sang failed/."""
+    item = {"file": f, "req": None, "parse_error": None, "read_error": None,
+            "raw_text": None}
     try:
-        req = json.loads(ss.read_text(drive, f["id"]))
-        return {"file": f, "req": req, "parse_error": None}
+        text = ss.read_text(drive, f["id"])
     except Exception as exc:
-        return {"file": f, "req": None, "parse_error": f"unreadable JSON: {exc}"}
+        item["read_error"] = exc
+        return item
+    item["raw_text"] = text
+    try:
+        req = json.loads(text)
+    except json.JSONDecodeError as exc:
+        item["parse_error"] = f"unreadable JSON: {exc}"
+        return item
+    if not isinstance(req, dict):
+        item["parse_error"] = "request is not a JSON object"
+        return item
+    item["req"] = req
+    return item
 
 
 def _sort_key(item: dict):
@@ -73,7 +100,7 @@ def _sort_key(item: dict):
 def _finish(drive, folders: dict, item: dict, status: str, detail: str) -> bool:
     """Ghi result va chuyen file. Tra ve True neu da chuyen duoc."""
     req = item["req"]
-    obj = dict(req) if isinstance(req, dict) else {"raw_unparsed": True}
+    obj = dict(req) if isinstance(req, dict) else {"raw_text": item["raw_text"]}
     obj["result"] = {"status": status, "at_utc": _utc(), "detail": detail}
     dest = folders["actions_done"] if status == "ok" else folders["actions_failed"]
     try:
@@ -85,30 +112,72 @@ def _finish(drive, folders: dict, item: dict, status: str, detail: str) -> bool:
         return False
 
 
+def new_state() -> dict:
+    """Trang thai trong tien trinh cho che do --watch: tranh bao Telegram lap lai."""
+    return {"notified": set(), "quota_day": None}
+
+
+def _notify_once(state: dict, key: str, message: str) -> None:
+    if key in state["notified"]:
+        return
+    state["notified"].add(key)
+    yu.notify(message)
+
+
+def _today() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
 def run_actions(drive, youtube, chan_folder: str, done_folder: str,
-                tmpdir: Path) -> tuple[int, int]:
+                tmpdir: Path, state: dict | None = None) -> tuple[int, int]:
     """Xu ly moi yeu cau trong actions/pending/, cu nhat truoc. Tra ve (ok, failed)."""
+    state = state if state is not None else new_state()
     folders = ss.studio_folders(drive, chan_folder)
     files = [f for f in ss.list_files(drive, folders["actions_pending"])
              if f["name"].lower().endswith(".json")]
     items = sorted((_load(drive, f) for f in files), key=_sort_key)
     ok = failed = 0
+    counter = 0
 
-    for item in items:
+    def quota_stop(left: int, what: str) -> tuple[int, int]:
+        log.error("Het quota, de nguyen %d yeu cau trong pending/ va dung.", left)
+        if state["quota_day"] != _today():
+            state["quota_day"] = _today()
+            yu.notify(f"Swap requests: quota exceeded ({what}), "
+                      f"{left} request(s) left in pending/")
+        return ok, failed
+
+    for idx, item in enumerate(items):
+        fid = item["file"]["id"]
+        left = len(items) - idx
+
+        if item["read_error"] is not None:
+            exc = item["read_error"]
+            if yu.is_quota_error(exc):
+                return quota_stop(left, "reading request")
+            log.warning("Khong doc duoc %s, de nguyen o pending/: %s",
+                        item["file"]["name"], exc)
+            _notify_once(state, fid, f"Swap {item['file']['name']}: could not read "
+                                     f"request ({exc}), left in pending/")
+            continue
+
         req = item["req"]
         err = item["parse_error"] or _validate(req)
         label = (f"Swap {req.get('video_id', '?')} -> {req.get('to_variant', '?')}"
                  if isinstance(req, dict) else f"Swap {item['file']['name']}")
 
         if err:
-            _finish(drive, folders, item, "error", err)
+            if _finish(drive, folders, item, "error", err):
+                yu.notify(f"{label}: FAILED {err}")
+            else:
+                _notify_once(state, fid, f"{label}: FAILED {err}, file not moved")
             failed += 1
-            yu.notify(f"{label}: FAILED {err}")
             continue
 
         name = _target_name(req)
         src_folder = done_folder if req["to_variant"] == "main" else folders["thumb_alts"]
-        local = Path(tmpdir) / f"{req['video_id']}_{req['to_variant']}.jpg"
+        counter += 1
+        local = Path(tmpdir) / f"swap{counter}.jpg"
         try:
             found = yu.find_child(drive, name, src_folder)
             if not found:
@@ -117,15 +186,13 @@ def run_actions(drive, youtube, chan_folder: str, done_folder: str,
             yu.set_thumbnail(youtube, req["video_id"], local)
         except Exception as exc:
             if yu.is_quota_error(exc):
-                log.error("Het quota, de nguyen %d yeu cau trong pending/ va dung.",
-                          len(items) - ok - failed)
-                yu.notify(f"Swap {req['video_id']} -> {req['to_variant']}: quota exceeded, "
-                          f"{len(items) - ok - failed} request(s) left in pending/")
-                return ok, failed
+                return quota_stop(left, label)
             detail = f"{type(exc).__name__}: {exc}"
-            _finish(drive, folders, item, "error", detail)
+            if _finish(drive, folders, item, "error", detail):
+                yu.notify(f"{label}: FAILED {detail}")
+            else:
+                _notify_once(state, fid, f"{label}: FAILED {detail}, file not moved")
             failed += 1
-            yu.notify(f"{label}: FAILED {detail}")
             continue
         finally:
             local.unlink(missing_ok=True)
@@ -135,9 +202,10 @@ def run_actions(drive, youtube, chan_folder: str, done_folder: str,
             yu.notify(f"{label}: ok")
         else:
             # Thumbnail da doi nhung file van o pending/: lan sau se doi lai
-            # cung anh (vo hai), nhung bao de chu kenh biet.
+            # cung anh (vo hai), nhung chi bao mot lan.
             failed += 1
-            yu.notify(f"{label}: set OK but request file not moved, stays in pending/")
+            _notify_once(state, fid,
+                         f"{label}: set OK but request file not moved, stays in pending/")
     return ok, failed
 
 
@@ -159,9 +227,11 @@ def parse_args(argv=None) -> argparse.Namespace:
     return args
 
 
-def _one_pass(args, drive, youtube, folders) -> tuple[int, int]:
+def _one_pass(args, drive, youtube, folders, state=None) -> tuple[int, int]:
+    if state is not None and state["quota_day"] == _today():
+        return 0, 0   # da het quota hom nay, cho sang ngay UTC moi
     with tempfile.TemporaryDirectory(prefix="studioact-", dir=args.temp_dir or None) as td:
-        return run_actions(drive, youtube, folders["channel"], folders["done"], Path(td))
+        return run_actions(drive, youtube, folders["channel"], folders["done"], Path(td), state)
 
 
 def main(argv=None) -> int:
@@ -188,9 +258,10 @@ def main(argv=None) -> int:
             log.info("Xong. %d ok, %d failed.", ok, failed)
             return 0
 
+        state = new_state()
         while True:
             try:
-                _one_pass(args, drive, youtube, folders)
+                _one_pass(args, drive, youtube, folders, state)
             except KeyboardInterrupt:
                 return 0
             except Exception as exc:
