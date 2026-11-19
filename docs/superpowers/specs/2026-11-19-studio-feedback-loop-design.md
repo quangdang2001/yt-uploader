@@ -194,6 +194,47 @@ A swap that wins is the clearest lesson: the two variants differed in one record
 - **Coverage.** Public videos only. Age counts from the moment the video became public. Private, unlisted,
   scheduled and held videos are never read or touched. No Shorts (the channel makes none).
 
+## 5.8 Revision 2026-11-19: the VPS collects, this PC analyses (owner approved)
+
+Owner 2026-11-19: "the script in vps upload the videos status in the drive folder (you can struture it properly).
+Then in this machine we will have the feedback loop to fetch it then analyst". The owner then approved the split
+below ("Approve"). Where it differs from §5.2, §5.4 and §5.6, this section wins.
+
+**VPS (collector + executor).** It reads Studio on the §5.1 schedule and writes to Drive. It makes no verdicts.
+It also executes swap requests: it holds the YouTube token and quota.
+
+**Drive layout**, under `YouTube-Upload/Bare Skull/studio/`:
+
+```
+studio/
+  snapshots/YYYY-MM-DD.csv                 append; one row per video per reading (SNAPSHOT columns, §5.2)
+  raw/YYYY-MM-DD/<video_id>__<utc>.json.gz  Studio JSON bodies for that reading, scrubbed (no tokens/cookies)
+  health.json                              {"status": "PASS|FAIL auth|FAIL read", "at_utc", "detail", "videos_read", "videos_failed"}
+  thumb-alts/<base>.alt1.jpg|alt2.jpg      alternates, pushed from this PC
+  thumbnail-features.csv                   one row per thumbnail variant, pushed from this PC
+  actions/pending/<video_id>__<utc>.json    swap requests written by this PC
+  actions/done/   actions/failed/          the VPS moves each request here with a "result" block added
+```
+
+A swap request is `{"video_id", "base", "to_variant": "alt1|alt2|main", "from_variant", "reason", "requested_utc"}`.
+The VPS adds `"result": {"status": "ok|error", "at_utc", "detail"}`. `main` means `done/<base>.jpg` in
+`YouTube-Upload/Bare Skull/done/`.
+
+**This PC (fetch + analysis).** It pulls new snapshot CSVs and finished actions from Drive into a local cache. It
+rebuilds each video's state, applies the §5.4 rules (with the §5.7 evidence floors), and writes:
+- `studio/verdicts.csv` to Drive;
+- the weekly "why" report into the channel's reports folder;
+- Telegram alerts;
+- swap requests into `actions/pending/`. During the first 7 days after `go_live` it writes none, only the report
+  line "would swap".
+
+Manual thumbnail changes are detected here from `thumb_hash` changes with no matching action in `done/`.
+
+**Code location (my call).** All loop code lives in the yt-uploader repo, so it shares one branch and review:
+`scripts/` for the VPS side, `loop/` for this PC's side. This PC runs `loop/` from its clone at
+`D:/Youtube/n8n-upload`. If the raw Studio format changes, this PC re-parses `raw/` with the same
+`scripts/studio_parse.py`. Thumbnail production and features stay in the build repo.
+
 ## 6. Left to the builder
 
 - The exact Studio URLs and the JSON endpoints to listen to (verify against the live Studio).
