@@ -73,7 +73,10 @@ def walk(node, path=""):
 
 def blocked_reason(page):
     """Tra ve ly do neu trang khong phai Studio binh thuong, nguoc lai None."""
-    host = (urlparse(page.url).hostname or "").lower()
+    try:
+        host = (urlparse(page.url).hostname or "").lower()
+    except Exception as e:
+        return f"could not read page: {type(e).__name__}"
     if host != "studio.youtube.com":
         return f"host la {host or '(trong)'}, khong phai studio.youtube.com ({page.url[:120]})"
     if URL_BAD_RE.search(page.url):
@@ -85,8 +88,8 @@ def blocked_reason(page):
         m = TEXT_BAD_RE.search(txt)
         if m:
             return f"noi dung trang co '{m.group(0)}'"
-    except Exception:
-        pass
+    except Exception as e:
+        return f"could not read page: {type(e).__name__}"  # fail closed
     return None
 
 
@@ -110,20 +113,38 @@ def login(profile):
         except Exception as e:
             print(f"canh bao mo trang: {e}")
         print("Sign in by hand in the Chrome window; waiting up to 15 min", flush=True)
-        end = time.time() + LOGIN_WAIT_S
-        while time.time() < end:
-            try:
-                if blocked_reason(page) is None:
-                    print("Signed in; profile saved")
-                    ctx.close()
-                    return 0
-            except Exception:
-                pass
-            time.sleep(5)
+        rc = wait_signed_in(page)
         try:
             ctx.close()
         except Exception:
             pass
+    return rc
+
+
+def wait_signed_in(page, wait_s=LOGIN_WAIT_S, poll_s=5):
+    """0 khi 2 lan poll sach lien tiep; 3 khi het gio hoac cua so bi dong."""
+    end = time.time() + wait_s
+    clean = 0
+    while time.time() < end:
+        try:
+            if page.is_closed():
+                raise RuntimeError("closed")
+            reason = blocked_reason(page)
+            if reason is None:
+                clean += 1
+                if clean >= 2:
+                    print("Signed in; profile saved")
+                    return 0
+            else:
+                clean = 0
+                if reason.startswith("could not read page"):
+                    # trang da dong hoac trinh duyet chet?
+                    if page.is_closed():
+                        raise RuntimeError("closed")
+        except Exception:
+            print("Chrome window closed before sign-in finished")
+            return 3
+        time.sleep(poll_s)
     print("Het 15 phut ma chua dang nhap.")
     return 3
 
