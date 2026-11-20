@@ -184,14 +184,21 @@ class JoinTest(Env):
         r = self.by_id(self.build_rows({VID2: "x"}))[VID2]
         self.assertEqual((r["slug"], r["match_source"]), ("bear_guns_ranked", "id-in-md"))
 
-    def test_id_in_read_first_and_url_forms_count_but_sibling_build_log_does_not(self):
+    def test_id_in_read_first_counts_but_sibling_build_log_does_not(self):
         self.write("projects/bear_guns_ranked/0 - ĐỌC TRƯỚC.md", "live: %s" % VID2)
         self.write("projects/other_film/BUILD_LOG.md", "compared with https://youtu.be/%s" % VID3)
         self.write("projects/lever_ranked/BUILD_LOG.md", "sibling mentions %s in passing" % VID4)
         r = self.by_id(self.build_rows({VID2: "x", VID3: "x", VID4: "x"}))
         self.assertEqual(r[VID2]["slug"], "bear_guns_ranked")
-        self.assertEqual((r[VID3]["slug"], r[VID3]["match_source"]), ("other_film", "id-in-md"))
+        self.assertEqual((r[VID3]["slug"], r[VID3]["match_source"]), ("", "none"))   # URL in BUILD_LOG: no
         self.assertEqual((r[VID4]["slug"], r[VID4]["match_source"]), ("", "none"))
+
+    def test_url_forms_and_bare_id_count_in_hoi_cuu_and_ghi_chu_duyet(self):
+        self.write("projects/other_film/hoi-cuu.md", "https://www.youtube.com/watch?v=%s" % VID3)
+        self.write("projects/bear_guns_ranked/ghi-chu-duyet.md", "dang %s" % VID4)
+        r = self.by_id(self.build_rows({VID3: "x", VID4: "x"}))
+        self.assertEqual((r[VID3]["slug"], r[VID3]["match_source"]), ("other_film", "id-in-md"))
+        self.assertEqual((r[VID4]["slug"], r[VID4]["match_source"]), ("bear_guns_ranked", "id-in-md"))
 
     def test_source_2_id_in_board_note_and_word_boundary(self):
         # VID1 is in the board ghi_chu of lever_ranked

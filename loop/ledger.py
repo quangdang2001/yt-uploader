@@ -44,6 +44,7 @@ BOARD_REL = "Bare Skull - 2nd brain/van-hanh/ke-hoach/bang-cong-viec.md"
 SHAPES_REL = "topic_engine/ctr/own_shapes.json"
 THUMB_GATE_REL = "playbook/thumb_gate.py"
 READ_FIRST = "0 - ĐỌC TRƯỚC.md"
+EVIDENCE_FILES = ("UPLOAD.md", READ_FIRST, "hoi-cuu.md", "ghi-chu-duyet.md")   # file ghi nhan dang bai
 VIDEOS_JSON_REL = "playbook/channel_daily_report_note/videos.json"      # config videos_json
 HISTORY_MD_REL = "Bare Skull - 2nd brain/wiki/analysis/lich-su-video-da-dang.md"   # config history_md
 
@@ -363,7 +364,7 @@ def build_ledger(cache: Path, cfg: dict, now: datetime, live_titles: dict, probe
     slugs |= set(board)
     texts = {s: "\n".join(_read(f) for f in sorted((proj_root / s).glob("*.md")))
              for s in slugs if (proj_root / s).is_dir()}
-    evidence = {s: _read(proj_root / s / "UPLOAD.md") + "\n" + _read(proj_root / s / READ_FIRST)
+    evidence = {s: "\n".join(_read(proj_root / s / n) for n in EVIDENCE_FILES)
                 for s in slugs if (proj_root / s).is_dir()}
     note = {s: board[s]["ghi_chu"] for s in board}
     titles_of: dict = {}
@@ -387,12 +388,11 @@ def build_ledger(cache: Path, cfg: dict, now: datetime, live_titles: dict, probe
         if not slug and vid in vjson:
             slug, source = vjson[vid], "videos-json"      # giu slug du thu muc da bi xoa
         if not slug:
-            # chi tinh khi ma nam trong UPLOAD.md, 0 - DOC TRUOC.md, ghi_chu bang cong viec, hoac dang URL;
-            # BUILD_LOG.md cua du an anh em co the nhac toi video khac
+            # chi tinh khi ma (tran hoac trong URL watch?v= / youtu.be/) nam trong file ghi nhan dang bai:
+            # UPLOAD.md, 0 - DOC TRUOC.md, hoi-cuu.md, ghi-chu-duyet.md, hoac ghi_chu bang cong viec.
+            # BUILD_LOG.md va file khac co the nhac toi video khac.
             rx = _id_re(vid)
-            url = re.compile(r"(?:watch\?v=|youtu\.be/)" + re.escape(vid) + r"(?![A-Za-z0-9_-])")
-            hit = sorted(s for s in slugs if rx.search(evidence.get(s, "")) or rx.search(note.get(s, ""))
-                         or url.search(texts.get(s, "")))
+            hit = sorted(s for s in slugs if rx.search(evidence.get(s, "")) or rx.search(note.get(s, "")))
             if len(hit) > 1:
                 hit = [s for s in hit if rx.search(note.get(s, ""))] or hit
             if len(hit) == 1:
