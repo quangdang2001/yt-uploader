@@ -9,6 +9,7 @@ hoac cache.
 
 Noi video_id -> slug, lay nguon dau tien khop (cot match_source):
   history   studio/upload-history.csv (cot ten_goc la slug)
+  videos-json  playbook/channel_daily_report_note/videos.json (config videos_json); giu slug du thu muc da xoa
   id-in-md  ma 11 ky tu nam trong projects/<slug>/*.md hoac ghi_chu cua slug tren bang cong viec
   title     tieu de live == tieu de trong UPLOAD.md hoac mot dong in dam trong tieu-de.md
   none      khong khop: van co dong, phan "da lam" de trong. Khong bao gio doan long.
@@ -42,9 +43,11 @@ SCENE_THRESHOLD = 0.25
 BOARD_REL = "Bare Skull - 2nd brain/van-hanh/ke-hoach/bang-cong-viec.md"
 SHAPES_REL = "topic_engine/ctr/own_shapes.json"
 THUMB_GATE_REL = "playbook/thumb_gate.py"
+VIDEOS_JSON_REL = "playbook/channel_daily_report_note/videos.json"      # config videos_json
+HISTORY_MD_REL = "Bare Skull - 2nd brain/wiki/analysis/lich-su-video-da-dang.md"   # config history_md
 
 IDS = ["video_id", "live_title", "slug", "match_source", "published_local", "weekday", "hour"]
-MADE = ["lane", "packaging", "title_shape", "title_chars", "title_has_number", "title_has_price",
+MADE = ["lane", "packaging", "title_shape", "gun_1", "title_chars", "title_has_number", "title_has_price",
         "title_has_year", "thumb_brightness", "thumb_saturation", "thumb_colourfulness", "thumb_warmth",
         "script_words", "runtime_s", "footage_pct", "render_pct", "stills_pct", "sec_per_cut"]
 DID = ["ctr_24h", "impr_24h", "views_24h", "ctr_7d", "impr_7d", "views_7d", "ctr_latest", "impr_latest",
@@ -84,6 +87,38 @@ def parse_board(text: str) -> dict:
         if len(cells) < 9 or cells[0] in ("ma", "") or set(cells[0]) <= set("-: "):
             continue
         out[cells[1]] = {"cach": cells[2], "buoc": cells[3], "ghi_chu": " | ".join(cells[8:])}
+    return out
+
+
+def parse_videos_json(text: str) -> dict:
+    """video_id -> slug tu videos.json ({"project": "projects/<slug>"})."""
+    try:
+        obj = json.loads(text or "{}")
+    except ValueError:
+        return {}
+    out = {}
+    for vid, v in (obj.items() if isinstance(obj, dict) else []):
+        proj = str(v.get("project") or "") if isinstance(v, dict) else ""
+        slug = proj.replace("\\", "/").rstrip("/").split("/")[-1]
+        if slug:
+            out[vid] = slug
+    return out
+
+
+def parse_history_md(text: str) -> dict:
+    """video_id -> {shape, gun_1} tu bang lich-su-video-da-dang.md (cot 2 la `id`, cot 4 khuon, cot 5 sung #1).
+    Khong doc cot view / CTR: so lieu ket qua lay tu Studio."""
+    out = {}
+    for line in (text or "").splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        m = re.fullmatch(r"`([A-Za-z0-9_-]{11})`", cells[1]) if len(cells) >= 5 else None
+        if not m:
+            continue
+        shape = cells[3] if re.fullmatch(r"[a-z][a-z0-9-]*", cells[3]) else ""
+        gun = cells[4] if cells[4] not in ("", "-", "—") else ""
+        out[m.group(1)] = {"shape": shape, "gun_1": gun}
     return out
 
 
@@ -306,6 +341,8 @@ def build_ledger(cache: Path, cfg: dict, now: datetime, live_titles: dict, probe
         print("ledger: verdicts unavailable (%s)" % exc, file=sys.stderr)
         verdicts = {}
 
+    vjson = parse_videos_json(_read(Path(cfg.get("videos_json") or build / VIDEOS_JSON_REL)))
+    hist_md = parse_history_md(_read(Path(cfg.get("history_md") or build / HISTORY_MD_REL)))
     proj_root = build / "projects"
     slugs = {p.name for p in proj_root.iterdir() if p.is_dir()} if proj_root.is_dir() else set()
     slugs |= set(board)
@@ -330,6 +367,8 @@ def build_ledger(cache: Path, cfg: dict, now: datetime, live_titles: dict, probe
         base = _resolve_base(history.get(vid, ""), slugs) if vid in history else None
         if base:
             slug, source = base, "history"
+        if not slug and vid in vjson:
+            slug, source = vjson[vid], "videos-json"      # giu slug du thu muc da bi xoa
         if not slug:
             rx = _id_re(vid)
             hit = sorted(s for s in slugs if rx.search(texts.get(s, "")) or rx.search(note.get(s, "")))
@@ -350,7 +389,8 @@ def build_ledger(cache: Path, cfg: dict, now: datetime, live_titles: dict, probe
                   "published_local": pub.strftime("%Y-%m-%d %H:%M"), "weekday": pub.strftime("%a"),
                   "hour": pub.hour, "packaging": packaging(live)})
         r.update(title_flags(live) if live else {})
-        r["title_shape"] = title_shape(live, shapes) if live else ""
+        r["title_shape"] = (title_shape(live, shapes) if live else "") or hist_md.get(vid, {}).get("shape", "")
+        r["gun_1"] = hist_md.get(vid, {}).get("gun_1", "")
 
         if slug:
             proj = proj_root / slug

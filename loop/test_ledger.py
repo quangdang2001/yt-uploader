@@ -213,6 +213,59 @@ class JoinTest(Env):
         self.assertEqual([r["video_id"] for r in rows], [VID1])
 
 
+class FixRound1Test(Env):
+    HIST = ("| date | id | title | shape | gun | views | ctr | note |\n|---|---|---|---|---|---|---|---|\n"
+            "| 09-22 | `%s` | The $199 Pistol | price-plea | Hi-Point C9 | **1.047.013** | 7,9%% / 3.7M | x |\n"
+            "| 09-23 | `%s` | Other | - | - | 5 | 1%% | y |\n")
+
+    def setUp(self):
+        super().setUp()
+        self.write_snaps([snap(VID1, 20), snap(VID2, 30)])
+
+    def test_videos_json_source_after_history_before_md(self):
+        self.write("playbook/channel_daily_report_note/videos.json", json.dumps(
+            {VID1: {"project": "projects/lever_ranked"}, VID2: {"project": "projects/walmart_guns"}}))
+        self.write("projects/bear_guns_ranked/a.md", VID1)        # md would say bear_guns_ranked
+        rows = {r["video_id"]: r for r in self.build_rows({VID1: "x", VID2: "y"})}
+        self.assertEqual((rows[VID1]["slug"], rows[VID1]["match_source"]), ("lever_ranked", "videos-json"))
+        # folder deleted: slug kept, folder-bound fields empty
+        self.assertEqual((rows[VID2]["slug"], rows[VID2]["match_source"]), ("walmart_guns", "videos-json"))
+        for col in ("script_words", "runtime_s", "footage_pct", "thumb_warmth"):
+            self.assertEqual(rows[VID2][col], "", col)
+        self.write_history([(VID1, "other_film")])
+        r = {r["video_id"]: r for r in self.build_rows({VID1: "x"})}[VID1]
+        self.assertEqual(r["match_source"], "history")
+
+    def test_videos_json_path_is_a_config_key(self):
+        p = self.root / "elsewhere.json"
+        p.write_text(json.dumps({VID1: {"project": "projects/lever_ranked"}}), encoding="utf-8")
+        self.cfg["videos_json"] = str(p)
+        r = self.build_rows({VID1: "x"})[0]
+        self.assertEqual(r["match_source"], "videos-json")
+
+    def test_history_md_parse_ignores_numbers(self):
+        got = lg.parse_history_md(self.HIST % (VID1, VID2))
+        self.assertEqual(got[VID1], {"shape": "price-plea", "gun_1": "Hi-Point C9"})
+        self.assertEqual(got[VID2], {"shape": "", "gun_1": ""})
+        self.assertNotIn("views", json.dumps(got))
+
+    def test_shape_fallback_and_gun_1(self):
+        p = self.root / "hist.md"
+        p.write_text(self.HIST % (VID1, VID2), encoding="utf-8")
+        self.cfg["history_md"] = str(p)
+        rows = {r["video_id"]: r for r in self.build_rows({VID1: "Unmatched title", VID2: "z"})}
+        self.assertEqual((rows[VID1]["title_shape"], rows[VID1]["gun_1"]), ("price-plea", "Hi-Point C9"))
+        self.assertEqual((rows[VID2]["title_shape"], rows[VID2]["gun_1"]), ("", ""))
+
+    def test_own_shapes_wins_over_history_md(self):
+        p = self.root / "hist.md"
+        p.write_text(self.HIST % (VID1, VID2), encoding="utf-8")
+        self.cfg["history_md"] = str(p)
+        self.write("topic_engine/ctr/own_shapes.json",
+                   json.dumps({"shapes": {}, "titles": {"Unmatched title": "every-x"}}))
+        self.assertEqual(self.build_rows({VID1: "Unmatched title"})[0]["title_shape"], "every-x")
+
+
 class MadeSideTest(Env):
     def setUp(self):
         super().setUp()
