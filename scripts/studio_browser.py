@@ -20,19 +20,28 @@ OPTIONAL_TABS = (AUDIENCE_TAB,)   # loi o tab nay khong lam hong video
 SCROLL_STEP_PX = 1200
 SCROLL_STEP_MS = 1500
 SCROLL_MAX_STEPS = 12
-SCROLL_CAP_S = 25
+SCROLL_CAP_S = 25                 # ca pha cuon: cuon + cho mang yen
+WHEEL_MAX_STEPS = 6               # lan chuot khong biet vi tri, nen gioi han so buoc
 SCROLL_IDLE_TIMEOUT_MS = 10000
 # %d = so pixel moi buoc. Tra ve vi tri cuon sau buoc (scrollTop cua phan tu cuon).
 SCROLL_JS = """(() => {
   const step = %d;
   const tall = (el) => el && el.scrollHeight > el.clientHeight + 1;
+  const room = (e) => e.scrollHeight - e.clientHeight;
   let el = document.scrollingElement;
   if (!tall(el)) {
     el = null;
-    for (const e of document.querySelectorAll('*')) {
-      const oy = getComputedStyle(e).overflowY;
-      if ((oy === 'auto' || oy === 'scroll') && tall(e)) { el = e; break; }
-    }
+    let best = 0;
+    const walk = (root) => {
+      for (const e of root.querySelectorAll('*')) {
+        const oy = getComputedStyle(e).overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && tall(e) && room(e) > best) {
+          best = room(e); el = e;
+        }
+        if (e.shadowRoot) walk(e.shadowRoot);
+      }
+    };
+    walk(document);
   }
   if (!el) return 0;
   el.scrollBy(0, step);
@@ -130,30 +139,65 @@ def scroll_position(page):
 
 
 def scroll_to_bottom(page, max_steps=SCROLL_MAX_STEPS, step_wait_ms=SCROLL_STEP_MS,
-                     cap_s=SCROLL_CAP_S, clock=time.monotonic):
+                     cap_s=SCROLL_CAP_S - SCROLL_IDLE_TIMEOUT_MS // 1000, clock=time.monotonic):
     """Cuon tung buoc de the tai cham (retention, traffic) hien ra. Dung khi vi tri
     khong doi, sau max_steps buoc, hoac qua cap_s giay. Chi cuon, khong bam, khong go.
     Tra ve so buoc da cuon."""
     start = clock()
     last = None
     steps = 0
+    method = "element"
     while steps < max_steps and clock() - start < cap_s:
-        pos = scroll_position(page)
-        steps += 1
-        page.wait_for_timeout(step_wait_ms)
-        if pos is None or pos == last:
-            break
-        last = pos
+        if method == "element":
+            pos = scroll_position(page)
+            steps += 1
+            if steps == 1 and not pos:
+                # khong tim thay phan tu cuon (vd nam trong shadow root dong): doi sang lan chuot
+                method = "wheel"
+                if not _wheel_step(page):
+                    method = "none"
+                    page.wait_for_timeout(step_wait_ms)
+                    break
+                page.wait_for_timeout(step_wait_ms)
+                continue
+            page.wait_for_timeout(step_wait_ms)
+            if pos is None or pos == last:
+                break
+            last = pos
+        else:
+            # lan chuot khong doc duoc vi tri: chay so buoc con lai nhung khong qua WHEEL_MAX_STEPS
+            if steps >= WHEEL_MAX_STEPS or not _wheel_step(page):
+                break
+            steps += 1
+            page.wait_for_timeout(step_wait_ms)
+    log.info("scroll: %d buoc, cach=%s, vi tri cuoi=%s", steps, method,
+             last if method == "element" else "khong biet")
     return steps
 
 
-def scroll_phase(page):
-    """Cuon het tab, doi mang yen (toi da 10 s), roi kiem tra lai dang nhap/thu thach."""
-    scroll_to_bottom(page)
+def _wheel_step(page):
+    """Di chuot vao giua khung nhin roi lan chuot mot buoc. Chi doc: khong bam."""
     try:
-        page.wait_for_load_state("networkidle", timeout=SCROLL_IDLE_TIMEOUT_MS)
+        vp = page.viewport_size or {"width": 1280, "height": 720}
+        page.mouse.move(vp["width"] / 2, vp["height"] / 2)
+        page.mouse.wheel(0, SCROLL_STEP_PX)
+        return True
     except Exception:
-        pass
+        return False
+
+
+def scroll_phase(page, clock=time.monotonic):
+    """Cuon het tab, doi mang yen, roi kiem tra lai dang nhap/thu thach.
+    Ca hai nam trong ngan sach SCROLL_CAP_S (cuon + toi da 10 s cho mang yen)."""
+    start = clock()
+    scroll_to_bottom(page, clock=clock)
+    left_ms = int((SCROLL_CAP_S - (clock() - start)) * 1000)
+    idle_ms = min(SCROLL_IDLE_TIMEOUT_MS, left_ms)
+    if idle_ms > 0:
+        try:
+            page.wait_for_load_state("networkidle", timeout=idle_ms)
+        except Exception:
+            pass
     check_page(page)
 
 

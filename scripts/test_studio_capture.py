@@ -403,6 +403,46 @@ class BrowserTest(unittest.TestCase):
         page.evaluate = boom
         self.assertEqual(sb.scroll_to_bottom(page), 1)
 
+    def test_no_scroller_falls_back_to_wheel_and_logs(self):
+        calls = []
+
+        class Mouse:
+            def move(self, x, y):
+                calls.append(("move", x, y))
+
+            def wheel(self, dx, dy):
+                calls.append(("wheel", dx, dy))
+        page = FakePage([])
+        page.mouse = Mouse()
+        page.viewport_size = {"width": 1000, "height": 600}
+        page.scroll_positions = []
+        page.evaluate = lambda js: 0                     # khong tim thay phan tu cuon
+        with self.assertLogs("uploader.studio_browser", level="INFO") as cm:
+            steps = sb.scroll_to_bottom(page)
+        self.assertEqual(steps, sb.WHEEL_MAX_STEPS)
+        self.assertEqual(calls[0], ("move", 500, 300))
+        self.assertEqual([c for c in calls if c[0] == "wheel"],
+                         [("wheel", 0, sb.SCROLL_STEP_PX)] * sb.WHEEL_MAX_STEPS)
+        self.assertEqual(len(cm.records), 1)
+        self.assertIn("cach=wheel", cm.records[0].getMessage())
+        # khong co chuot -> cach=none
+        page = FakePage([])
+        page.evaluate = lambda js: 0
+        with self.assertLogs("uploader.studio_browser", level="INFO") as cm:
+            sb.scroll_to_bottom(page)
+        self.assertIn("cach=none", cm.records[0].getMessage())
+
+    def test_idle_wait_counts_inside_scroll_budget(self):
+        page = FakePage([])
+        page._url = "https://studio.youtube.com/video/x"
+        timeouts = []
+        page.wait_for_load_state = lambda state, timeout=None: timeouts.append(timeout)
+        page.scroll_positions = [1200, 1200]
+        # da dung 20 s cho cuon: chi con 5 s cho mang yen
+        seq = iter([0, 0, 20, 20, 20, 20, 20, 20])
+        sb.scroll_phase(page, clock=lambda: next(seq, 20))
+        self.assertEqual(timeouts, [5000])
+
     def test_third_tab_failure_does_not_fail_capture(self):
         page = FakePage([[{"a": 1}], [{"b": 2}]])
         real = page.goto

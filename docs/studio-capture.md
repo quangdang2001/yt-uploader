@@ -118,6 +118,7 @@ thực thi một lần. Nếu vẫn chạy `studio_actions.py --watch` riêng th
 - Video công khai dưới 72 giờ được đọc khoảng 2 giờ/lần. Tuổi video tính từ lúc nó thành
   công khai.
 - Video cũ hơn được đọc mỗi ngày một lần, từ `daily_hour` giờ VPS.
+- Mỗi video giờ mở 3 tab (Reach, Engagement, Audience) và cuộn từng tab để thẻ tải chậm hiện ra, nên mất khoảng 100 s mỗi video; một lượt đủ 35 video trải qua hai lần chạy.
 - Sau 35 phút kể từ lúc khởi động (tính cả thời gian chờ jitter), script không mở video mới;
   phần còn lại để lần chạy sau. Nếu cả lần chạy vượt 50 phút, watchdog sẽ dừng nó và gỡ lock
   của nó.
