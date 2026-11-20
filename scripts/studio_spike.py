@@ -18,14 +18,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
-TABS = ("tab-reach_viewers", "tab-interest_viewers")
+from studio_browser import (  # noqa: F401  (dung chung voi studio_capture.py)
+    SCRUB_RE, SETTLE_MS, TABS, TEXT_BAD_RE, URL_BAD_RE, blocked_reason, scrub, wanted)
+
 KEY_RE = re.compile(r"impression|ctr|view|averageviewduration|retention", re.I)
-SCRUB_RE = re.compile(r"token|xsrf|session|auth|cookie|visitordata", re.I)
-URL_BAD_RE = re.compile(r"/sorry/|challenge|signin|servicelogin|consent", re.I)
-TEXT_BAD_RE = re.compile(
-    r"verify it.?s you|confirm it.?s you|unusual traffic|not a robot|captcha|"
-    r"sign in to continue|choose an account", re.I)
-SETTLE_MS = 8000
 WATCHDOG_S = 300
 LOGIN_WAIT_S = 900
 
@@ -34,26 +30,10 @@ def utc_stamp():
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
-def wanted(url):
-    u = urlparse(url)
-    host = (u.hostname or "").lower()
-    if host == "studio.youtube.com":
-        return True
-    return host in ("youtube.com", "www.youtube.com") and u.path.startswith("/youtubei/")
-
-
 def slug(url):
     path = urlparse(url).path.strip("/").split("/")
     s = "_".join(p for p in path[-3:] if p) or "root"
     return re.sub(r"[^A-Za-z0-9_.-]", "-", s)[:60]
-
-
-def scrub(node):
-    if isinstance(node, dict):
-        return {k: ("<scrubbed>" if SCRUB_RE.search(k) else scrub(v)) for k, v in node.items()}
-    if isinstance(node, list):
-        return [scrub(v) for v in node]
-    return node
 
 
 def walk(node, path=""):
@@ -69,28 +49,6 @@ def walk(node, path=""):
     elif isinstance(node, list):
         for i, v in enumerate(node):
             yield from walk(v, f"{path}[{i}]")
-
-
-def blocked_reason(page):
-    """Tra ve ly do neu trang khong phai Studio binh thuong, nguoc lai None."""
-    try:
-        host = (urlparse(page.url).hostname or "").lower()
-    except Exception as e:
-        return f"could not read page: {type(e).__name__}"
-    if host != "studio.youtube.com":
-        return f"host la {host or '(trong)'}, khong phai studio.youtube.com ({page.url[:120]})"
-    if URL_BAD_RE.search(page.url):
-        return f"URL co dau hieu dang nhap/thu thach ({page.url[:120]})"
-    try:
-        if page.locator("input[type=password]").count() > 0:
-            return "trang co o nhap mat khau"
-        txt = page.inner_text("body")
-        m = TEXT_BAD_RE.search(txt)
-        if m:
-            return f"noi dung trang co '{m.group(0)}'"
-    except Exception as e:
-        return f"could not read page: {type(e).__name__}"  # fail closed
-    return None
 
 
 def bail(ctx, reason):

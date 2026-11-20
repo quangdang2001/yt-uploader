@@ -12,6 +12,9 @@ client_secret_*.json
 scripts/.uploader-state-*.json
 scripts/.uploader-*.lock
 scripts/.studio-*.lock
+scripts/.studio-state-*.json
+scripts/.studio-state-*.json.tmp
+scripts/studio_config.json
 scripts/.analytics-*.lock
 scripts/logs/
 
