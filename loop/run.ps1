@@ -31,4 +31,8 @@ if ($code -ne 0) {
     python -m loop.notify_fail ledger $code --config $config
     exit $code
 }
+
+# Du lieu cho bang dieu khien (loop/cache/dashboard.json). Khong chan vong: loi chi in ra.
+python -m loop.dashboard --config $config
+if ($LASTEXITCODE -ne 0) { Write-Warning "loop.dashboard exit $LASTEXITCODE (dashboard.json not refreshed)" }
 exit 0

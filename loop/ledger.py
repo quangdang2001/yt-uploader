@@ -208,7 +208,10 @@ def _blank(v):
 # ---------- nguon ngoai ----------
 
 def _default_yt_runner(url: str) -> str:
-    p = subprocess.run(["yt-dlp", "--flat-playlist", "--print", "%(id)s|%(title)s", url], capture_output=True,
+    # --encoding utf-8: on Windows a piped yt-dlp prints in the console code page (cp1252), so curly quotes
+    # and dashes in titles would decode as U+FFFD.
+    p = subprocess.run(["yt-dlp", "--encoding", "utf-8", "--flat-playlist", "--print", "%(id)s|%(title)s", url],
+                       capture_output=True,
                        text=True, encoding="utf-8", errors="replace", timeout=300)
     if p.returncode != 0:
         raise OSError("yt-dlp exit %d: %s" % (p.returncode, p.stderr.strip()[-200:]))
