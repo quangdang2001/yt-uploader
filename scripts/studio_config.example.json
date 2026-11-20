@@ -1,5 +1,6 @@
 {
   "channel": "Bare Skull",
   "profile_dir": "C:\\yt\\studio-profile",
-  "daily_hour": 6
+  "daily_hour": 6,
+  "capture_cap_min": 150
 }

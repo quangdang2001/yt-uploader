@@ -106,6 +106,13 @@ class DueVideosTest(unittest.TestCase):
         # chua tung doc -> den han ngay
         self.assertEqual(self.due([old], {}, dt("2026-11-20T03:00:00Z")), ["o"])
 
+    def test_old_videos_least_recently_read_first(self):
+        # mot luot moi ngay bi cat giua chung: luot sau phai bat dau tu video bi bo, khong doi mai
+        now = dt("2026-11-20T12:00:00Z")
+        vs = [vid(x, dt("2026-11-01T00:00:00Z")) for x in ("a", "b", "c", "d")]
+        last = {"a": dt("2026-11-19T07:00:00Z"), "b": dt("2026-11-17T07:00:00Z"), "d": dt("2026-11-18T07:00:00Z")}
+        self.assertEqual(self.due(vs, last, now), ["c", "b", "d", "a"])
+
     def test_due_daily_hour_is_local_time(self):
         plus7 = timezone(timedelta(hours=7))
         old = vid("o", dt("2026-11-01T00:00:00Z"))
@@ -1322,7 +1329,18 @@ class RunTest(unittest.TestCase):
         a = sc.parse_args(["--config", str(self.cfg), "--channel", "X", "--profile", "P"])
         self.assertEqual((a.channel, a.profile), ("X", "P"))
         ex = json.loads((HERE / "studio_config.example.json").read_text(encoding="utf-8"))
-        self.assertEqual(set(ex), {"channel", "profile_dir", "daily_hour"})
+        self.assertEqual(set(ex), {"channel", "profile_dir", "daily_hour", "capture_cap_min"})
+
+    def test_capture_cap_from_config(self):
+        self.assertEqual(sc.parse_args(["--config", str(self.cfg)]).capture_cap_s, sc.CAPTURE_CAP_S)
+        cfg = json.loads(self.cfg.read_text(encoding="utf-8"))
+        cfg["capture_cap_min"] = 120
+        self.cfg.write_text(json.dumps(cfg), encoding="utf-8")
+        self.assertEqual(sc.parse_args(["--config", str(self.cfg)]).capture_cap_s, 7200)
+        cfg["capture_cap_min"] = 5
+        self.cfg.write_text(json.dumps(cfg), encoding="utf-8")
+        with self.assertRaises(SystemExit):
+            sc.parse_args(["--config", str(self.cfg)])
 
 
 if __name__ == "__main__":

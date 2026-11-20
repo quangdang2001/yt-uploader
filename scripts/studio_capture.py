@@ -69,6 +69,7 @@ JITTER_S = 600
 PAUSE_S = (5, 15)
 WATCHDOG_S = 50 * 60
 CAPTURE_CAP_S = 35 * 60                # tinh tu luc khoi dong (gom jitter): sau moc nay khong mo video moi
+WATCHDOG_MARGIN_S = 15 * 60            # watchdog = han doc + 15 phut (doi han bang capture_cap_min trong config)
 MAX_CONSECUTIVE_FAILS = 3              # 3 video loi lien tiep -> dung, phan con lai de lan sau
 LOCK_STALE_S = 6 * 3600                # giong yu.Lock
 UPLOADER_MIDRUN_MIN_AGE_S = 60         # giua chung chi dung neu uploader da chay > 60 s
@@ -337,8 +338,11 @@ def due_videos(videos: list[dict], last_by_video: dict, now: datetime, daily_hou
             if last is None or now - last >= FRESH_EVERY - FRESH_SLACK:
                 fresh.append(v["video_id"])
         elif last is None or last < boundary:
-            old.append(v["video_id"])
-    return fresh + old
+            old.append((last, v["video_id"]))
+    # Video cu doc lau nhat truoc (chua doc bao gio dung dau): luot nao bi cat giua chung thi
+    # luot sau bat dau tu nhung video bi bo, khong video nao doi mai.
+    old.sort(key=lambda t: (t[0] is not None, t[0] or now))
+    return fresh + [vid for _, vid in old]
 
 
 # ---------------------------------------------------------------- thumbnail
@@ -639,10 +643,11 @@ def _capture_loop(args, deps, page, due, by_id, rows, failures, attempts, notes,
         left = len(due) - i
         if i:
             deps.sleep(deps.uniform(*PAUSE_S))
-        if (deps.now() - deps.launched_at).total_seconds() > CAPTURE_CAP_S:
+        cap_s = getattr(args, "capture_cap_s", CAPTURE_CAP_S)
+        if (deps.now() - deps.launched_at).total_seconds() > cap_s:
             notes.append(f"time cap: {left} video(s) left for next run")
             log.warning("Qua %d phut tu luc khoi dong, de %d video cho lan sau.",
-                        CAPTURE_CAP_S // 60, left)
+                        cap_s // 60, left)
             break
         if uploader_busy(deps.home, args.channel, min_age=UPLOADER_MIDRUN_MIN_AGE_S):
             notes.append(f"uploader running: {left} video(s) left for next run")
@@ -789,6 +794,14 @@ def parse_args(argv=None) -> argparse.Namespace:
         p.error("daily_hour trong config phai la so 0-23")
     if not 0 <= a.daily_hour <= 23:
         p.error("daily_hour trong config phai la so 0-23")
+    # Chay moi ngay mot lan thi mot luot phai doc het kenh: dat capture_cap_min lon hon (vd 120).
+    try:
+        cap_min = int(cfg.get("capture_cap_min", CAPTURE_CAP_S // 60))
+    except (TypeError, ValueError):
+        p.error("capture_cap_min trong config phai la so phut 10-300")
+    if not 10 <= cap_min <= 300:
+        p.error("capture_cap_min trong config phai la so phut 10-300")
+    a.capture_cap_s = cap_min * 60
     if a.only and not VIDEO_ID_RE.match(a.only):
         p.error(f"video id khong hop le: {a.only!r}")
     return a
@@ -849,7 +862,7 @@ def main(argv=None) -> int:
     for h in yu.log.handlers:
         alog.addHandler(h)
     deps = Deps(launched_at=launched)
-    wd = start_watchdog(deps.notify)
+    wd = start_watchdog(deps.notify, max(WATCHDOG_S, args.capture_cap_s + WATCHDOG_MARGIN_S))
     try:
         return run(args, deps)
     except Exception as e:

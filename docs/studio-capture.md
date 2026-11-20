@@ -41,6 +41,7 @@ Script chỉ đọc. Nó không bao giờ điền form đăng nhập và không 
    | `channel` | tên kênh, trùng tên folder trên Drive | `Bare Skull` |
    | `profile_dir` | profile Chrome đã đăng nhập | `C:\yt\studio-profile` |
    | `daily_hour` | giờ VPS bắt đầu lượt đọc hằng ngày cho video ≥ 72 h | `6` |
+   | `capture_cap_min` | phút tối đa một lần chạy được mở video mới (10–300); chạy mỗi ngày một lần thì đặt đủ cho cả kênh | `35` (file mẫu: `150`) |
 
    Script tự đọc `studio_config.json` nằm cạnh nó. Cờ dòng lệnh (`--channel`, `--profile`)
    ghi đè giá trị trong config.
@@ -85,16 +86,16 @@ user đang đăng nhập.
 
 ## 4. Task Scheduler
 
-Chạy mỗi 30 phút, chỉ khi user đang đăng nhập (`/IT`). Gõ lệnh này trong **Command Prompt
+Chủ kênh 2026-11-20: chạy **mỗi ngày một lần**, 18:00 giờ Việt Nam (tránh hai lượt uploader 9:00 và 21:00), chỉ khi user đang đăng nhập (`/IT`). `/ST` là giờ của VPS: đổi 18:00 cho đúng múi giờ VPS (`tzutil /g`). Gõ lệnh này trong **Command Prompt
 (cmd)**, không gõ trong PowerShell, vì PowerShell 5.1 hiểu sai dấu `\"`:
 
 ```bat
-schtasks /Create /SC MINUTE /MO 30 /TN "Studio Capture" /IT /F /TR "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location C:\yt\yt-uploader\scripts; python studio_capture.py --channel 'Bare Skull' --once; exit $LASTEXITCODE\""
+schtasks /Create /SC DAILY /ST 18:00 /TN "Studio Capture" /IT /F /TR "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location C:\yt\yt-uploader\scripts; python studio_capture.py --channel 'Bare Skull' --once; exit $LASTEXITCODE\""
 ```
 
 Lệnh trên đúng với cấu hình
 `powershell -NoProfile -ExecutionPolicy Bypass -Command "Set-Location C:\yt\yt-uploader\scripts; python studio_capture.py --channel 'Bare Skull' --once; exit $LASTEXITCODE"`,
-chạy mỗi 30 phút với "Run only when user is logged on". Đoạn `exit $LASTEXITCODE` giữ lại
+chạy mỗi ngày lúc 18:00 với "Run only when user is logged on". Đoạn `exit $LASTEXITCODE` giữ lại
 mã thoát của script, nhờ đó cột "Last Run Result" của Task Scheduler hiện 0, 1, 2, 3 hoặc 4.
 
 Chạy ngay một lần để thử: `schtasks /Run /TN "Studio Capture"`.
@@ -115,12 +116,12 @@ thực thi một lần. Nếu vẫn chạy `studio_actions.py --watch` riêng th
 
 - Mỗi lần chạy chờ ngẫu nhiên 0–10 phút trước khi bắt đầu (`--no-jitter` để bỏ chờ).
 - Mỗi lúc chỉ mở một trang video, và nghỉ 5–15 s giữa hai video.
-- Video công khai dưới 72 giờ được đọc khoảng 2 giờ/lần. Tuổi video tính từ lúc nó thành
+- Video công khai dưới 72 giờ được đọc khoảng 2 giờ/lần nếu task chạy dày; với lịch mỗi ngày một lần thì mọi video được đọc một lần mỗi ngày. Tuổi video tính từ lúc nó thành
   công khai.
 - Video cũ hơn được đọc mỗi ngày một lần, từ `daily_hour` giờ VPS.
-- Mỗi video giờ mở 3 tab (Reach, Engagement, Audience) và cuộn từng tab để thẻ tải chậm hiện ra, nên mất khoảng 100 s mỗi video; một lượt đủ 35 video trải qua hai lần chạy.
-- Sau 35 phút kể từ lúc khởi động (tính cả thời gian chờ jitter), script không mở video mới;
-  phần còn lại để lần chạy sau. Nếu cả lần chạy vượt 50 phút, watchdog sẽ dừng nó và gỡ lock
+- Mỗi video giờ mở 3 tab (Reach, Engagement, Audience) và cuộn từng tab để thẻ tải chậm hiện ra, nên mất khoảng 100 s mỗi video; 35 video mất khoảng 70 phút, nên lịch mỗi ngày cần `capture_cap_min` ≥ 120.
+- Sau `capture_cap_min` phút (mặc định 35) kể từ lúc khởi động (tính cả thời gian chờ jitter), script không mở video mới;
+  phần còn lại để lần chạy sau, và lần sau đọc trước những video lâu chưa đọc nhất. Watchdog dừng lần chạy sau `capture_cap_min` + 15 phút (ít nhất 50 phút) và gỡ lock
   của nó.
 - Nếu uploader đang chạy (`.uploader-<kênh>.lock` còn mới), lần này bỏ qua hoàn toàn và
   thoát 0, vì upload được ưu tiên. Nếu giữa chừng có lock uploader đã giữ quá 60 s, script
