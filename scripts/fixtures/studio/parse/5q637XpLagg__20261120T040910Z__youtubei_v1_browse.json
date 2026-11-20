@@ -1,0 +1,4069 @@
+{
+ "trimmed": [
+  {
+   "cardStyle": "CARD_STYLE_OUTLINE",
+   "topContent": {
+    "sectionHeaderViewModel": {
+     "headline": {
+      "content": "Số lượt hiển thị hình thu nhỏ"
+     },
+     "horizontalPadding": {
+      "ytSysMeasurementReference": "YT_SYS_MEASUREMENT_REFERENCE_SIZE_COMPACT"
+     },
+     "topPadding": {
+      "spacing": 8
+     },
+     "bottomPadding": {
+      "spacing": 0
+     }
+    }
+   },
+   "bodyContent": {
+    "linearLayoutViewModel": {
+     "items": [
+      {
+       "linearLayoutViewModel": {
+        "items": [
+         {
+          "simpleMetricViewModel": {
+           "value": {
+            "content": "1,6 N",
+            "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+           },
+           "valueSize": "SIMPLE_METRIC_VALUE_SIZE_MEDIUM"
+          }
+         }
+        ],
+        "linearLayoutContainerConfiguration": {
+         "justifyContent": "JUSTIFY_CONTENT_FLEX_START",
+         "flexDirection": "FLEX_DIRECTION_ROW",
+         "padding": {
+          "horizontal": "LINEAR_LAYOUT_SPACE_S4"
+         },
+         "gap": {
+          "all": "LINEAR_LAYOUT_SPACE_S8"
+         }
+        },
+        "itemConfigs": [
+         {
+          "flexGrow": "LINEAR_LAYOUT_FLEX_GROW_S0"
+         }
+        ],
+        "accessibilityId": "analytics_hub.VideoReachKeyMetricImpressionsCard.metric_values"
+       }
+      },
+      {
+       "lineChartViewModel": {
+        "series": [
+         {
+          "label": "Số lượt hiển thị hình thu nhỏ",
+          "dataPoints": [
+           {
+            "domain": 1795017220000,
+            "measure": 0
+           },
+           {
+            "domain": 1795020820000,
+            "measure": 264
+           },
+           {
+            "domain": 1795024420000,
+            "measure": 419
+           },
+           {
+            "domain": 1795028020000,
+            "measure": 509
+           },
+           {
+            "domain": 1795031620000,
+            "measure": 543
+           },
+           {
+            "domain": 1795035220000,
+            "measure": 575
+           },
+           {
+            "domain": 1795038820000,
+            "measure": 600
+           },
+           {
+            "domain": 1795042420000,
+            "measure": 619
+           },
+           {
+            "domain": 1795046020000,
+            "measure": 761
+           },
+           {
+            "domain": 1795049620000,
+            "measure": 838
+           },
+           {
+            "domain": 1795053220000,
+            "measure": 961
+           },
+           {
+            "domain": 1795056820000,
+            "measure": 1023
+           },
+           {
+            "domain": 1795060420000,
+            "measure": 1059
+           },
+           {
+            "domain": 1795064020000,
+            "measure": 1128
+           },
+           {
+            "domain": 1795067620000,
+            "measure": 1202
+           },
+           {
+            "domain": 1795071220000,
+            "measure": 1263
+           },
+           {
+            "domain": 1795074820000,
+            "measure": 1313
+           },
+           {
+            "domain": 1795078420000,
+            "measure": 1351
+           },
+           {
+            "domain": 1795082020000,
+            "measure": 1375
+           },
+           {
+            "domain": 1795085620000,
+            "measure": 1378
+           },
+           {
+            "domain": 1795089220000,
+            "measure": 1410
+           },
+           {
+            "domain": 1795092820000,
+            "measure": 1442
+           },
+           {
+            "domain": 1795096420000,
+            "measure": 1494
+           },
+           {
+            "domain": 1795100020000,
+            "measure": 1517
+           },
+           {
+            "domain": 1795103620000,
+            "measure": 1528
+           },
+           {
+            "domain": 1795107220000,
+            "measure": 1548
+           },
+           {
+            "domain": 1795110820000,
+            "measure": 1559
+           },
+           {
+            "domain": 1795114420000,
+            "measure": 1571
+           },
+           {
+            "domain": 1795118020000,
+            "measure": 1590
+           },
+           {
+            "domain": 1795121620000,
+            "measure": 1609
+           },
+           {
+            "domain": 1795125220000,
+            "measure": 1618
+           },
+           {
+            "domain": 1795128820000,
+            "measure": 1620
+           },
+           {
+            "domain": 1795132420000,
+            "measure": 1629
+           },
+           {
+            "domain": 1795136020000,
+            "measure": 1645
+           },
+           {
+            "domain": 1795139620000,
+            "measure": 1663
+           },
+           {
+            "domain": 1795143220000,
+            "measure": 1674
+           },
+           {
+            "domain": 1795146820000,
+            "measure": 1684
+           },
+           {
+            "domain": 1795147764425,
+            "measure": 1684
+           }
+          ]
+         }
+        ],
+        "domainAxis": {
+         "ticks": [
+          {
+           "value": 1795017220000,
+           "label": "22:53 18 thg 11, 2026"
+          },
+          {
+           "value": 1795147764425,
+           "label": "11:09 20 thg 11, 2026"
+          }
+         ],
+         "style": {
+          "showAxisLine": false,
+          "showGridlines": false
+         }
+        },
+        "primaryMeasureAxis": {
+         "ticks": [
+          {
+           "value": 0,
+           "label": "0"
+          },
+          {
+           "value": 570,
+           "label": "570"
+          },
+          {
+           "value": 1140,
+           "label": "1,1 N"
+          },
+          {
+           "value": 1710,
+           "label": "1,7 N"
+          }
+         ],
+         "style": {
+          "showAxisLine": false,
+          "showGridlines": true
+         }
+        },
+        "dataHovercards": [
+         {
+          "domainValue": 1795017220000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "22:53 18 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "Thời gian xuất bản video",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "0",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "22:53 18 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 0"
+         },
+         {
+          "domainValue": 1795020820000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "23:53 18 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "264",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "23:53 18 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 264"
+         },
+         {
+          "domainValue": 1795024420000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "00:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "2 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "419",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "00:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 419"
+         },
+         {
+          "domainValue": 1795028020000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "01:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "3 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "509",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "01:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 509"
+         },
+         {
+          "domainValue": 1795031620000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "02:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "4 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "543",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "02:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 543"
+         },
+         {
+          "domainValue": 1795035220000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "03:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "5 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "575",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "03:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 575"
+         },
+         {
+          "domainValue": 1795038820000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "04:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "6 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "600",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "04:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 600"
+         },
+         {
+          "domainValue": 1795042420000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "05:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "7 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "619",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "05:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 619"
+         },
+         {
+          "domainValue": 1795046020000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "06:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "8 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "761",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "06:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 761"
+         },
+         {
+          "domainValue": 1795049620000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "07:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "9 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "838",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "07:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 838"
+         },
+         {
+          "domainValue": 1795053220000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "08:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "10 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "961",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "08:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 961"
+         },
+         {
+          "domainValue": 1795056820000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "09:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "11 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.023",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "09:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.023"
+         },
+         {
+          "domainValue": 1795060420000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "10:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "12 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.059",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "10:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.059"
+         },
+         {
+          "domainValue": 1795064020000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "11:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "13 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.128",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "11:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.128"
+         },
+         {
+          "domainValue": 1795067620000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "12:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "14 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.202",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "12:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.202"
+         },
+         {
+          "domainValue": 1795071220000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "13:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "15 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.263",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "13:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.263"
+         },
+         {
+          "domainValue": 1795074820000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "14:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "16 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.313",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "14:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.313"
+         },
+         {
+          "domainValue": 1795078420000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "15:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "17 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.351",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "15:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.351"
+         },
+         {
+          "domainValue": 1795082020000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "16:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "18 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.375",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "16:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.375"
+         },
+         {
+          "domainValue": 1795085620000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "17:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "19 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.378",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "17:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.378"
+         },
+         {
+          "domainValue": 1795089220000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "18:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "20 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.410",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "18:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.410"
+         },
+         {
+          "domainValue": 1795092820000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "19:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "21 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.442",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "19:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.442"
+         },
+         {
+          "domainValue": 1795096420000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "20:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "22 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.494",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "20:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.494"
+         },
+         {
+          "domainValue": 1795100020000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "21:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "23 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.517",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "21:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.517"
+         },
+         {
+          "domainValue": 1795103620000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "22:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 0 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.528",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "22:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.528"
+         },
+         {
+          "domainValue": 1795107220000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "23:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 1 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.548",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "23:53 19 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.548"
+         },
+         {
+          "domainValue": 1795110820000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "00:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 2 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.559",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "00:53 20 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.559"
+         },
+         {
+          "domainValue": 1795114420000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "01:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 3 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.571",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "01:53 20 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.571"
+         },
+         {
+          "domainValue": 1795118020000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "02:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 4 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.590",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "02:53 20 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.590"
+         },
+         {
+          "domainValue": 1795121620000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "03:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 5 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.609",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "03:53 20 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.609"
+         },
+         {
+          "domainValue": 1795125220000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "04:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 6 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.618",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "04:53 20 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.618"
+         },
+         {
+          "domainValue": 1795128820000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "05:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 7 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.620",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "05:53 20 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.620"
+         },
+         {
+          "domainValue": 1795132420000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "06:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 8 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.629",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "06:53 20 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.629"
+         },
+         {
+          "domainValue": 1795136020000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "07:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 9 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.645",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "07:53 20 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.645"
+         },
+         {
+          "domainValue": 1795139620000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "08:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 10 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.663",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "08:53 20 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.663"
+         },
+         {
+          "domainValue": 1795143220000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "09:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 11 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.674",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "09:53 20 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.674"
+         },
+         {
+          "domainValue": 1795146820000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "10:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 12 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.684",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "10:53 20 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.684"
+         },
+         {
+          "domainValue": 1795147764425,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "11:09 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 12 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1.684",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "11:09 20 thg 11, 2026, Số lượt hiển thị hình thu nhỏ: 1.684"
+         }
+        ],
+        "chartSize": "CHART_SIZE_DEFAULT",
+        "accessibilityLabel": "Số lượt hiển thị hình thu nhỏ",
+        "showLegend": false
+       }
+      }
+     ],
+     "linearLayoutContainerConfiguration": {
+      "justifyContent": "JUSTIFY_CONTENT_FLEX_START",
+      "flexDirection": "FLEX_DIRECTION_COLUMN",
+      "gap": {
+       "all": "LINEAR_LAYOUT_SPACE_S2"
+      }
+     },
+     "accessibilityId": "analytics_hub.VideoReachKeyMetricImpressionsCard.body"
+    }
+   },
+   "disableTopContentPadding": true,
+   "accessibilityId": "analytics_hub.VideoReachKeyMetricImpressionsCard",
+   "isAccessibilityContainer": true,
+   "bodyContentPaddingValues": {},
+   "rendererContext": {
+    "loggingContext": {
+     "loggingDirectives": {
+      "gestures": {
+       "types": "2"
+      },
+      "useGreenPath": true
+     }
+    },
+    "commandContext": {
+     "onTap": {
+      "innertubeCommand": {
+       "studioWebNavigationCommand": {
+        "routeName": "video.analytics.hub_reach.explore",
+        "routeParams": [
+         {
+          "key": "videoId",
+          "value": "5q637XpLagg"
+         },
+         {
+          "key": "v_metrics",
+          "value": "VIDEO_THUMBNAIL_IMPRESSIONS,VIDEO_THUMBNAIL_IMPRESSIONS_VTR,EXTERNAL_VIEWS,EXTERNAL_WATCH_TIME,ESTIMATED_UNIQUE_VIEWERS"
+         },
+         {
+          "key": "o_column",
+          "value": "VIDEO_THUMBNAIL_IMPRESSIONS"
+         },
+         {
+          "key": "granularity",
+          "value": "DAY"
+         },
+         {
+          "key": "dimension",
+          "value": "VIDEO"
+         },
+         {
+          "key": "t_metrics",
+          "value": "VIDEO_THUMBNAIL_IMPRESSIONS,VIDEO_THUMBNAIL_IMPRESSIONS_VTR,EXTERNAL_VIEWS,EXTERNAL_WATCH_TIME,ESTIMATED_UNIQUE_VIEWERS"
+         },
+         {
+          "key": "entity_id",
+          "value": "5q637XpLagg"
+         },
+         {
+          "key": "metric",
+          "value": "VIDEO_THUMBNAIL_IMPRESSIONS"
+         },
+         {
+          "key": "time_period",
+          "value": "since_publish"
+         },
+         {
+          "key": "metrics_computation_type",
+          "value": "DELTA"
+         },
+         {
+          "key": "entity_type",
+          "value": "VIDEO"
+         },
+         {
+          "key": "explore_type",
+          "value": "TABLE_AND_CHART"
+         },
+         {
+          "key": "o_direction",
+          "value": "ANALYTICS_ORDER_DIRECTION_DESC"
+         }
+        ]
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "cardStyle": "CARD_STYLE_OUTLINE",
+   "bodyContent": {
+    "linearLayoutViewModel": {
+     "items": [
+      {
+       "linearLayoutViewModel": {
+        "items": [
+         {
+          "basicContentViewModel": {
+           "paragraphs": [
+            {
+             "headline": {
+              "content": "Lượt xem",
+              "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+             }
+            }
+           ]
+          }
+         },
+         {
+          "simpleMetricViewModel": {
+           "value": {
+            "content": "214",
+            "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+           },
+           "icon": {
+            "sources": [
+             {
+              "customImageSource": {
+               "youtubeIconSource": {
+                "clientResource": {
+                 "icon": "YTICON_FILL_ARROW_DOWN_CIRCLE_S24"
+                }
+               }
+              }
+             }
+            ]
+           },
+           "iconLabel": {
+            "content": "486",
+            "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+           },
+           "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL",
+           "iconTooltip": {
+            "tooltipViewModel": {
+             "tooltipText": "Thấp hơn 486 so với mức thông thường là 700 – 3,3 N"
+            }
+           }
+          }
+         }
+        ],
+        "linearLayoutContainerConfiguration": {
+         "justifyContent": "JUSTIFY_CONTENT_FLEX_START",
+         "flexDirection": "FLEX_DIRECTION_COLUMN"
+        },
+        "accessibilityId": "analytics_hub.video_reach_views.left_section"
+       }
+      },
+      {
+       "lineChartViewModel": {
+        "series": [
+         {
+          "label": "Lượt xem",
+          "dataPoints": [
+           {
+            "domain": 1795017220000,
+            "measure": 0
+           },
+           {
+            "domain": 1795020820000,
+            "measure": 82
+           },
+           {
+            "domain": 1795024420000,
+            "measure": 121
+           },
+           {
+            "domain": 1795028020000,
+            "measure": 135
+           },
+           {
+            "domain": 1795031620000,
+            "measure": 144
+           },
+           {
+            "domain": 1795035220000,
+            "measure": 153
+           },
+           {
+            "domain": 1795038820000,
+            "measure": 162
+           },
+           {
+            "domain": 1795042420000,
+            "measure": 163
+           },
+           {
+            "domain": 1795046020000,
+            "measure": 166
+           },
+           {
+            "domain": 1795049620000,
+            "measure": 171
+           },
+           {
+            "domain": 1795053220000,
+            "measure": 171
+           },
+           {
+            "domain": 1795056820000,
+            "measure": 179
+           },
+           {
+            "domain": 1795060420000,
+            "measure": 181
+           },
+           {
+            "domain": 1795064020000,
+            "measure": 182
+           },
+           {
+            "domain": 1795067620000,
+            "measure": 185
+           },
+           {
+            "domain": 1795071220000,
+            "measure": 187
+           },
+           {
+            "domain": 1795074820000,
+            "measure": 191
+           },
+           {
+            "domain": 1795078420000,
+            "measure": 192
+           },
+           {
+            "domain": 1795082020000,
+            "measure": 193
+           },
+           {
+            "domain": 1795085620000,
+            "measure": 194
+           },
+           {
+            "domain": 1795089220000,
+            "measure": 196
+           },
+           {
+            "domain": 1795092820000,
+            "measure": 197
+           },
+           {
+            "domain": 1795096420000,
+            "measure": 199
+           },
+           {
+            "domain": 1795100020000,
+            "measure": 200
+           },
+           {
+            "domain": 1795103620000,
+            "measure": 201
+           },
+           {
+            "domain": 1795107220000,
+            "measure": 202
+           },
+           {
+            "domain": 1795110820000,
+            "measure": 202
+           },
+           {
+            "domain": 1795114420000,
+            "measure": 202
+           },
+           {
+            "domain": 1795118020000,
+            "measure": 202
+           },
+           {
+            "domain": 1795121620000,
+            "measure": 205
+           },
+           {
+            "domain": 1795125220000,
+            "measure": 205
+           },
+           {
+            "domain": 1795128820000,
+            "measure": 205
+           },
+           {
+            "domain": 1795132420000,
+            "measure": 208
+           },
+           {
+            "domain": 1795136020000,
+            "measure": 208
+           },
+           {
+            "domain": 1795139620000,
+            "measure": 211
+           },
+           {
+            "domain": 1795143220000,
+            "measure": 211
+           },
+           {
+            "domain": 1795146820000,
+            "measure": 214
+           },
+           {
+            "domain": 1795147764428,
+            "measure": 214
+           }
+          ]
+         }
+        ],
+        "domainAxis": {
+         "style": {
+          "showAxisLine": false,
+          "showGridlines": false
+         }
+        },
+        "primaryMeasureAxis": {
+         "ticks": [
+          {
+           "value": 0,
+           "label": "0"
+          },
+          {
+           "value": 2000,
+           "label": "2,0 N"
+          },
+          {
+           "value": 4000,
+           "label": "4,0 N"
+          }
+         ],
+         "style": {
+          "showAxisLine": false,
+          "showGridlines": true
+         }
+        },
+        "dataHovercards": [
+         {
+          "domainValue": 1795017220000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "22:53 18 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "Thời gian xuất bản video",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "0",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 0 – 0",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 25,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "22:53 18 thg 11, 2026, Lượt xem: 0, Thông thường: 0 – 0"
+         },
+         {
+          "domainValue": 1795020820000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "23:53 18 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "82",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 40 – 100",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 28,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "23:53 18 thg 11, 2026, Lượt xem: 82, Thông thường: 40 – 100"
+         },
+         {
+          "domainValue": 1795024420000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "00:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "2 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "121",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 80 – 150",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 28,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "00:53 19 thg 11, 2026, Lượt xem: 121, Thông thường: 80 – 150"
+         },
+         {
+          "domainValue": 1795028020000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "01:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "3 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "135",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 150 – 210",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 29,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "01:53 19 thg 11, 2026, Lượt xem: 135, Thông thường: 150 – 210"
+         },
+         {
+          "domainValue": 1795031620000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "02:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "4 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "144",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 210 – 340",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 29,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "02:53 19 thg 11, 2026, Lượt xem: 144, Thông thường: 210 – 340"
+         },
+         {
+          "domainValue": 1795035220000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "03:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "5 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "153",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 240 – 470",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 29,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "03:53 19 thg 11, 2026, Lượt xem: 153, Thông thường: 240 – 470"
+         },
+         {
+          "domainValue": 1795038820000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "04:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "6 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "162",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 270 – 570",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 29,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "04:53 19 thg 11, 2026, Lượt xem: 162, Thông thường: 270 – 570"
+         },
+         {
+          "domainValue": 1795042420000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "05:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "7 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "163",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 290 – 640",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 29,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "05:53 19 thg 11, 2026, Lượt xem: 163, Thông thường: 290 – 640"
+         },
+         {
+          "domainValue": 1795046020000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "06:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "8 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "166",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 320 – 720",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 29,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "06:53 19 thg 11, 2026, Lượt xem: 166, Thông thường: 320 – 720"
+         },
+         {
+          "domainValue": 1795049620000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "07:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "9 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "171",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 350 – 820",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 29,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "07:53 19 thg 11, 2026, Lượt xem: 171, Thông thường: 350 – 820"
+         },
+         {
+          "domainValue": 1795053220000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "08:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "10 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "171",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 390 – 900",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 29,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "08:53 19 thg 11, 2026, Lượt xem: 171, Thông thường: 390 – 900"
+         },
+         {
+          "domainValue": 1795056820000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "09:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "11 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "179",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 460 – 1,1 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "09:53 19 thg 11, 2026, Lượt xem: 179, Thông thường: 460 – 1,1 N"
+         },
+         {
+          "domainValue": 1795060420000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "10:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "12 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "181",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 490 – 1,2 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "10:53 19 thg 11, 2026, Lượt xem: 181, Thông thường: 490 – 1,2 N"
+         },
+         {
+          "domainValue": 1795064020000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "11:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "13 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "182",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 510 – 1,3 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "11:53 19 thg 11, 2026, Lượt xem: 182, Thông thường: 510 – 1,3 N"
+         },
+         {
+          "domainValue": 1795067620000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "12:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "14 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "185",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 530 – 1,5 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "12:53 19 thg 11, 2026, Lượt xem: 185, Thông thường: 530 – 1,5 N"
+         },
+         {
+          "domainValue": 1795071220000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "13:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "15 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "187",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 550 – 1,8 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "13:53 19 thg 11, 2026, Lượt xem: 187, Thông thường: 550 – 1,8 N"
+         },
+         {
+          "domainValue": 1795074820000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "14:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "16 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "191",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 560 – 2,0 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "14:53 19 thg 11, 2026, Lượt xem: 191, Thông thường: 560 – 2,0 N"
+         },
+         {
+          "domainValue": 1795078420000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "15:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "17 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "192",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 580 – 2,1 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "15:53 19 thg 11, 2026, Lượt xem: 192, Thông thường: 580 – 2,1 N"
+         },
+         {
+          "domainValue": 1795082020000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "16:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "18 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "193",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 600 – 2,2 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "16:53 19 thg 11, 2026, Lượt xem: 193, Thông thường: 600 – 2,2 N"
+         },
+         {
+          "domainValue": 1795085620000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "17:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "19 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "194",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 610 – 2,3 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "17:53 19 thg 11, 2026, Lượt xem: 194, Thông thường: 610 – 2,3 N"
+         },
+         {
+          "domainValue": 1795089220000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "18:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "20 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "196",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 620 – 2,4 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "18:53 19 thg 11, 2026, Lượt xem: 196, Thông thường: 620 – 2,4 N"
+         },
+         {
+          "domainValue": 1795092820000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "19:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "21 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "197",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 630 – 2,4 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "19:53 19 thg 11, 2026, Lượt xem: 197, Thông thường: 630 – 2,4 N"
+         },
+         {
+          "domainValue": 1795096420000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "20:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "22 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "199",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 640 – 2,5 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "20:53 19 thg 11, 2026, Lượt xem: 199, Thông thường: 640 – 2,5 N"
+         },
+         {
+          "domainValue": 1795100020000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "21:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "23 giờ, 0 phút đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "200",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 650 – 2,5 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "21:53 19 thg 11, 2026, Lượt xem: 200, Thông thường: 650 – 2,5 N"
+         },
+         {
+          "domainValue": 1795103620000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "22:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 0 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "201",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 670 – 2,6 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "22:53 19 thg 11, 2026, Lượt xem: 201, Thông thường: 670 – 2,6 N"
+         },
+         {
+          "domainValue": 1795107220000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "23:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 1 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "202",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 680 – 2,7 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "23:53 19 thg 11, 2026, Lượt xem: 202, Thông thường: 680 – 2,7 N"
+         },
+         {
+          "domainValue": 1795110820000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "00:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 2 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "202",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 680 – 2,7 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "00:53 20 thg 11, 2026, Lượt xem: 202, Thông thường: 680 – 2,7 N"
+         },
+         {
+          "domainValue": 1795114420000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "01:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 3 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "202",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 680 – 2,8 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "01:53 20 thg 11, 2026, Lượt xem: 202, Thông thường: 680 – 2,8 N"
+         },
+         {
+          "domainValue": 1795118020000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "02:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 4 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "202",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 690 – 2,9 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "02:53 20 thg 11, 2026, Lượt xem: 202, Thông thường: 690 – 2,9 N"
+         },
+         {
+          "domainValue": 1795121620000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "03:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 5 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "205",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 690 – 2,9 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "03:53 20 thg 11, 2026, Lượt xem: 205, Thông thường: 690 – 2,9 N"
+         },
+         {
+          "domainValue": 1795125220000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "04:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 6 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "205",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 690 – 3,0 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "04:53 20 thg 11, 2026, Lượt xem: 205, Thông thường: 690 – 3,0 N"
+         },
+         {
+          "domainValue": 1795128820000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "05:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 7 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "205",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 690 – 3,1 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "05:53 20 thg 11, 2026, Lượt xem: 205, Thông thường: 690 – 3,1 N"
+         },
+         {
+          "domainValue": 1795132420000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "06:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 8 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "208",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 690 – 3,1 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "06:53 20 thg 11, 2026, Lượt xem: 208, Thông thường: 690 – 3,1 N"
+         },
+         {
+          "domainValue": 1795136020000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "07:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 9 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "208",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 690 – 3,2 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "07:53 20 thg 11, 2026, Lượt xem: 208, Thông thường: 690 – 3,2 N"
+         },
+         {
+          "domainValue": 1795139620000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "08:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 10 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "211",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 690 – 3,2 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "08:53 20 thg 11, 2026, Lượt xem: 211, Thông thường: 690 – 3,2 N"
+         },
+         {
+          "domainValue": 1795143220000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "09:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 11 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "211",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 700 – 3,2 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "09:53 20 thg 11, 2026, Lượt xem: 211, Thông thường: 700 – 3,2 N"
+         },
+         {
+          "domainValue": 1795146820000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "10:53 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 12 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "214",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 700 – 3,3 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "10:53 20 thg 11, 2026, Lượt xem: 214, Thông thường: 700 – 3,3 N"
+         },
+         {
+          "domainValue": 1795147764428,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "11:09 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 12 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "214",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Thông thường: 700 – 3,3 N",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 32,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "11:09 20 thg 11, 2026, Lượt xem: 214, Thông thường: 700 – 3,3 N"
+         }
+        ],
+        "rangeSeries": [
+         {
+          "label": "Hiệu suất thông thường",
+          "dataPoints": [
+           {
+            "domain": 1795017220000,
+            "lowerMeasure": 0,
+            "upperMeasure": 0
+           },
+           {
+            "domain": 1795020820000,
+            "lowerMeasure": 40,
+            "upperMeasure": 100
+           },
+           {
+            "domain": 1795024420000,
+            "lowerMeasure": 80,
+            "upperMeasure": 150
+           },
+           {
+            "domain": 1795028020000,
+            "lowerMeasure": 150,
+            "upperMeasure": 210
+           },
+           {
+            "domain": 1795031620000,
+            "lowerMeasure": 210,
+            "upperMeasure": 340
+           },
+           {
+            "domain": 1795035220000,
+            "lowerMeasure": 240,
+            "upperMeasure": 470
+           },
+           {
+            "domain": 1795038820000,
+            "lowerMeasure": 270,
+            "upperMeasure": 570
+           },
+           {
+            "domain": 1795042420000,
+            "lowerMeasure": 290,
+            "upperMeasure": 640
+           },
+           {
+            "domain": 1795046020000,
+            "lowerMeasure": 320,
+            "upperMeasure": 720
+           },
+           {
+            "domain": 1795049620000,
+            "lowerMeasure": 350,
+            "upperMeasure": 820
+           },
+           {
+            "domain": 1795053220000,
+            "lowerMeasure": 390,
+            "upperMeasure": 900
+           },
+           {
+            "domain": 1795056820000,
+            "lowerMeasure": 460,
+            "upperMeasure": 1100
+           },
+           {
+            "domain": 1795060420000,
+            "lowerMeasure": 490,
+            "upperMeasure": 1200
+           },
+           {
+            "domain": 1795064020000,
+            "lowerMeasure": 510,
+            "upperMeasure": 1300
+           },
+           {
+            "domain": 1795067620000,
+            "lowerMeasure": 530,
+            "upperMeasure": 1500
+           },
+           {
+            "domain": 1795071220000,
+            "lowerMeasure": 550,
+            "upperMeasure": 1800
+           },
+           {
+            "domain": 1795074820000,
+            "lowerMeasure": 560,
+            "upperMeasure": 2000
+           },
+           {
+            "domain": 1795078420000,
+            "lowerMeasure": 580,
+            "upperMeasure": 2100
+           },
+           {
+            "domain": 1795082020000,
+            "lowerMeasure": 600,
+            "upperMeasure": 2200
+           },
+           {
+            "domain": 1795085620000,
+            "lowerMeasure": 610,
+            "upperMeasure": 2300
+           },
+           {
+            "domain": 1795089220000,
+            "lowerMeasure": 620,
+            "upperMeasure": 2400
+           },
+           {
+            "domain": 1795092820000,
+            "lowerMeasure": 630,
+            "upperMeasure": 2400
+           },
+           {
+            "domain": 1795096420000,
+            "lowerMeasure": 640,
+            "upperMeasure": 2500
+           },
+           {
+            "domain": 1795100020000,
+            "lowerMeasure": 650,
+            "upperMeasure": 2500
+           },
+           {
+            "domain": 1795103620000,
+            "lowerMeasure": 670,
+            "upperMeasure": 2600
+           },
+           {
+            "domain": 1795107220000,
+            "lowerMeasure": 680,
+            "upperMeasure": 2700
+           },
+           {
+            "domain": 1795110820000,
+            "lowerMeasure": 680,
+            "upperMeasure": 2700
+           },
+           {
+            "domain": 1795114420000,
+            "lowerMeasure": 680,
+            "upperMeasure": 2800
+           },
+           {
+            "domain": 1795118020000,
+            "lowerMeasure": 690,
+            "upperMeasure": 2900
+           },
+           {
+            "domain": 1795121620000,
+            "lowerMeasure": 690,
+            "upperMeasure": 2900
+           },
+           {
+            "domain": 1795125220000,
+            "lowerMeasure": 690,
+            "upperMeasure": 3000
+           },
+           {
+            "domain": 1795128820000,
+            "lowerMeasure": 690,
+            "upperMeasure": 3100
+           },
+           {
+            "domain": 1795132420000,
+            "lowerMeasure": 690,
+            "upperMeasure": 3100
+           },
+           {
+            "domain": 1795136020000,
+            "lowerMeasure": 690,
+            "upperMeasure": 3200
+           },
+           {
+            "domain": 1795139620000,
+            "lowerMeasure": 690,
+            "upperMeasure": 3200
+           },
+           {
+            "domain": 1795143220000,
+            "lowerMeasure": 700,
+            "upperMeasure": 3200
+           },
+           {
+            "domain": 1795146820000,
+            "lowerMeasure": 700,
+            "upperMeasure": 3300
+           },
+           {
+            "domain": 1795147764428,
+            "lowerMeasure": 700,
+            "upperMeasure": 3300
+           }
+          ]
+         }
+        ],
+        "chartSize": "CHART_SIZE_SMALL",
+        "accessibilityLabel": "Lượt xem",
+        "showLegend": false
+       }
+      }
+     ],
+     "linearLayoutContainerConfiguration": {
+      "alignItems": "ALIGN_ITEMS_CENTER",
+      "justifyContent": "JUSTIFY_CONTENT_FLEX_START",
+      "flexDirection": "FLEX_DIRECTION_ROW",
+      "padding": {
+       "horizontal": "LINEAR_LAYOUT_SPACE_S4",
+       "vertical": "LINEAR_LAYOUT_SPACE_S4"
+      }
+     },
+     "itemConfigs": [
+      {
+       "flexGrow": "LINEAR_LAYOUT_FLEX_GROW_S0",
+       "flexShrink": "LINEAR_LAYOUT_FLEX_SHRINK_S0",
+       "alignSelf": "ALIGN_ITEMS_START",
+       "flexBasis": 210
+      },
+      {
+       "flexGrow": "LINEAR_LAYOUT_FLEX_GROW_S1",
+       "flexShrink": "LINEAR_LAYOUT_FLEX_SHRINK_S1"
+      }
+     ],
+     "accessibilityId": "analytics_hub.video_reach_views.body"
+    }
+   },
+   "disableBodyContentPadding": true,
+   "accessibilityId": "analytics_hub.video_reach_views",
+   "isAccessibilityContainer": true,
+   "rendererContext": {
+    "loggingContext": {
+     "loggingDirectives": {
+      "gestures": {
+       "types": "2"
+      },
+      "useGreenPath": true
+     }
+    },
+    "commandContext": {
+     "onTap": {
+      "innertubeCommand": {
+       "studioWebNavigationCommand": {
+        "routeName": "video.analytics.hub_reach.explore",
+        "routeParams": [
+         {
+          "key": "time_period",
+          "value": "since_publish"
+         },
+         {
+          "key": "o_column",
+          "value": "EXTERNAL_VIEWS"
+         },
+         {
+          "key": "dimension",
+          "value": "VIDEO"
+         },
+         {
+          "key": "entity_type",
+          "value": "VIDEO"
+         },
+         {
+          "key": "t_metrics",
+          "value": "VIDEO_THUMBNAIL_IMPRESSIONS,VIDEO_THUMBNAIL_IMPRESSIONS_VTR,EXTERNAL_VIEWS,EXTERNAL_WATCH_TIME,ESTIMATED_UNIQUE_VIEWERS"
+         },
+         {
+          "key": "entity_id",
+          "value": "5q637XpLagg"
+         },
+         {
+          "key": "v_metrics",
+          "value": "VIDEO_THUMBNAIL_IMPRESSIONS,VIDEO_THUMBNAIL_IMPRESSIONS_VTR,EXTERNAL_VIEWS,EXTERNAL_WATCH_TIME,ESTIMATED_UNIQUE_VIEWERS"
+         },
+         {
+          "key": "o_direction",
+          "value": "ANALYTICS_ORDER_DIRECTION_DESC"
+         },
+         {
+          "key": "metrics_computation_type",
+          "value": "DELTA"
+         },
+         {
+          "key": "metric",
+          "value": "EXTERNAL_VIEWS"
+         },
+         {
+          "key": "videoId",
+          "value": "5q637XpLagg"
+         },
+         {
+          "key": "granularity",
+          "value": "DAY"
+         },
+         {
+          "key": "explore_type",
+          "value": "TABLE_AND_CHART"
+         }
+        ]
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "cardStyle": "CARD_STYLE_OUTLINE",
+   "bodyContent": {
+    "linearLayoutViewModel": {
+     "items": [
+      {
+       "linearLayoutViewModel": {
+        "items": [
+         {
+          "basicContentViewModel": {
+           "paragraphs": [
+            {
+             "headline": {
+              "content": "Tỷ lệ nhấp vào hình thu nhỏ",
+              "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+             }
+            }
+           ]
+          }
+         },
+         {
+          "simpleMetricViewModel": {
+           "value": {
+            "content": "2,5%",
+            "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+           },
+           "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+          }
+         }
+        ],
+        "linearLayoutContainerConfiguration": {
+         "justifyContent": "JUSTIFY_CONTENT_FLEX_START",
+         "flexDirection": "FLEX_DIRECTION_COLUMN"
+        },
+        "accessibilityId": "analytics_hub.video_reach_ctr.left_section"
+       }
+      },
+      {
+       "lineChartViewModel": {
+        "series": [
+         {
+          "label": "Tỷ lệ nhấp vào hình thu nhỏ",
+          "dataPoints": [
+           {
+            "domain": 1795017220000,
+            "measure": 0
+           },
+           {
+            "domain": 1795103620000,
+            "measure": 2.62
+           },
+           {
+            "domain": 1795147764429,
+            "measure": 1.28
+           }
+          ]
+         }
+        ],
+        "domainAxis": {
+         "style": {
+          "showAxisLine": false,
+          "showGridlines": false
+         }
+        },
+        "primaryMeasureAxis": {
+         "ticks": [
+          {
+           "value": 0,
+           "label": "0,0%"
+          },
+          {
+           "value": 2,
+           "label": "2,0%"
+          },
+          {
+           "value": 4,
+           "label": "4,0%"
+          }
+         ],
+         "style": {
+          "showAxisLine": false,
+          "showGridlines": true
+         }
+        },
+        "dataHovercards": [
+         {
+          "domainValue": 1795017220000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "22:53 18 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "Thời gian xuất bản video",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "0,0%",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "22:53 18 thg 11, 2026, Tỷ lệ nhấp vào hình thu nhỏ: 0,0%"
+         },
+         {
+          "domainValue": 1795103620000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "22:53 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 0 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "2,6%",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "22:53 19 thg 11, 2026, Tỷ lệ nhấp vào hình thu nhỏ: 2,6%"
+         },
+         {
+          "domainValue": 1795147764429,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "11:09 20 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "subtitle": {
+             "content": "1 ngày, 12 giờ đầu tiên",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "1,3%",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "11:09 20 thg 11, 2026, Tỷ lệ nhấp vào hình thu nhỏ: 1,3%"
+         }
+        ],
+        "chartSize": "CHART_SIZE_SMALL",
+        "accessibilityLabel": "Tỷ lệ nhấp vào hình thu nhỏ",
+        "showLegend": false
+       }
+      }
+     ],
+     "linearLayoutContainerConfiguration": {
+      "alignItems": "ALIGN_ITEMS_CENTER",
+      "justifyContent": "JUSTIFY_CONTENT_FLEX_START",
+      "flexDirection": "FLEX_DIRECTION_ROW",
+      "padding": {
+       "horizontal": "LINEAR_LAYOUT_SPACE_S4",
+       "vertical": "LINEAR_LAYOUT_SPACE_S4"
+      }
+     },
+     "itemConfigs": [
+      {
+       "flexGrow": "LINEAR_LAYOUT_FLEX_GROW_S0",
+       "flexShrink": "LINEAR_LAYOUT_FLEX_SHRINK_S0",
+       "alignSelf": "ALIGN_ITEMS_START",
+       "flexBasis": 210
+      },
+      {
+       "flexGrow": "LINEAR_LAYOUT_FLEX_GROW_S1",
+       "flexShrink": "LINEAR_LAYOUT_FLEX_SHRINK_S1"
+      }
+     ],
+     "accessibilityId": "analytics_hub.video_reach_ctr.body"
+    }
+   },
+   "disableBodyContentPadding": true,
+   "accessibilityId": "analytics_hub.video_reach_ctr",
+   "isAccessibilityContainer": true,
+   "rendererContext": {
+    "loggingContext": {
+     "loggingDirectives": {
+      "gestures": {
+       "types": "2"
+      },
+      "useGreenPath": true
+     }
+    },
+    "commandContext": {
+     "onTap": {
+      "innertubeCommand": {
+       "studioWebNavigationCommand": {
+        "routeName": "video.analytics.hub_reach.explore",
+        "routeParams": [
+         {
+          "key": "entity_type",
+          "value": "VIDEO"
+         },
+         {
+          "key": "metrics_computation_type",
+          "value": "DELTA"
+         },
+         {
+          "key": "time_period",
+          "value": "since_publish"
+         },
+         {
+          "key": "o_direction",
+          "value": "ANALYTICS_ORDER_DIRECTION_DESC"
+         },
+         {
+          "key": "videoId",
+          "value": "5q637XpLagg"
+         },
+         {
+          "key": "dimension",
+          "value": "VIDEO"
+         },
+         {
+          "key": "entity_id",
+          "value": "5q637XpLagg"
+         },
+         {
+          "key": "t_metrics",
+          "value": "VIDEO_THUMBNAIL_IMPRESSIONS,VIDEO_THUMBNAIL_IMPRESSIONS_VTR,EXTERNAL_VIEWS,EXTERNAL_WATCH_TIME,ESTIMATED_UNIQUE_VIEWERS"
+         },
+         {
+          "key": "v_metrics",
+          "value": "VIDEO_THUMBNAIL_IMPRESSIONS,VIDEO_THUMBNAIL_IMPRESSIONS_VTR,EXTERNAL_VIEWS,EXTERNAL_WATCH_TIME,ESTIMATED_UNIQUE_VIEWERS"
+         },
+         {
+          "key": "metric",
+          "value": "VIDEO_THUMBNAIL_IMPRESSIONS_VTR"
+         },
+         {
+          "key": "o_column",
+          "value": "VIDEO_THUMBNAIL_IMPRESSIONS_VTR"
+         },
+         {
+          "key": "explore_type",
+          "value": "TABLE_AND_CHART"
+         },
+         {
+          "key": "granularity",
+          "value": "DAY"
+         }
+        ]
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "cardStyle": "CARD_STYLE_OUTLINE",
+   "bodyContent": {
+    "linearLayoutViewModel": {
+     "items": [
+      {
+       "linearLayoutViewModel": {
+        "items": [
+         {
+          "basicContentViewModel": {
+           "paragraphs": [
+            {
+             "headline": {
+              "content": "Số người xem riêng biệt",
+              "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+             }
+            }
+           ]
+          }
+         },
+         {
+          "simpleMetricViewModel": {
+           "value": {
+            "content": "67",
+            "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+           },
+           "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+          }
+         }
+        ],
+        "linearLayoutContainerConfiguration": {
+         "justifyContent": "JUSTIFY_CONTENT_FLEX_START",
+         "flexDirection": "FLEX_DIRECTION_COLUMN"
+        },
+        "accessibilityId": "analytics_hub.video_reach_unique_viewers.left_section"
+       }
+      },
+      {
+       "lineChartViewModel": {
+        "series": [
+         {
+          "label": "Số người xem riêng biệt",
+          "dataPoints": [
+           {
+            "domain": 1794902400000,
+            "measure": 0
+           },
+           {
+            "domain": 1794988800000,
+            "measure": 67
+           },
+           {
+            "domain": 1795075200000
+           }
+          ]
+         }
+        ],
+        "domainAxis": {
+         "style": {
+          "showAxisLine": false,
+          "showGridlines": false
+         },
+         "highlights": [
+          {
+           "rangeHighlight": {
+            "start": 1794988800000,
+            "end": 1795075200000,
+            "fillMode": "FILL_MODE_HATCHED"
+           }
+          }
+         ]
+        },
+        "primaryMeasureAxis": {
+         "ticks": [
+          {
+           "value": 0,
+           "label": "0"
+          },
+          {
+           "value": 35,
+           "label": "35"
+          },
+          {
+           "value": 70,
+           "label": "70"
+          }
+         ],
+         "style": {
+          "showAxisLine": false,
+          "showGridlines": true
+         }
+        },
+        "dataHovercards": [
+         {
+          "domainValue": 1794902400000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "17 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "0",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "17 thg 11, 2026, Số người xem riêng biệt: 0"
+         },
+         {
+          "domainValue": 1794988800000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "18 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "metric": {
+             "simpleMetricViewModel": {
+              "value": {
+               "content": "67",
+               "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+              },
+              "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL"
+             }
+            }
+           }
+          },
+          "accessibilityLabel": "18 thg 11, 2026, Số người xem riêng biệt: 67"
+         },
+         {
+          "domainValue": 1795075200000,
+          "hovercard": {
+           "hoverCardViewModel": {
+            "title": {
+             "content": "18 – 19 thg 11, 2026",
+             "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+            },
+            "items": [
+             {
+              "listItemViewModel": {
+               "title": {
+                "content": "Dữ liệu đang được xử lý",
+                "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL",
+                "styleRuns": [
+                 {
+                  "startIndex": 0,
+                  "length": 35,
+                  "weightLabel": "FONT_WEIGHT_NORMAL"
+                 }
+                ]
+               },
+               "titleMaxLines": 1,
+               "layoutPriority": "LIST_ITEM_LAYOUT_PRIORITY_TRAILING"
+              }
+             }
+            ]
+           }
+          },
+          "accessibilityLabel": "18 – 19 thg 11, 2026, Dữ liệu đang được xử lý"
+         }
+        ],
+        "chartSize": "CHART_SIZE_SMALL",
+        "accessibilityLabel": "Số người xem riêng biệt",
+        "showLegend": false
+       }
+      }
+     ],
+     "linearLayoutContainerConfiguration": {
+      "alignItems": "ALIGN_ITEMS_CENTER",
+      "justifyContent": "JUSTIFY_CONTENT_FLEX_START",
+      "flexDirection": "FLEX_DIRECTION_ROW",
+      "padding": {
+       "horizontal": "LINEAR_LAYOUT_SPACE_S4",
+       "vertical": "LINEAR_LAYOUT_SPACE_S4"
+      }
+     },
+     "itemConfigs": [
+      {
+       "flexGrow": "LINEAR_LAYOUT_FLEX_GROW_S0",
+       "flexShrink": "LINEAR_LAYOUT_FLEX_SHRINK_S0",
+       "alignSelf": "ALIGN_ITEMS_START",
+       "flexBasis": 210
+      },
+      {
+       "flexGrow": "LINEAR_LAYOUT_FLEX_GROW_S1",
+       "flexShrink": "LINEAR_LAYOUT_FLEX_SHRINK_S1"
+      }
+     ],
+     "accessibilityId": "analytics_hub.video_reach_unique_viewers.body"
+    }
+   },
+   "disableBodyContentPadding": true,
+   "accessibilityId": "analytics_hub.video_reach_unique_viewers",
+   "isAccessibilityContainer": true,
+   "rendererContext": {
+    "loggingContext": {
+     "loggingDirectives": {
+      "gestures": {
+       "types": "2"
+      },
+      "useGreenPath": true
+     }
+    },
+    "commandContext": {
+     "onTap": {
+      "innertubeCommand": {
+       "studioWebNavigationCommand": {
+        "routeName": "video.analytics.hub_reach.explore",
+        "routeParams": [
+         {
+          "key": "metric",
+          "value": "ESTIMATED_UNIQUE_VIEWERS"
+         },
+         {
+          "key": "o_column",
+          "value": "ESTIMATED_UNIQUE_VIEWERS"
+         },
+         {
+          "key": "granularity",
+          "value": "DAY"
+         },
+         {
+          "key": "metrics_computation_type",
+          "value": "DELTA"
+         },
+         {
+          "key": "explore_type",
+          "value": "TABLE_AND_CHART"
+         },
+         {
+          "key": "v_metrics",
+          "value": "VIDEO_THUMBNAIL_IMPRESSIONS,VIDEO_THUMBNAIL_IMPRESSIONS_VTR,EXTERNAL_VIEWS,EXTERNAL_WATCH_TIME,ESTIMATED_UNIQUE_VIEWERS"
+         },
+         {
+          "key": "o_direction",
+          "value": "ANALYTICS_ORDER_DIRECTION_DESC"
+         },
+         {
+          "key": "entity_type",
+          "value": "VIDEO"
+         },
+         {
+          "key": "time_period",
+          "value": "since_publish"
+         },
+         {
+          "key": "dimension",
+          "value": "VIDEO"
+         },
+         {
+          "key": "videoId",
+          "value": "5q637XpLagg"
+         },
+         {
+          "key": "t_metrics",
+          "value": "VIDEO_THUMBNAIL_IMPRESSIONS,VIDEO_THUMBNAIL_IMPRESSIONS_VTR,EXTERNAL_VIEWS,EXTERNAL_WATCH_TIME,ESTIMATED_UNIQUE_VIEWERS"
+         },
+         {
+          "key": "entity_id",
+          "value": "5q637XpLagg"
+         }
+        ]
+       }
+      }
+     }
+    }
+   }
+  }
+ ]
+}
