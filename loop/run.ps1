@@ -24,4 +24,11 @@ if ($code -ne 0) {
     python -m loop.notify_fail analyse $code --config $config
     exit $code
 }
+
+python -m loop.ledger --config $config
+$code = $LASTEXITCODE
+if ($code -ne 0) {
+    python -m loop.notify_fail ledger $code --config $config
+    exit $code
+}
 exit 0
