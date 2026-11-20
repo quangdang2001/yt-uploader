@@ -17,6 +17,11 @@ import os
 import re
 from datetime import datetime, timezone, timedelta
 
+try:
+    from loop import channel_view
+except ImportError:          # chay truc tiep: python loop/dashboard.py
+    import channel_view
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 VERDICT_VI = {
@@ -214,6 +219,11 @@ def build_health(cache_dir, report_dir):
             detail = "Lần gần nhất không có video nào cần đọc."
         else:
             detail = h.get("detail") or ""
+        m = re.search(r"channel ok \((\d+) cards, (\d+) research videos\)", h.get("detail") or "")
+        if m:
+            detail = f"{detail} Trang kênh: {m.group(1)} thẻ số, {m.group(2)} video ở tab Nghiên cứu.".strip()
+        elif "channel" in (h.get("detail") or ""):
+            detail = f"{detail} Trang kênh có lỗi: {h['detail'][:200]}".strip()
         if not ok:
             detail = f"Có lỗi, cần mở VPS kiểm tra. Chi tiết: {detail}"
         try:
@@ -348,6 +358,13 @@ def main(argv=None):
         "patterns": patterns,
         "changes": build_changes(improve_dir),
     }
+    view = channel_view.build(cache_dir)
+    data.update(view)
+    try:
+        with open(os.path.join(report_dir, "kenh.md"), "w", encoding="utf-8") as fh:
+            fh.write(channel_view.markdown(view))
+    except OSError as e:
+        print(f"kenh.md not written: {e}")
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     tmp = a.out + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
