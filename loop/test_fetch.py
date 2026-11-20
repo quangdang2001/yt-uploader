@@ -183,6 +183,27 @@ class FetchTest(unittest.TestCase):
         lf.fetch(self.drive, "CHAN", self.cache)
         self.assertEqual(lf.load_history(self.cache), {"v1": "NEW"})
 
+    def test_fetch_main_by_id_never_resolves_channel_folder(self):
+        cfg = Path(self.tmp.name) / "c.json"
+        cfg.write_text(json.dumps({"studio_folder_id": "STUDIO1", "channel": "Bare Skull"}),
+                       encoding="utf-8")
+        import youtube_uploader as yu
+        with mock.patch.object(yu, "get_credentials"), \
+                mock.patch("googleapiclient.discovery.build", return_value="DRIVE"), \
+                mock.patch.object(yu, "resolve_folders", side_effect=AssertionError("no")), \
+                mock.patch.object(lf, "fetch", return_value={"health_status": "PASS"}) as fe:
+            self.assertEqual(lf.main(["--config", str(cfg), "--cache", str(self.cache)]), 0)
+        fe.assert_called_once_with("DRIVE", None, self.cache, studio_id="STUDIO1")
+
+    def test_fetch_main_without_id_or_channel_exits_2(self):
+        cfg = Path(self.tmp.name) / "c.json"
+        cfg.write_text(json.dumps({"channel": "Bare Skull"}), encoding="utf-8")
+        import youtube_uploader as yu
+        with mock.patch.object(yu, "get_credentials"), \
+                mock.patch("googleapiclient.discovery.build", return_value="DRIVE"), \
+                mock.patch.object(yu, "resolve_folders", side_effect=AssertionError("no")):
+            self.assertEqual(lf.main(["--config", str(cfg), "--cache", str(self.cache)]), 2)
+
     def test_health_ok_values(self):
         for s in ("PASS", "pass", "ok", "OK"):
             self.assertTrue(lf.health_ok(s), s)

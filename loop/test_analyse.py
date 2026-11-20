@@ -260,6 +260,12 @@ class AnalyseTest(unittest.TestCase):
         by_id.assert_called_once_with("DRIVE", "STUDIO1")
         self.assertEqual(seen["folders"], {"studio": "STUDIO1"})
 
+    def test_main_without_id_or_channel_exits_2(self):
+        cfg = Path(self.tmp.name) / "c.json"
+        cfg.write_text(json.dumps({"channel": "Bare Skull"}), encoding="utf-8")
+        with mock.patch.object(an.yu, "resolve_folders", side_effect=AssertionError("no")):
+            self.assertEqual(an.main(["--config", str(cfg), "--cache", str(self.cache)]), 2)
+
     def test_missing_go_live_is_alert_only(self):
         del self.cfg["go_live"]
         self.low_video()

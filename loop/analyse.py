@@ -307,7 +307,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     cfg = _read_json(Path(args.config), {})
-    channel = args.channel or cfg.get("channel")
+    channel = args.channel      # chi --channel moi cho phep che do theo ten, config thi khong
     studio_id = args.studio_folder_id or cfg.get("studio_folder_id")
     if not channel and not studio_id:
         print("thieu --channel hoac --studio-folder-id", file=sys.stderr)

@@ -100,6 +100,10 @@ class RulesTest(unittest.TestCase):
     def test_opening_margin(self):
         v, _ = run(snap(ctr=0.055, impr=5000, ret=0.58), state(), med_ret=0.60)
         self.assertNotEqual(v, Verdict.OPENING)     # 0.58 >= 0.85 x 0.60 = 0.51
+        v, _ = run(snap(ctr=0.055, impr=5000, ret=0.51), state(), med_ret=0.60)
+        self.assertNotEqual(v, Verdict.OPENING)     # bien: 0.85 x 0.60 = 0.51, strict <
+        v, _ = run(snap(ctr=0.055, impr=5000, ret=0.5099), state(), med_ret=0.60)
+        self.assertEqual(v, Verdict.OPENING)
         v, reason = run(snap(ctr=0.055, impr=5000, ret=0.50), state(), med_ret=0.60)
         self.assertEqual(v, Verdict.OPENING)
         self.assertIn("50.0%", reason)

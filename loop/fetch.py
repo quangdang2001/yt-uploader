@@ -224,7 +224,7 @@ def main(argv=None) -> int:
     if studio_id:
         res = fetch(drive, None, Path(args.cache), studio_id=studio_id)
     else:
-        channel = args.channel or cfg.get("channel")
+        channel = args.channel      # chi --channel moi cho phep che do theo ten
         if not channel:
             print("thieu --channel hoac --studio-folder-id", file=sys.stderr)
             return 2
