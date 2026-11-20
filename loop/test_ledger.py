@@ -73,7 +73,14 @@ class PackagingTest(unittest.TestCase):
         self.assertEqual(lg.packaging("10 Lever Guns Ranked From Worst To Best"), "xep-hang")
         self.assertEqual(lg.packaging("Top 5 Revolvers"), "xep-hang")
         self.assertEqual(lg.packaging("The $329 AR-15 That Killed Two"), "gia")
-        self.assertEqual(lg.packaging("The $329 AR-15 Ranked"), "xep-hang")
+        self.assertEqual(lg.packaging("The $329 AR-15 Ranked"), "gia")      # $ first
+        for title, want in (
+                ("Ruger Is Going CRAZY in 2027! (9 Guns)", "lineup"),
+                ("Smith & Wesson Beats Winchester?! 10 Lever Guns Ranked", "xep-hang"),
+                ("Toughest Home Defense Shotguns Ever Made: No.1 Will Shock You", "xep-hang"),
+                ("The Only 5 AR-15s Worth Buying in 2027 (Skip the Other 90%)", "xep-hang"),
+                ("The $152 Rifle Whose Warranty Says Taurus", "gia")):
+            self.assertEqual(lg.packaging(title), want, title)
         self.assertEqual(lg.packaging("The Gun Nobody Wanted"), "other")
         self.assertEqual(lg.packaging("Stopwatch gun"), "other")   # "Top" must be a word
 
@@ -173,16 +180,25 @@ class JoinTest(Env):
         self.assertEqual((r["slug"], r["match_source"]), ("lever_ranked", "history"))
 
     def test_source_2_id_in_project_md(self):
-        self.write("projects/bear_guns_ranked/BUILD_LOG.md", "published as %s ok" % VID2)
+        self.write("projects/bear_guns_ranked/UPLOAD.md", "published as %s ok" % VID2)
         r = self.by_id(self.build_rows({VID2: "x"}))[VID2]
         self.assertEqual((r["slug"], r["match_source"]), ("bear_guns_ranked", "id-in-md"))
+
+    def test_id_in_read_first_and_url_forms_count_but_sibling_build_log_does_not(self):
+        self.write("projects/bear_guns_ranked/0 - ĐỌC TRƯỚC.md", "live: %s" % VID2)
+        self.write("projects/other_film/BUILD_LOG.md", "compared with https://youtu.be/%s" % VID3)
+        self.write("projects/lever_ranked/BUILD_LOG.md", "sibling mentions %s in passing" % VID4)
+        r = self.by_id(self.build_rows({VID2: "x", VID3: "x", VID4: "x"}))
+        self.assertEqual(r[VID2]["slug"], "bear_guns_ranked")
+        self.assertEqual((r[VID3]["slug"], r[VID3]["match_source"]), ("other_film", "id-in-md"))
+        self.assertEqual((r[VID4]["slug"], r[VID4]["match_source"]), ("", "none"))
 
     def test_source_2_id_in_board_note_and_word_boundary(self):
         # VID1 is in the board ghi_chu of lever_ranked
         r = self.by_id(self.build_rows({VID1: "x"}))[VID1]
         self.assertEqual((r["slug"], r["match_source"]), ("lever_ranked", "id-in-md"))
         # an id that merely contains VID3 as a substring does not match
-        self.write("projects/other_film/notes.md", "see x%sy and %s-z" % (VID3, VID3))
+        self.write("projects/other_film/UPLOAD.md", "see x%sy and %s-z" % (VID3, VID3))
         r = self.by_id(self.build_rows({VID3: "x"}))[VID3]
         self.assertEqual(r["match_source"], "none")
 
@@ -203,8 +219,8 @@ class JoinTest(Env):
         self.assertEqual(r["packaging"], "other")        # from the live title
 
     def test_ambiguous_id_falls_through(self):
-        self.write("projects/bear_guns_ranked/a.md", VID3)
-        self.write("projects/other_film/a.md", VID3)
+        self.write("projects/bear_guns_ranked/UPLOAD.md", VID3)
+        self.write("projects/other_film/UPLOAD.md", VID3)
         r = self.by_id(self.build_rows({VID3: "x"}))[VID3]
         self.assertEqual(r["match_source"], "none")
 
@@ -225,7 +241,7 @@ class FixRound1Test(Env):
     def test_videos_json_source_after_history_before_md(self):
         self.write("playbook/channel_daily_report_note/videos.json", json.dumps(
             {VID1: {"project": "projects/lever_ranked"}, VID2: {"project": "projects/walmart_guns"}}))
-        self.write("projects/bear_guns_ranked/a.md", VID1)        # md would say bear_guns_ranked
+        self.write("projects/bear_guns_ranked/UPLOAD.md", VID1)   # md would say bear_guns_ranked
         rows = {r["video_id"]: r for r in self.build_rows({VID1: "x", VID2: "y"})}
         self.assertEqual((rows[VID1]["slug"], rows[VID1]["match_source"]), ("lever_ranked", "videos-json"))
         # folder deleted: slug kept, folder-bound fields empty
@@ -320,6 +336,26 @@ class MadeSideTest(Env):
         self.build_rows({VID1: "x"}, scan=scan, probe=lambda p: 100.0)
         self.assertEqual(len(calls), 2)
 
+    def test_none_from_probe_and_scan_is_not_cached_and_retried(self):
+        probes, scans = [], []
+        self.build_rows({VID1: "x"}, scan=lambda p, r: scans.append(1), probe=lambda p: probes.append(1))
+        self.assertEqual((len(probes), len(scans)), (1, 0))         # no runtime -> no scan
+        row = self.build_rows({VID1: "x"}, scan=lambda p, r: scans.append(1) or None,
+                              probe=lambda p: probes.append(1) or 100.0)[0]
+        self.assertEqual(len(probes), 2)                            # retried
+        self.assertEqual(row["sec_per_cut"], "")
+        self.build_rows({VID1: "x"}, scan=lambda p, r: scans.append(1) or 49, probe=lambda p: 1 / 0)
+        self.assertEqual(len(scans), 2)                             # scan retried, runtime now cached
+        row = self.build_rows({VID1: "x"}, scan=lambda p, r: 1 / 0, probe=lambda p: 1 / 0)[0]
+        self.assertEqual(row["sec_per_cut"], 2.0)                   # 100 / (49 + 1)
+
+    def test_default_probe_and_scan_swallow_subprocess_errors(self):
+        import subprocess
+        for exc in (OSError("no ffmpeg"), subprocess.TimeoutExpired("ffmpeg", 1)):
+            with mock.patch.object(subprocess, "run", side_effect=exc):
+                self.assertIsNone(lg._default_probe(self.mp4))
+                self.assertIsNone(lg._default_scan(self.mp4, 10.0))
+
     def test_no_scan_leaves_sec_per_cut_empty(self):
         self.assertEqual(self.build_rows({VID1: "x"})[0]["sec_per_cut"], "")
 
@@ -378,10 +414,13 @@ class LiveTitlesTest(Env):
         def boom(url):
             raise OSError("no yt-dlp")
 
-        self.assertEqual(lg.live_titles(self.cache, NOW, boom), {})
-        lg.live_titles(self.cache, NOW, lambda u: "%s|T\n" % VID1)
-        later = datetime(2026, 11, 25, tzinfo=timezone.utc)
-        self.assertEqual(lg.live_titles(self.cache, later, boom), {VID1: "T"})
+        import contextlib
+        import io
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(lg.live_titles(self.cache, NOW, boom), {})
+            lg.live_titles(self.cache, NOW, lambda u: "%s|T\n" % VID1)
+            later = datetime(2026, 11, 25, tzinfo=timezone.utc)
+            self.assertEqual(lg.live_titles(self.cache, later, boom), {VID1: "T"})
 
 
 class OutputTest(Env):
@@ -414,10 +453,12 @@ class CliTest(Env):
     def run_main(self, args):
         cfg_path = self.root / "config.json"
         cfg_path.write_text(json.dumps(self.cfg), encoding="utf-8")
-        err = []
-        with mock.patch.object(sys, "stderr") as e:
+        err, out = [], []
+        with mock.patch.object(sys, "stderr") as e, mock.patch.object(sys, "stdout") as o:
             e.write = err.append
+            o.write = out.append
             code = lg.main(["--config", str(cfg_path), "--cache", str(self.cache)] + args)
+        self.out = "".join(out)
         return code, "".join(err)
 
     def test_missing_build_repo_exits_2(self):
@@ -440,6 +481,13 @@ class CliTest(Env):
             code, _ = self.run_main(["--no-video-scan"])
         self.assertEqual(code, 0)
         self.assertTrue((self.report / "ledger.csv").exists())
+        self.assertIn('ledger: 1 videos; match {"id-in-md": 1}; packaging {"other": 1}', self.out)
+
+    def test_summary_says_live_titles_unavailable(self):
+        self.write_snaps([snap(VID1, 20)])
+        with mock.patch.object(lg, "live_titles", return_value={}):
+            self.run_main(["--no-video-scan"])
+        self.assertIn("live titles: unavailable", self.out)
 
 
 class RunPs1Test(unittest.TestCase):

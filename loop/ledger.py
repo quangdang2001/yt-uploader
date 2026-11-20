@@ -43,6 +43,7 @@ SCENE_THRESHOLD = 0.25
 BOARD_REL = "Bare Skull - 2nd brain/van-hanh/ke-hoach/bang-cong-viec.md"
 SHAPES_REL = "topic_engine/ctr/own_shapes.json"
 THUMB_GATE_REL = "playbook/thumb_gate.py"
+READ_FIRST = "0 - ĐỌC TRƯỚC.md"
 VIDEOS_JSON_REL = "playbook/channel_daily_report_note/videos.json"      # config videos_json
 HISTORY_MD_REL = "Bare Skull - 2nd brain/wiki/analysis/lich-su-video-da-dang.md"   # config history_md
 
@@ -144,13 +145,19 @@ def norm_title(t: str) -> str:
 # ---------- tieu de ----------
 
 def packaging(title: str) -> str:
-    """Quy tac dong goi (tu tieu de live): 'xep-hang' neu co tu Ranked hoac 'Top <so>' (vd '10 Guns Ranked');
-    'gia' neu co dau $; nguoc lai 'other'. Xep hang thang gia khi co ca hai."""
+    """Quy tac dong goi (tu tieu de live), theo thu tu:
+    'gia'      co dau $
+    'lineup'   '(<so> Guns)' o cuoi tieu de, hoac 'going crazy'
+    'xep-hang' Ranked, Top <so>, No.1, best/worst/toughest, 'the only <so>'
+    'other'    con lai."""
     t = title or ""
-    if re.search(r"\branked\b", t, re.I) or re.search(r"\btop\s*\d+", t, re.I):
-        return "xep-hang"
     if "$" in t:
         return "gia"
+    if (re.search(r"\(\s*\d+\s+\w*\s*(guns?|rifles?|pistols?|revolvers?|shotguns?)\s*\)", t, re.I)
+            or re.search(r"going crazy", t, re.I)):
+        return "lineup"
+    if (re.search(r"\branked\b|\btop\s*\d+|\bno\.?\s*1\b|\b(best|worst|toughest)\b|the only \d+", t, re.I)):
+        return "xep-hang"
     return "other"
 
 
@@ -240,19 +247,23 @@ def live_titles(cache: Path, now: datetime, runner=None) -> dict:
 
 
 def _default_probe(path: Path):
-    p = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
-                        str(path)], capture_output=True, text=True, timeout=120)
     try:
+        p = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                            str(path)], capture_output=True, text=True, timeout=120)
         return float(p.stdout.strip())
-    except ValueError:
+    except (OSError, subprocess.SubprocessError, ValueError):
         return None
 
 
 def _default_scan(path: Path, runtime):
     """So lan cat: ffmpeg scene detection tren ban 5 fps nho (~1 phut moi phim)."""
-    p = subprocess.run(["ffmpeg", "-nostdin", "-hide_banner", "-i", str(path), "-vf",
-                        "fps=5,scale=256:-2,select='gt(scene,%s)',showinfo" % SCENE_THRESHOLD, "-an", "-f", "null",
-                        "-"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=1800)
+    try:
+        p = subprocess.run(["ffmpeg", "-nostdin", "-hide_banner", "-i", str(path), "-vf",
+                            "fps=5,scale=256:-2,select='gt(scene,%s)',showinfo" % SCENE_THRESHOLD, "-an", "-f",
+                            "null", "-"], capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           timeout=1800)
+    except (OSError, subprocess.SubprocessError):
+        return None
     if p.returncode != 0:
         return None
     return len(re.findall(r"pts_time:", p.stderr))
@@ -315,9 +326,13 @@ def compute_verdicts(cache: Path, cfg: dict, now: datetime) -> dict:
     latest = {v: rows[-1] for v, rows in by_vid.items()}
     out = {}
     for vid, snap in latest.items():
-        verdict, _ = decide(snap, states[vid], swap_bar(snap["age_hours"], history), now,
-                            an._peer_typical_impr(vid, snap["age_hours"], by_vid),
-                            an._peer_median(vid, snap, latest, "ret_30s"))
+        try:
+            verdict, _ = decide(snap, states[vid], swap_bar(snap["age_hours"], history), now,
+                                an._peer_typical_impr(vid, snap["age_hours"], by_vid),
+                                an._peer_median(vid, snap, latest, "ret_30s"))
+        except Exception as exc:    # mot video loi khong lam mat verdict cac video khac
+            print("ledger: verdict failed for %s (%s)" % (vid, exc), file=sys.stderr)
+            continue
         out[vid] = verdict.value
     return out
 
@@ -348,6 +363,8 @@ def build_ledger(cache: Path, cfg: dict, now: datetime, live_titles: dict, probe
     slugs |= set(board)
     texts = {s: "\n".join(_read(f) for f in sorted((proj_root / s).glob("*.md")))
              for s in slugs if (proj_root / s).is_dir()}
+    evidence = {s: _read(proj_root / s / "UPLOAD.md") + "\n" + _read(proj_root / s / READ_FIRST)
+                for s in slugs if (proj_root / s).is_dir()}
     note = {s: board[s]["ghi_chu"] for s in board}
     titles_of: dict = {}
     for s in slugs:
@@ -370,8 +387,12 @@ def build_ledger(cache: Path, cfg: dict, now: datetime, live_titles: dict, probe
         if not slug and vid in vjson:
             slug, source = vjson[vid], "videos-json"      # giu slug du thu muc da bi xoa
         if not slug:
+            # chi tinh khi ma nam trong UPLOAD.md, 0 - DOC TRUOC.md, ghi_chu bang cong viec, hoac dang URL;
+            # BUILD_LOG.md cua du an anh em co the nhac toi video khac
             rx = _id_re(vid)
-            hit = sorted(s for s in slugs if rx.search(texts.get(s, "")) or rx.search(note.get(s, "")))
+            url = re.compile(r"(?:watch\?v=|youtu\.be/)" + re.escape(vid) + r"(?![A-Za-z0-9_-])")
+            hit = sorted(s for s in slugs if rx.search(evidence.get(s, "")) or rx.search(note.get(s, ""))
+                         or url.search(texts.get(s, "")))
             if len(hit) > 1:
                 hit = [s for s in hit if rx.search(note.get(s, ""))] or hit
             if len(hit) == 1:
@@ -417,12 +438,17 @@ def build_ledger(cache: Path, cfg: dict, now: datetime, live_titles: dict, probe
                 ent = vcache.get(slug) if isinstance(vcache.get(slug), dict) else {}
                 if ent.get("mtime") != mt:
                     ent = {"mtime": mt}
-                if "runtime_s" not in ent:
-                    ent["runtime_s"] = probe(mp4)
-                    dirty = True
-                if scan is not None and ent.get("runtime_s") and "cuts" not in ent:
-                    ent["cuts"] = scan(mp4, ent["runtime_s"])
-                    dirty = True
+                # chi luu gia tri that: None (loi ffprobe/ffmpeg) khong vao cache, lan sau thu lai
+                if ent.get("runtime_s") is None:
+                    v = probe(mp4)
+                    if v is not None:
+                        ent["runtime_s"] = v
+                        dirty = True
+                if scan is not None and ent.get("runtime_s") and ent.get("cuts") is None:
+                    v = scan(mp4, ent["runtime_s"])
+                    if v is not None:
+                        ent["cuts"] = v
+                        dirty = True
                 vcache[slug] = ent
                 r["runtime_s"] = _blank(round(ent["runtime_s"], 2) if ent.get("runtime_s") else None)
                 if ent.get("cuts") is not None and ent.get("runtime_s"):
@@ -498,13 +524,18 @@ def main(argv=None) -> int:
         print("ledger: no snapshots in the cache %s; run loop.fetch first" % cache, file=sys.stderr)
         return 2
     now = datetime.now(timezone.utc)
-    rows = build_ledger(cache, cfg, now, live_titles(cache, now),
-                        scan=None if args.no_video_scan else _default_scan)
+    live = live_titles(cache, now)
+    rows = build_ledger(cache, cfg, now, live, scan=None if args.no_video_scan else _default_scan)
     write_outputs(rows, Path(cfg.get("report_dir") or an.DEFAULT_REPORT_DIR))
     counts: dict = {}
     for r in rows:
         counts[r["match_source"]] = counts.get(r["match_source"], 0) + 1
-    print("ledger: %d videos; match %s" % (len(rows), json.dumps(counts, sort_keys=True)))
+    pk: dict = {}
+    for r in rows:
+        pk[r["packaging"]] = pk.get(r["packaging"], 0) + 1
+    print("ledger: %d videos; match %s; packaging %s%s" % (
+        len(rows), json.dumps(counts, sort_keys=True), json.dumps(pk, sort_keys=True),
+        "" if live else "; live titles: unavailable"))
     return 0
 
 
