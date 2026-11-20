@@ -32,8 +32,23 @@ def card(aid, content, *children):
     return {"items": items, "accessibilityId": aid}
 
 
-def synthetic(impr="159", ctr="10,1%", views="114", uniq="0", avd="3:02", extra=None, series=None):
+def with_period(payloads, value):
+    """Ban sao sau cua payloads voi moi time_period doi thanh value."""
+    copy = json.loads(json.dumps(payloads))
+    n = 0
+    for p in copy:
+        for node in sp._nodes(p):
+            if node.get("key") == "time_period":
+                node["value"] = value
+                n += 1
+    assert n, "fixture khong co time_period"
+    return copy
+
+
+def synthetic(impr="159", ctr="10,1%", views="114", uniq="0", avd="3:02", extra=None, series=None,
+              time_period="since_publish"):
     reach = [
+        {"routeParams": [{"key": "time_period", "value": time_period}]} if time_period else {},
         card("analytics_hub.VideoReachKeyMetricImpressionsCard.metric_values", impr),
         card("analytics_hub.video_reach_views.left_section", views),
         card("analytics_hub.video_reach_ctr.left_section", ctr),
@@ -44,7 +59,7 @@ def synthetic(impr="159", ctr="10,1%", views="114", uniq="0", avd="3:02", extra=
             "accessibilityId": "analytics_hub.VideoReachKeyMetricImpressionsCard.body",
             "lineChartViewModel": {"series": [{"dataPoints": [{"domain": i, "measure": m} for i, m in enumerate(series)]}]},
         }
-        reach[0] = {"accessibilityId": "analytics_hub.VideoReachKeyMetricImpressionsCard", "items": [reach[0], chart]}
+        reach[1] = {"accessibilityId": "analytics_hub.VideoReachKeyMetricImpressionsCard", "items": [reach[1], chart]}
     eng = [card("analytics_hub.FEanalytics_hub_video_engagement.key_metrics_average_view_duration.left_section", avd)]
     if extra:
         eng.append(extra)
@@ -57,11 +72,15 @@ class ParseNumberTest(unittest.TestCase):
             "159": 159, "12,345": 12345, "12.345": 12345, "1,234,567": 1234567,
             "10,1%": 0.101, "10.1%": 0.101, "5,4 %": 0.054, "5.4%": 0.054,
             "1,6 N": 1600, "1.6K": 1600, "2,3 Tr": 2300000, "1.2M": 1200000,
-            "1,6 N": 1600, "1,6 N": 1600,
             "3:02": 182.0, "1:02:03": 3723.0,
         }
         for text, want in cases.items():
             self.assertAlmostEqual(sp.parse_number(text), want, places=9, msg=text)
+
+    def test_parse_number_non_breaking_spaces(self):
+        self.assertAlmostEqual(sp.parse_number("1,6 N"), 1600, places=9)
+        self.assertAlmostEqual(sp.parse_number("1,6 N"), 1600, places=9)
+        self.assertAlmostEqual(sp.parse_number("5,4 %"), 0.054, places=9)
 
     def test_parse_number_rejects_blank_and_dash(self):
         for text in ("—", "-", "", "  ", "abc"):
@@ -77,7 +96,7 @@ class ParseNumberTest(unittest.TestCase):
 
 class FixtureTest(unittest.TestCase):
     def check_ruger(self, folder):
-        row = sp.parse_snapshot(both_tabs(RUGER, folder), "mwKhntLxOlk", "since_publish")
+        row = sp.parse_snapshot(both_tabs(RUGER, folder), "mwKhntLxOlk", None)
         self.assertEqual(row["impressions"], 159)
         self.assertIs(row["impr_rounded"], False)
         self.assertAlmostEqual(row["ctr"], 0.101)
@@ -87,7 +106,7 @@ class FixtureTest(unittest.TestCase):
         return row
 
     def check_lever(self, folder):
-        row = sp.parse_snapshot(both_tabs(LEVER, folder), "5q637XpLagg", "since_publish")
+        row = sp.parse_snapshot(both_tabs(LEVER, folder), "5q637XpLagg", None)
         self.assertEqual(row["impressions"], 1684)  # cuoi chuoi tich luy, trong 10% cua "1,6 N"
         self.assertIs(row["impr_rounded"], False)
         self.assertAlmostEqual(row["ctr"], 0.025)
@@ -99,16 +118,42 @@ class FixtureTest(unittest.TestCase):
     def test_parses_reach_fixture(self):
         row = self.check_ruger(PARSE_DIR)
         self.assertEqual(row["video_id"], "mwKhntLxOlk")
-        self.assertEqual(row["period"], "since_publish")
+        self.assertEqual(row["period"], "since_published")
         self.check_lever(PARSE_DIR)
 
+    def test_period_from_payload_and_argument(self):
+        pl = both_tabs(RUGER)
+        self.assertEqual(sp.parse_snapshot(pl, "v")["period"], "since_published")
+        self.assertEqual(sp.parse_snapshot(pl, "v", "since_published")["period"], "since_published")
+        with self.assertRaises(sp.ParseError):
+            sp.parse_snapshot(pl, "v", "last_28_days")
+        edited = with_period(pl, "last_28_days")
+        self.assertEqual(sp.parse_snapshot(edited, "v")["period"], "last_28_days")
+        self.assertEqual(sp.parse_snapshot(edited, "v", "last_28_days")["period"], "last_28_days")
+        self.assertEqual(sp.parse_snapshot(with_period(pl, "LAST_90_DAYS"), "v")["period"], "last_90_days")
+
+    def test_period_neither_available_raises(self):
+        with self.assertRaises(sp.ParseError) as cm:
+            sp.parse_snapshot(synthetic(time_period=None), "v")
+        self.assertIn("period", str(cm.exception))
+        # tham so dung thay cho payload khong co time_period
+        self.assertEqual(sp.parse_snapshot(synthetic(time_period=None), "v", "since_published")["period"],
+                         "since_published")
+
+    def test_sanity_guards(self):
+        with self.assertRaises(sp.ParseError) as cm:
+            sp.parse_snapshot(synthetic(ctr="1,234%"), "v")
+        self.assertIn("ctr", str(cm.exception))
+        with self.assertRaises(sp.ParseError):
+            sp.parse_snapshot(synthetic(avd="-3:02"), "v")
+
     def test_tab_order_does_not_matter(self):
-        a = sp.parse_snapshot(both_tabs(RUGER), "v", "p")
-        b = sp.parse_snapshot(list(reversed(both_tabs(RUGER))), "v", "p")
+        a = sp.parse_snapshot(both_tabs(RUGER), "v")
+        b = sp.parse_snapshot(list(reversed(both_tabs(RUGER))), "v")
         self.assertEqual(a, b)
 
     def test_columns_and_unparsed_are_none(self):
-        row = sp.parse_snapshot(both_tabs(RUGER), "v", "p")
+        row = sp.parse_snapshot(both_tabs(RUGER), "v")
         self.assertEqual(tuple(row), sp.SNAPSHOT_COLS)
         for col in ("captured_at_utc", "age_hours", "thumb_hash", "apv_pct", "ret_30s", "ret_60s",
                     "src_browse", "src_suggested", "src_search", "src_other"):
@@ -130,50 +175,50 @@ class FixtureTest(unittest.TestCase):
 class RulesTest(unittest.TestCase):
     def test_missing_metric_raises_and_names_it(self):
         payloads = synthetic()
-        payloads[0]["contents"].pop(1)  # bo views
+        payloads[0]["contents"].pop(2)  # bo views
         with self.assertRaises(sp.ParseError) as cm:
-            sp.parse_snapshot(payloads, "v", "p")
+            sp.parse_snapshot(payloads, "v")
         self.assertIn("views", str(cm.exception))
 
     def test_empty_payloads_raise(self):
         with self.assertRaises(sp.ParseError):
-            sp.parse_snapshot([], "v", "p")
+            sp.parse_snapshot([], "v")
 
     def test_dash_value_raises_and_names_it(self):
         with self.assertRaises(sp.ParseError) as cm:
-            sp.parse_snapshot(synthetic(uniq="—"), "v", "p")
+            sp.parse_snapshot(synthetic(uniq="—"), "v")
         self.assertIn("unique_viewers", str(cm.exception))
 
     def test_zero_is_a_real_value(self):
-        row = sp.parse_snapshot(synthetic(uniq="0"), "v", "p")
+        row = sp.parse_snapshot(synthetic(uniq="0"), "v")
         self.assertEqual(row["unique_viewers"], 0)
 
     def test_abbreviated_impressions_use_series_end_when_close(self):
-        row = sp.parse_snapshot(synthetic(impr="1,6 N", series=[0, 900, 1684]), "v", "p")
+        row = sp.parse_snapshot(synthetic(impr="1,6 N", series=[0, 900, 1684]), "v")
         self.assertEqual(row["impressions"], 1684)
         self.assertIs(row["impr_rounded"], False)
 
     def test_abbreviated_impressions_without_series_are_flagged(self):
-        row = sp.parse_snapshot(synthetic(impr="1,6 N"), "v", "p")
+        row = sp.parse_snapshot(synthetic(impr="1,6 N"), "v")
         self.assertEqual(row["impressions"], 1600)
         self.assertIs(row["impr_rounded"], True)
 
     def test_abbreviated_impressions_far_series_is_flagged(self):
-        row = sp.parse_snapshot(synthetic(impr="1.6K", series=[0, 900, 1200]), "v", "p")
+        row = sp.parse_snapshot(synthetic(impr="1.6K", series=[0, 900, 1200]), "v")
         self.assertEqual(row["impressions"], 1600)
         self.assertIs(row["impr_rounded"], True)
 
     def test_exact_impressions_ignore_series(self):
-        row = sp.parse_snapshot(synthetic(impr="159", series=[0, 5000]), "v", "p")
+        row = sp.parse_snapshot(synthetic(impr="159", series=[0, 5000]), "v")
         self.assertEqual(row["impressions"], 159)
         self.assertIs(row["impr_rounded"], False)
 
     def test_test_running_flag(self):
         extra = {"accessibilityId": "analytics_hub.thumbnail_test_compare_card"}
-        row = sp.parse_snapshot(synthetic(extra=extra), "v", "p")
+        row = sp.parse_snapshot(synthetic(extra=extra), "v")
         self.assertIs(row["test_running"], True)
         extra = {"accessibilityId": "analytics_hub.video_likes_comparison"}
-        self.assertIs(sp.parse_snapshot(synthetic(extra=extra), "v", "p")["test_running"], False)
+        self.assertIs(sp.parse_snapshot(synthetic(extra=extra), "v")["test_running"], False)
 
 
 class ImportTest(unittest.TestCase):

@@ -193,13 +193,45 @@ def _test_running(payloads):
     return False
 
 
-def parse_snapshot(payloads, video_id, period):
+_PERIOD_LABELS = {"since_publish": "since_published"}
+
+
+def _route_period(node):
+    for n in _nodes(node):
+        if n.get("key") == "time_period" and isinstance(n.get("value"), str):
+            return n["value"]
+    return None
+
+
+def _payload_period(payloads):
+    """time_period trong routeParams: the Impressions truoc, roi bat ky cho nao trong payload."""
+    raw = None
+    card = _find(payloads, ID_IMPRESSIONS_CARD)
+    if card is not None:
+        raw = _route_period(card)
+    if raw is None:
+        raw = _route_period(payloads)
+    if raw is None:
+        return None
+    raw = raw.strip().lower()
+    return _PERIOD_LABELS.get(raw, raw)
+
+
+def parse_snapshot(payloads, video_id, period=None):
     """payloads: cac body JSON da decode cua ca hai tab, thu tu nao cung duoc.
 
+    period: tuy chon; neu co thi phai khop time_period trong payload (since_publish ->
+    "since_published"), neu khong khop thi ParseError. Khong co ca hai thi ParseError.
     captured_at_utc, age_hours, thumb_hash do noi goi dien. Cac cot khong co trong
     ban chup de None (khong bao gio la 0)."""
     if not payloads:
         raise ParseError("no payloads")
+    found = _payload_period(payloads)
+    if period is not None and found is not None and period != found:
+        raise ParseError("period %r disagrees with payload time_period %r" % (period, found))
+    period = found if found is not None else period
+    if period is None:
+        raise ParseError("period unknown: no time_period in payload and none given")
     row = dict.fromkeys(SNAPSHOT_COLS)
     row["video_id"] = video_id
     row["period"] = period
@@ -208,5 +240,9 @@ def parse_snapshot(payloads, video_id, period):
     row["views"] = int(round(_metric(payloads, ID_VIEWS, "views")))
     row["unique_viewers"] = int(round(_metric(payloads, ID_UNIQUE, "unique_viewers")))
     row["avd_s"] = _metric(payloads, ID_AVD, "avd_s")
+    if row["ctr"] > 1.0:
+        raise ParseError("metric ctr out of range: %r" % row["ctr"])
+    if row["avd_s"] < 0:
+        raise ParseError("metric avd_s out of range: %r" % row["avd_s"])
     row["test_running"] = _test_running(payloads)
     return row
