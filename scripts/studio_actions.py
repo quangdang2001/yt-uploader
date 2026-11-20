@@ -33,8 +33,25 @@ log = logging.getLogger("studio_actions")
 VARIANTS = ("alt1", "alt2", "main")
 
 
+STALE_H = 24     # yeu cau cu hon (theo requested_utc) khong bao gio duoc thuc hien
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 def _utc() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return _now().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _parse_utc(text) -> datetime | None:
+    if not isinstance(text, str) or not text.strip():
+        return None
+    try:
+        d = datetime.fromisoformat(text.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
 VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,20}$")
@@ -97,11 +114,12 @@ def _sort_key(item: dict):
     return (utc if isinstance(utc, str) else "", item["file"]["name"])
 
 
-def _finish(drive, folders: dict, item: dict, status: str, detail: str) -> bool:
-    """Ghi result va chuyen file. Tra ve True neu da chuyen duoc."""
+def _finish(drive, folders: dict, item: dict, status: str, detail: str, at_utc: str | None = None) -> bool:
+    """Ghi result va chuyen file. Tra ve True neu da chuyen duoc. at_utc: luc thumbnail THAT SU doi
+    (mac dinh bay gio); may chu kenh dung no de nhan hash moi la cua action."""
     req = item["req"]
     obj = dict(req) if isinstance(req, dict) else {"raw_text": item["raw_text"]}
-    obj["result"] = {"status": status, "at_utc": _utc(), "detail": detail}
+    obj["result"] = {"status": status, "at_utc": at_utc or _utc(), "detail": detail}
     dest = folders["actions_done"] if status == "ok" else folders["actions_failed"]
     try:
         ss.move_json(drive, item["file"]["id"], folders["actions_pending"], dest, obj)
@@ -113,28 +131,48 @@ def _finish(drive, folders: dict, item: dict, status: str, detail: str) -> bool:
 
 
 def new_state() -> dict:
-    """Trang thai trong tien trinh cho che do --watch: tranh bao Telegram lap lai."""
-    return {"notified": set(), "quota_day": None}
+    """Trang thai giua cac lan chay, ghi duoc ra JSON (studio_capture giu no trong
+    .studio-state-<kenh>.json): file id da bao, ngay het quota, va yeu cau da dat thumbnail
+    nhung chua chuyen duoc sang done/ (file id -> luc dat)."""
+    return {"notified": [], "quota_day": None, "applied": {}}
+
+
+def normalize_state(state) -> dict:
+    """Sua state doc tu file (hoac ban cu dung set) cho dung dang new_state()."""
+    if not isinstance(state, dict):
+        state = {}
+    notified = state.get("notified")
+    state["notified"] = sorted(notified) if isinstance(notified, (set, list, tuple)) else []
+    if not isinstance(state.get("applied"), dict):
+        state["applied"] = {}
+    state.setdefault("quota_day", None)
+    return state
 
 
 def _notify_once(state: dict, key: str, message: str) -> None:
     if key in state["notified"]:
         return
-    state["notified"].add(key)
+    state["notified"].append(key)
     yu.notify(message)
 
 
 def _today() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return _now().strftime("%Y-%m-%d")
 
 
 def run_actions(drive, youtube, chan_folder: str, done_folder: str,
                 tmpdir: Path, state: dict | None = None) -> tuple[int, int]:
-    """Xu ly moi yeu cau trong actions/pending/, cu nhat truoc. Tra ve (ok, failed)."""
-    state = state if state is not None else new_state()
+    """Xu ly moi yeu cau trong actions/pending/, cu nhat truoc. Tra ve (ok, failed).
+
+    `state` (new_state()) duoc sua tai cho; ben goi giu no giua cac lan chay."""
+    state = normalize_state(state if state is not None else new_state())
     folders = ss.studio_folders(drive, chan_folder)
     files = [f for f in ss.list_files(drive, folders["actions_pending"])
              if f["name"].lower().endswith(".json")]
+    # chi nho file con o pending/: state khong lon dan
+    live_ids = {f["id"] for f in files}
+    state["notified"] = [k for k in state["notified"] if k in live_ids]
+    state["applied"] = {k: v for k, v in state["applied"].items() if k in live_ids}
     items = sorted((_load(drive, f) for f in files), key=_sort_key)
     ok = failed = 0
     counter = 0
@@ -162,9 +200,28 @@ def run_actions(drive, youtube, chan_folder: str, done_folder: str,
             continue
 
         req = item["req"]
-        err = item["parse_error"] or _validate(req)
         label = (f"Swap {req.get('video_id', '?')} -> {req.get('to_variant', '?')}"
                  if isinstance(req, dict) else f"Swap {item['file']['name']}")
+
+        if fid in state["applied"] and isinstance(req, dict) and not _validate(req):
+            # Thumbnail da dat o lan truoc, chi chuyen file chua duoc: chi thu chuyen lai,
+            # khong dat lai (va giu luc dat that).
+            if _finish(drive, folders, item, "ok", f"set thumbnail from {_target_name(req)}",
+                       at_utc=state["applied"][fid]):
+                state["applied"].pop(fid, None)
+                ok += 1
+                yu.notify(f"{label}: ok (request file moved on retry)")
+            else:
+                failed += 1
+            continue
+
+        err = item["parse_error"] or _validate(req)
+        if not err:
+            requested = _parse_utc(req.get("requested_utc"))
+            if requested is None:
+                err = "invalid requested_utc"
+            elif (_now() - requested).total_seconds() > STALE_H * 3600:
+                err = "stale request"
 
         if err:
             if _finish(drive, folders, item, "error", err):
@@ -197,12 +254,14 @@ def run_actions(drive, youtube, chan_folder: str, done_folder: str,
         finally:
             local.unlink(missing_ok=True)
 
-        if _finish(drive, folders, item, "ok", f"set thumbnail from {name}"):
+        set_at = _utc()
+        if _finish(drive, folders, item, "ok", f"set thumbnail from {name}", at_utc=set_at):
             ok += 1
             yu.notify(f"{label}: ok")
         else:
-            # Thumbnail da doi nhung file van o pending/: lan sau se doi lai
-            # cung anh (vo hai), nhung chi bao mot lan.
+            # Thumbnail da doi nhung file van o pending/: nho file id (va luc dat), lan sau
+            # chi thu chuyen file, khong dat lai thumbnail. Chi bao mot lan.
+            state["applied"][fid] = set_at
             failed += 1
             _notify_once(state, fid,
                          f"{label}: set OK but request file not moved, stays in pending/")

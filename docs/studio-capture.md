@@ -125,6 +125,14 @@ thực thi một lần. Nếu vẫn chạy `studio_actions.py --watch` riêng th
   thoát 0, vì upload được ưu tiên. Nếu giữa chừng có lock uploader đã giữ quá 60 s, script
   dừng mở video mới; các dòng đã đọc vẫn được ghi. Một lượt quét `pending/` vài giây của
   uploader thì không làm script dừng.
+- Danh sách video công khai (Data API) được giữ trong `.studio-state-<kênh>.json` 6 giờ; chỉ
+  `--only <id>` với một video chưa có trong danh sách mới làm mới sớm hơn.
+- Thumbnail đang chạy được nhận diện bằng sha256 của **một** bản cố định, `hqdefault.jpg`
+  (video nào cũng có), để bản maxres xuất hiện muộn không bị tưởng là đổi tay.
+- Bộ thực thi đổi thumbnail không thực hiện yêu cầu cũ hơn 24 giờ (theo `requested_utc`): file
+  sang `failed/` với "stale request". Đã đặt thumbnail mà chưa chuyển được file sang `done/` thì
+  lần sau chỉ thử chuyển lại, không đặt lại. Trạng thái "đã báo" của nó nằm trong
+  `.studio-state-<kênh>.json`, nên mỗi sự cố chỉ báo một lần qua nhiều lần chạy.
 
 ## 5. Trạng thái `studio/health.json`
 
@@ -132,7 +140,7 @@ thực thi một lần. Nếu vẫn chạy `studio_actions.py --watch` riêng th
 |---|---|---|
 | `PASS` | mọi video đến hạn đều đọc được (hoặc không có video nào đến hạn) | không cần làm gì |
 | `FAIL read` | ít nhất một video không đọc được (Studio không trả số, trang không mở, hoặc Chrome không khởi động). `detail` ghi tên từng video và lý do | không cần làm gì nếu chỉ một lần; video lỗi sẽ được đọc lại ở lần sau. Không bao giờ ghi số 0 thay cho lần đọc lỗi |
-| `FAIL auth` | Studio hiện trang đăng nhập, CAPTCHA hoặc "verify it's you". Nếu `detail` bắt đầu bằng `token:` thì token Google API của uploader hỏng | Studio: làm lại mục 2. Token: chạy uploader một lần bằng tay (`python youtube_uploader.py --channel "Bare Skull" --once`) để đăng nhập lại |
+| `FAIL auth` | Studio hiện trang đăng nhập, CAPTCHA hoặc "verify it's you" (cả bản tiếng Việt: "Xác minh đó là bạn", "Đăng nhập", "Tôi không phải là người máy", "hoạt động bất thường"…), hoặc `all reads failed twice - possible challenge page`: mọi video đọc trong hai lần chạy liền đều không ra số. Nếu `detail` bắt đầu bằng `token:` thì token Google API của uploader hỏng | Studio: làm lại mục 2. Token: chạy uploader một lần bằng tay (`python youtube_uploader.py --channel "Bare Skull" --once`) để đăng nhập lại |
 | `FAIL api` | Data API hoặc Drive báo lỗi (quota, mạng, quyền). `detail` ghi loại lỗi | thường tự hết; nếu kéo dài, xem log |
 
 `videos_read` và `videos_failed` là số video đọc được và đọc lỗi trong lần chạy gần nhất.

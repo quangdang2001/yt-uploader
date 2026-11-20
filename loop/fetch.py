@@ -192,6 +192,22 @@ def load_actions(cache: Path) -> list:
     return out
 
 
+def token_or_exit(step: str, token: Path, cache: Path, cfg: dict, send=None):
+    """Credentials Drive khong tuong tac (khong bao gio mo trinh duyet), hoac None sau khi in loi ro rang va gui
+    Telegram toi da mot lan moi ngay (khoa "<step>:3", trung khoa voi loop.notify_fail)."""
+    import google_creds as gc
+    import youtube_uploader as yu
+    from loop.notify_fail import failure_message, notify_once
+    try:
+        return gc.load_creds(token, yu.DRIVE_SCOPES, "Drive")
+    except gc.TokenError as e:
+        print("Drive token on this PC cannot be used without a sign-in: %s. "
+              "Sign in again (docs/loop-pc.md), then rerun." % e, file=sys.stderr)
+        notify_once(cache, "%s:3" % step, "%s (%s)" % (failure_message(step, 3), e),
+                    tz_name=cfg.get("tz"), send=send)
+        return None
+
+
 def health_ok(status: str) -> bool:
     """VPS ghi PASS, ban cu ghi ok; moi gia tri khac (missing, corrupt, FAIL ...) la canh bao."""
     return str(status).strip().lower() in ("ok", "pass")
@@ -204,22 +220,22 @@ def main(argv=None) -> int:
     ap.add_argument("--studio-folder-id", default=None)
     ap.add_argument("--cache", default=str(DEFAULT_CACHE))
     ap.add_argument("--drive-root", default="YouTube-Upload")
-    ap.add_argument("--client-secret", default=str(SCRIPTS / "client_secret.json"))
     ap.add_argument("--token-drive", default=str(SCRIPTS / "token-drive-link.json"))
     args = ap.parse_args(argv)
 
     import youtube_uploader as yu
     from googleapiclient.discovery import build
 
-    creds = yu.get_credentials(Path(args.client_secret), Path(args.token_drive),
-                               yu.DRIVE_SCOPES, "Drive")
-    drive = build("drive", "v3", credentials=creds, cache_discovery=False)
     try:
         cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         cfg = {}
     if not isinstance(cfg, dict):
         cfg = {}
+    creds = token_or_exit("fetch", Path(args.token_drive), Path(args.cache), cfg)
+    if creds is None:
+        return 3
+    drive = build("drive", "v3", credentials=creds, cache_discovery=False)
     studio_id = args.studio_folder_id or cfg.get("studio_folder_id")
     if studio_id:
         res = fetch(drive, None, Path(args.cache), studio_id=studio_id)

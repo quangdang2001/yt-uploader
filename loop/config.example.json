@@ -1,8 +1,9 @@
 {
   "channel": "Bare Skull",
   "studio_folder_id": "1vzGZgxFrfPnmD7ikJEBIvqJvnalZQEBo",
-  "go_live": "2026-11-20",
+  "go_live": "",
   "alert_only_days": 7,
+  "release_manual": [],
   "tz": "Asia/Ho_Chi_Minh",
   "report_dir": "D:/Youtube/video_footage_re_create/Bare Skull - 2nd brain/van-hanh/bao-cao/studio"
 }

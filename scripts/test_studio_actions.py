@@ -9,9 +9,11 @@ Chay:
 from __future__ import annotations
 
 import json
+import logging
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -23,6 +25,18 @@ import studio_actions as sa  # noqa: E402
 import studio_store as ss  # noqa: E402
 import youtube_uploader as yu  # noqa: E402
 from test_studio_store import FakeDrive  # noqa: E402
+
+
+_QUIET = logging.NullHandler()
+
+
+def setUpModule():
+    # canh bao co chu dich trong test (move loi, het quota): khong in ra man hinh
+    logging.getLogger("studio_actions").addHandler(_QUIET)
+
+
+def tearDownModule():
+    logging.getLogger("studio_actions").removeHandler(_QUIET)
 
 
 class _Resp:
@@ -55,10 +69,12 @@ class StudioActionsTest(unittest.TestCase):
                 raise self.set_error
             self.set_calls.append((video_id, Path(path).read_bytes()))
 
+        self.now = datetime(2026, 11, 19, 2, 0, tzinfo=timezone.utc)
         patches = [
             mock.patch.object(yu, "set_thumbnail", fake_set),
             mock.patch.object(yu, "notify", self.sent.append),
             mock.patch.object(yu, "download_to", fake_download_to),
+            mock.patch.object(sa, "_now", lambda: self.now),
         ]
         for p in patches:
             p.start()
@@ -232,6 +248,64 @@ class StudioActionsTest(unittest.TestCase):
             self.assertEqual(self.drive.items[fid]["parents"], [self.folders["actions_pending"]])
             self.assertNotIn(b"result", self.drive.items[fid]["data"])
         self.assertEqual(self.drive.update_calls, [])
+
+    # -- m1: "set OK but move failed" is not re-set every pass
+
+    def test_set_ok_move_failed_only_retries_the_move(self):
+        self.alt()
+        fid = self.request()
+        state = sa.new_state()
+        with mock.patch.object(ss, "move_json", side_effect=http_error(500)):
+            for _ in range(3):
+                sa.run_actions(self.drive, None, "CHAN", self.done, self.tmpdir, state)
+                self.now += timedelta(hours=2)
+        self.assertEqual(self.set_calls, [("vid001", b"ALT1")])     # set once, not every pass
+        self.assertEqual(state["applied"], {fid: "2026-11-19T02:00:00Z"})
+        state = json.loads(json.dumps(state))                       # survives the state file
+        self.assertEqual(sa.run_actions(self.drive, None, "CHAN", self.done, self.tmpdir, state), (1, 0))
+        self.assertEqual(len(self.set_calls), 1)
+        self.assertEqual(self.drive.items[fid]["parents"], [self.folders["actions_done"]])
+        self.assertEqual(self.result_of(fid)["at_utc"], "2026-11-19T02:00:00Z")   # when it was really set
+        self.assertEqual(state["applied"], {})
+
+    def test_applied_request_is_not_dropped_as_stale(self):
+        self.alt()
+        fid = self.request()
+        state = sa.new_state()
+        with mock.patch.object(ss, "move_json", side_effect=http_error(500)):
+            sa.run_actions(self.drive, None, "CHAN", self.done, self.tmpdir, state)
+        self.now += timedelta(hours=30)
+        self.assertEqual(sa.run_actions(self.drive, None, "CHAN", self.done, self.tmpdir, state), (1, 0))
+        self.assertEqual(self.result_of(fid)["status"], "ok")
+
+    # -- m3: stale requests are never executed
+
+    def test_stale_request_moved_to_failed_not_executed(self):
+        self.alt()
+        old = self.request(name="old.json", requested_utc="2026-11-18T01:59:59Z")     # 24 h 1 s
+        edge = self.request(name="edge.json", video_id="vid002", requested_utc="2026-11-18T02:00:00Z")
+        bad = self.request(name="bad.json", video_id="vid003", requested_utc="yesterday")
+        self.assertEqual(self.run_it(), (1, 2))
+        self.assertEqual(self.set_calls, [("vid002", b"ALT1")])
+        self.assertEqual(self.drive.items[old]["parents"], [self.folders["actions_failed"]])
+        self.assertEqual(self.result_of(old)["detail"], "stale request")
+        self.assertEqual(self.drive.items[edge]["parents"], [self.folders["actions_done"]])
+        self.assertEqual(self.result_of(bad)["detail"], "invalid requested_utc")
+
+    # -- I7d: the notify state is plain JSON and stays small
+
+    def test_state_is_json_and_pruned(self):
+        self.alt()
+        fid = self.request()
+        state = sa.normalize_state({"notified": {"gone-id"}, "quota_day": None})
+        with mock.patch.object(ss, "move_json", side_effect=http_error(500)):
+            sa.run_actions(self.drive, None, "CHAN", self.done, self.tmpdir, state)
+        self.assertEqual(state["notified"], [fid])                  # gone-id pruned, fid remembered
+        json.dumps(state)
+        state = json.loads(json.dumps(state))
+        with mock.patch.object(ss, "move_json", side_effect=http_error(500)):
+            sa.run_actions(self.drive, None, "CHAN", self.done, self.tmpdir, state)
+        self.assertEqual(len(self.sent), 1)
 
     def test_move_failure_does_not_count_ok(self):
         self.alt()

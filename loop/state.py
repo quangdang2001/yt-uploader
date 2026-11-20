@@ -2,6 +2,11 @@
 
 Quy tac (spec 5.7): chi dung dong period == since_published; bien the doi theo action done
 co result.status == ok; hash doi ma khong co action nao thi la nguoi doi tay (manual).
+
+Sau mot action ok, hash doi duoc xac nhan (2 snapshot lien tiep) la cua action neu xac nhan
+roi vao trong 3 snapshot co hash dau tien sau action. Cua so dong o lan xac nhan dau tien,
+hoac sau snapshot co hash thu 3 ma chua xac nhan. Dem theo snapshot, khong theo gio: dung
+cho ca nhip 2 gio lan nhip hang ngay. Dong khong co hash bi bo qua (khong dem, khong cat chuoi).
 """
 from __future__ import annotations
 
@@ -10,7 +15,8 @@ from datetime import datetime, timedelta, timezone
 from loop.rules import MANUAL_PAUSE_D, VideoState
 
 ALTS = ("alt1", "alt2")
-EXPECT_H = 24
+EXPECT_SNAPS = 3        # cua so "cho thay doi" sau action: so snapshot co hash
+MAIN_BASELINE_IVS = 3   # main de so sanh REVERT: 3 khoang snapshot cuoi truoc lan swap dau
 
 
 def parse_utc(text) -> datetime | None:
@@ -64,7 +70,7 @@ def ok_actions(actions: list) -> dict:
 
 
 def _build_one(snaps: list, acts: list, feature_variants: set, pending: bool,
-               now: datetime) -> VideoState:
+               now: datetime, release_at: datetime | None = None) -> VideoState:
     variant, before_last = "main", None
     swaps = reverts = 0
     last_swap = None
@@ -72,13 +78,27 @@ def _build_one(snaps: list, acts: list, feature_variants: set, pending: bool,
     manual_until = None
     used: set = set()
     stats: dict = {}
+    # prev_impr None = chua co moc (sau khi tha mot video manual ma dong do bi lam tron)
     prev_impr, prev_clicks, prev_hash = 0, 0.0, None
+    main_ivs: list = []           # (impr, clicks) cua tung khoang snapshot khi main dang chay
+    main_baseline = None
+    main_frozen = False
+    released = release_at is None
     ai = 0
-    expect_since = None           # luc action ok gan nhat: hash doi dau tien sau do la cua action
+    expect_left = None            # con bao nhieu snapshot co hash trong cua so cho action
     cand_hash, cand_count, cand_first = None, 0, None
 
+    def leave_main() -> None:
+        nonlocal main_baseline, main_frozen
+        if variant == "main" and not main_frozen:
+            last = main_ivs[-MAIN_BASELINE_IVS:]
+            n = sum(x[0] for x in last)
+            c = sum(x[1] for x in last)
+            main_baseline = (n, c / n if n > 0 else 0.0)
+            main_frozen = True
+
     def apply(at, act) -> bool:
-        nonlocal variant, before_last, swaps, reverts, last_swap, expect_since
+        nonlocal variant, before_last, swaps, reverts, last_swap, expect_left
         to = act["to_variant"]
         if to == variant:           # action trung lap: khong doi gi
             return False
@@ -87,19 +107,34 @@ def _build_one(snaps: list, acts: list, feature_variants: set, pending: bool,
         elif to in ALTS:
             swaps += 1
         used.add(to)
-        before_last, variant, last_swap, expect_since = variant, to, at, at
+        leave_main()
+        before_last, variant, last_swap, expect_left = variant, to, at, EXPECT_SNAPS
         return True
 
     for s in snaps:
         t = parse_utc(s["captured_at_utc"])
         h = s.get("thumb_hash") or None
+        rounded = bool(s.get("impr_rounded"))
+        impr = s["impressions"]
+        clicks = (s.get("ctr") or 0.0) * impr
         switched = False
         while ai < len(acts) and acts[ai][0] <= t:
             switched = apply(*acts[ai]) or switched
             ai += 1
         if switched:
-            impr_last = s["impressions"]
+            impr_last = impr
+        if not released and t >= release_at:
+            released = True
+            if variant == "manual":
+                # Chu kenh tha video: tu luc nay coi nhu main, so lieu dem lai tu dau.
+                variant, manual_until, stats = "main", None, {}
+                main_ivs, main_baseline, main_frozen = [], None, False
+                expect_left, cand_hash, cand_count = None, None, 0
+                prev_hash = h or prev_hash
+                prev_impr, prev_clicks = (None, 0.0) if rounded else (impr, clicks)
+                continue
         if h:
+            in_window = expect_left is not None
             if prev_hash is None or h == prev_hash:
                 prev_hash, cand_hash, cand_count = prev_hash or h, None, 0
             else:
@@ -109,31 +144,37 @@ def _build_one(snaps: list, acts: list, feature_variants: set, pending: bool,
                 else:
                     cand_hash, cand_count, cand_first = h, 1, t
                 if cand_count >= 2:
-                    ours = expect_since is not None and cand_first - expect_since <= timedelta(hours=EXPECT_H)
-                    if ours:
-                        expect_since = None
+                    if in_window:
+                        expect_left = None      # thay doi nay la cua action
                     else:
+                        leave_main()
                         variant = "manual"
                         manual_until = cand_first + timedelta(days=MANUAL_PAUSE_D)
                     prev_hash, cand_hash, cand_count = h, None, 0
-        # The 24 h window is keyed to the FIRST sighting of a pending new hash (not to the confirming snapshot):
-        # a hash first seen at 23 h and confirmed at 25 h still belongs to the action. Expire only after `ours`.
-        if expect_since is not None:
-            ref = cand_first if (cand_hash is not None and cand_first is not None) else t
-            if ref - expect_since > timedelta(hours=EXPECT_H):
-                expect_since = None
-        impr = s["impressions"]
-        clicks = (s.get("ctr") or 0.0) * impr
+            if expect_left is not None:
+                expect_left -= 1
+                if expect_left <= 0:
+                    expect_left = None
+        # Dong lam tron ("1.2K") khong vao delta: khoang ke tiep tinh tu dong chinh xac truoc do.
+        if rounded:
+            continue
+        if prev_impr is None:
+            prev_impr, prev_clicks = impr, clicks
+            continue
         # Khoang giua hai snapshot ma action roi vao giua duoc tinh cho bien the MOI, co chu y:
         # VPS thuc hien ngay sau mot lan chup, nen khoang do gan nhu toan bo la thumbnail moi.
         if impr > prev_impr:
+            dn, dc = impr - prev_impr, max(0.0, clicks - prev_clicks)
             cur = stats.setdefault(variant, [0, 0.0])
-            cur[0] += impr - prev_impr
-            cur[1] += max(0.0, clicks - prev_clicks)
+            cur[0] += dn
+            cur[1] += dc
+            # Khoang dau tinh tu 0 luc dang (video moi: snapshot dau chi vai gio sau khi dang).
+            if variant == "main" and not main_frozen:
+                main_ivs.append((dn, dc))
         prev_impr, prev_clicks = impr, clicks
     while ai < len(acts):           # action done luon dung, ke ca at_utc sau `now` (lech dong ho)
         if apply(*acts[ai]):
-            impr_last = prev_impr
+            impr_last = prev_impr or 0
         ai += 1
     return VideoState(
         variant=variant, swaps=swaps, reverts=reverts, last_swap_utc=last_swap,
@@ -141,14 +182,17 @@ def _build_one(snaps: list, acts: list, feature_variants: set, pending: bool,
         variant_stats={v: (n, c / n) for v, (n, c) in stats.items() if n > 0},
         manual_until=manual_until,
         alts_left=[v for v in ALTS if v in feature_variants and v not in used],
-        pending_action=pending)
+        pending_action=pending,
+        main_baseline=main_baseline)
 
 
 def build_states(snapshots: list, actions: list, features: list, now: datetime,
-                 bases: dict | None = None, pending=()) -> dict:
-    """video_id -> VideoState. `bases` = video_id -> base (upload-history), `pending` = ten file cho."""
+                 bases: dict | None = None, pending=(), released: dict | None = None) -> dict:
+    """video_id -> VideoState. `bases` = video_id -> base (upload-history), `pending` = ten file cho,
+    `released` = video_id -> luc chu kenh tha video manual (config release_manual)."""
     now = aware(now)
     bases = bases or {}
+    released = released or {}
     fvars: dict = {}
     for f in features:
         fvars.setdefault(f.get("base"), set()).add(f.get("variant"))
@@ -157,5 +201,5 @@ def build_states(snapshots: list, actions: list, features: list, now: datetime,
     for vid, snaps in since_published(snapshots).items():
         has_pending = any(str(n).startswith(vid + "__") for n in pending)
         out[vid] = _build_one(snaps, done.get(vid, []), fvars.get(bases.get(vid), set()),
-                              has_pending, now)
+                              has_pending, now, released.get(vid))
     return out

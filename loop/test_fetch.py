@@ -2,6 +2,8 @@
 
 Chay tu goc repo:  python -m unittest loop.test_fetch -v
 """
+import contextlib
+import io
 import json
 import sys
 import tempfile
@@ -188,10 +190,12 @@ class FetchTest(unittest.TestCase):
         cfg.write_text(json.dumps({"studio_folder_id": "STUDIO1", "channel": "Bare Skull"}),
                        encoding="utf-8")
         import youtube_uploader as yu
-        with mock.patch.object(yu, "get_credentials"), \
+        with mock.patch("google_creds.load_creds", return_value="CREDS"), \
+                mock.patch.object(yu, "get_credentials", side_effect=AssertionError("interactive")), \
                 mock.patch("googleapiclient.discovery.build", return_value="DRIVE"), \
                 mock.patch.object(yu, "resolve_folders", side_effect=AssertionError("no")), \
-                mock.patch.object(lf, "fetch", return_value={"health_status": "PASS"}) as fe:
+                mock.patch.object(lf, "fetch", return_value={"health_status": "PASS"}) as fe, \
+                contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(lf.main(["--config", str(cfg), "--cache", str(self.cache)]), 0)
         fe.assert_called_once_with("DRIVE", None, self.cache, studio_id="STUDIO1")
 
@@ -199,10 +203,37 @@ class FetchTest(unittest.TestCase):
         cfg = Path(self.tmp.name) / "c.json"
         cfg.write_text(json.dumps({"channel": "Bare Skull"}), encoding="utf-8")
         import youtube_uploader as yu
-        with mock.patch.object(yu, "get_credentials"), \
+        with mock.patch("google_creds.load_creds", return_value="CREDS"), \
                 mock.patch("googleapiclient.discovery.build", return_value="DRIVE"), \
-                mock.patch.object(yu, "resolve_folders", side_effect=AssertionError("no")):
+                mock.patch.object(yu, "resolve_folders", side_effect=AssertionError("no")), \
+                contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(lf.main(["--config", str(cfg), "--cache", str(self.cache)]), 2)
+
+    def test_bad_token_exits_3_never_prompts_one_telegram_a_day(self):
+        # I6b: the PC loader is non-interactive; a broken token is a clear exit 3 and one Telegram a day
+        import youtube_uploader as yu
+        from loop import analyse as an
+        cfg = Path(self.tmp.name) / "c.json"
+        cfg.write_text(json.dumps({"studio_folder_id": "STUDIO1"}), encoding="utf-8")
+        tok = Path(self.tmp.name) / "token-drive-link.json"
+        tok.write_text("{not json", encoding="utf-8")
+        sent = []
+        no_prompt = AssertionError("OAuth browser flow must never start")
+        with mock.patch.object(yu, "get_credentials", side_effect=no_prompt), \
+                mock.patch.object(yu.InstalledAppFlow, "from_client_secrets_file", side_effect=no_prompt), \
+                mock.patch.object(yu, "notify", sent.append), mock.patch.object(an, "notify", sent.append):
+            for _ in range(2):
+                err = io.StringIO()
+                with contextlib.redirect_stderr(err):
+                    rc = lf.main(["--config", str(cfg), "--cache", str(self.cache), "--token-drive", str(tok)])
+                self.assertEqual(rc, 3)
+                self.assertIn("Drive token on this PC cannot be used without a sign-in", err.getvalue())
+                with contextlib.redirect_stderr(io.StringIO()):
+                    rc = an.main(["--config", str(cfg), "--cache", str(self.cache), "--token-drive", str(tok)])
+                self.assertEqual(rc, 3)
+        self.assertEqual(len(sent), 2)              # fetch once, analyse once, for the day
+        self.assertTrue(all("exit code 3" in m and "token-drive-link.json" in m for m in sent))
+        self.assertEqual(tok.read_text(encoding="utf-8"), "{not json")   # never rewritten
 
     def test_health_ok_values(self):
         for s in ("PASS", "pass", "ok", "OK"):

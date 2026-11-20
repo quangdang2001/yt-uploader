@@ -8,7 +8,7 @@ import json
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -97,12 +97,17 @@ class BuildStatesTest(unittest.TestCase):
         self.assertEqual(st.variant, "alt1")
         self.assertIsNone(st.manual_until)
 
-    def test_hash_first_seen_after_24h_is_manual(self):
+    def test_change_after_three_unchanged_snapshots_is_manual(self):
+        # the window counts snapshots, not hours: three unchanged readings after the action close it
         snaps = [snap("v1", "2026-11-19T10:00:00Z", 30, 1000, 0.04),
-                 snap("v1", "2026-11-20T12:00:00Z", 56, 3000, 0.04, h="h1"),
-                 snap("v1", "2026-11-20T14:00:00Z", 58, 3500, 0.04, h="h1")]
+                 snap("v1", "2026-11-19T12:00:00Z", 32, 1500, 0.04),
+                 snap("v1", "2026-11-19T14:00:00Z", 34, 2000, 0.04),
+                 snap("v1", "2026-11-19T16:00:00Z", 36, 2500, 0.04),
+                 snap("v1", "2026-11-19T18:00:00Z", 38, 3000, 0.04, h="h1"),
+                 snap("v1", "2026-11-19T20:00:00Z", 40, 3500, 0.04, h="h1")]
         st = an.build_states(snaps, [done("v1", "alt1", "main", "2026-11-19T11:00:00Z")], [], self.NOW)["v1"]
         self.assertEqual(st.variant, "manual")
+        self.assertEqual(st.manual_until, utc("2026-11-26T18:00:00Z"))
 
     def test_revert_counted_and_pending(self):
         snaps = [snap("v1", "2026-11-18T10:00:00Z", 10, 1000, 0.04),
@@ -133,13 +138,16 @@ class HashTimelineTest(unittest.TestCase):
         self.assertEqual(st.variant, "alt1")
         self.assertIsNone(st.manual_until)
 
-    def test_expectation_lapses_after_24h(self):
+    def test_expectation_lapses_after_three_snapshots(self):
+        # first sighting in the 3rd snapshot after the action, confirmed in the 4th: outside the window
         snaps = [snap("v1", "2026-11-19T10:00:00Z", 10, 1000, 0.04),
-                 snap("v1", "2026-11-20T14:00:00Z", 38, 3000, 0.04, h="h1"),
-                 snap("v1", "2026-11-20T16:00:00Z", 40, 4000, 0.04, h="h1")]
+                 snap("v1", "2026-11-19T12:00:00Z", 12, 1500, 0.04),
+                 snap("v1", "2026-11-19T14:00:00Z", 14, 2000, 0.04),
+                 snap("v1", "2026-11-19T16:00:00Z", 16, 3000, 0.04, h="h1"),
+                 snap("v1", "2026-11-19T18:00:00Z", 18, 4000, 0.04, h="h1")]
         st = self.states(snaps, [done("v1", "alt1", "main", "2026-11-19T11:00:00Z")])
         self.assertEqual(st.variant, "manual")
-        self.assertEqual(st.manual_until, utc("2026-11-27T14:00:00Z"))  # tu lan thay dau tien
+        self.assertEqual(st.manual_until, utc("2026-11-26T16:00:00Z"))  # tu lan thay dau tien
 
     def test_one_snapshot_blip_is_not_manual(self):
         snaps = [snap("v1", "2026-11-19T10:00:00Z", 10, 1000, 0.04),
@@ -251,7 +259,8 @@ class AnalyseTest(unittest.TestCase):
         cfg = Path(self.tmp.name) / "c.json"
         cfg.write_text(json.dumps({"studio_folder_id": "STUDIO1"}), encoding="utf-8")
         seen = {}
-        with mock.patch.object(an.yu, "get_credentials"), \
+        with mock.patch("google_creds.load_creds", return_value="CREDS"), \
+                mock.patch.object(an.yu, "get_credentials", side_effect=AssertionError("interactive")), \
                 mock.patch("googleapiclient.discovery.build", return_value="DRIVE"), \
                 mock.patch.object(an.yu, "resolve_folders", side_effect=AssertionError("no")), \
                 mock.patch.object(an.ss, "studio_folders_by_id", return_value={"studio": "STUDIO1"}) as by_id, \
@@ -263,8 +272,19 @@ class AnalyseTest(unittest.TestCase):
     def test_main_without_id_or_channel_exits_2(self):
         cfg = Path(self.tmp.name) / "c.json"
         cfg.write_text(json.dumps({"channel": "Bare Skull"}), encoding="utf-8")
-        with mock.patch.object(an.yu, "resolve_folders", side_effect=AssertionError("no")):
+        with mock.patch.object(an.yu, "resolve_folders", side_effect=AssertionError("no")), \
+                contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(an.main(["--config", str(cfg), "--cache", str(self.cache)]), 2)
+
+    def test_config_example_is_alert_only_forever(self):
+        ex = json.loads((Path(an.__file__).parent / "config.example.json").read_text(encoding="utf-8"))
+        self.assertEqual(ex["go_live"], "")
+        self.assertEqual(ex["release_manual"], [])
+        self.assertTrue(an.alert_only(ex, utc("2030-01-01T00:00:00Z")))
+        self.low_video()
+        self.cfg.update(go_live=ex["go_live"])
+        self.run_an()
+        self.assertEqual(self.pending_files(), [])
 
     def test_missing_go_live_is_alert_only(self):
         del self.cfg["go_live"]
@@ -318,7 +338,9 @@ class AnalyseTest(unittest.TestCase):
         snap_ = snap("v1", "2026-11-19T10:00:00Z", 40, 11000, 0.05)
         verdict, _ = decide(snap_, st, 0.053, self.NOW, None, None)
         self.assertNotEqual(verdict, Verdict.REVERT)
-        st.variant_stats["main"] = (4000, 0.06)
+        st.variant_stats["main"] = (4000, 0.06)     # lifetime totals: never the revert comparison (I4c)
+        self.assertIsNone(an._revert_target(st))
+        st.main_baseline = (4000, 0.06)
         self.assertEqual(an._revert_target(st), "main")
 
     def test_failed_request_not_repeated_within_24h(self):
@@ -364,20 +386,195 @@ class AnalyseTest(unittest.TestCase):
         msgs = [c.args[0] for c in self.notify.call_args_list if "missing" in c.args[0]]
         self.assertEqual(len(msgs), 2)
 
-    def test_notify_once_per_verdict_change(self):
-        self.low_video()
-        n = self.notify
-        self.run_an()
-        self.assertEqual(n.call_count, 1)
-        self.run_an()
-        self.assertEqual(n.call_count, 1)
-        self.snaps = [snap("v1", "2026-11-19T11:00:00Z", 31, 7000, 0.07)]
+    def not_first_run(self):
+        self.cache.mkdir(parents=True, exist_ok=True)
+        (self.cache / an.LAST_VERDICTS).write_text("{}", encoding="utf-8")
+
+    def msgs(self, word=""):
+        return [c.args[0] for c in self.notify.call_args_list if word in c.args[0]]
+
+    # -- I7: no floods
+
+    def test_first_run_sends_one_digest(self):
+        self.cfg["go_live"] = "2026-11-17"          # alert-only
+        self.snaps = [snap("v1", "2026-11-19T10:00:00Z", 30, 6000, 0.03),
+                      snap("v2", "2026-11-19T10:00:00Z", 30, 6000, 0.03),
+                      snap("v3", "2026-11-19T10:00:00Z", 30, 6000, 0.07)]
         self.write()
         self.run_an()
-        self.assertEqual(n.call_count, 1)  # KEEP khong bao
+        self.assertEqual(self.msgs(), ["Studio loop started: 3 videos, 1 KEEP, 2 CHANGE_TITLE"])
+        self.run_an()                                # 2nd run: already covered by the digest
+        self.assertEqual(len(self.msgs()), 1)
+
+    def test_verdict_alert_needs_two_runs_and_24h_gap(self):
+        self.cfg["go_live"] = "2026-11-17"          # alert-only: "would swap"
+        self.not_first_run()
         self.low_video()
         self.run_an()
-        self.assertEqual(n.call_count, 2)  # SWAP lai sau khi doi
+        self.assertEqual(self.msgs(), [])           # held for one run only
+        self.run_an()
+        self.assertEqual(len(self.msgs("SWAP")), 1)
+        self.assertIn("would swap to alt1", self.msgs("SWAP")[0])
+        self.run_an()
+        self.assertEqual(len(self.msgs("SWAP")), 1)  # once per streak
+        self.snaps = [snap("v1", "2026-11-19T11:00:00Z", 31, 7000, 0.07)]
+        self.write()
+        self.run_an()                                # KEEP: never alerted
+        self.low_video()
+        self.run_an()
+        self.run_an()
+        self.assertEqual(len(self.msgs("SWAP")), 1)  # held 2 runs again, but SWAP alerted < 24 h ago
+        self.run_an(now=utc("2026-11-20T12:30:00Z"))
+        self.assertEqual(len(self.msgs("SWAP")), 2)  # 24 h later, still holding: one more
+
+    def test_live_swap_alerts_when_request_written(self):
+        self.not_first_run()
+        self.low_video()
+        self.run_an()
+        self.assertEqual(len(self.pending_files()), 1)
+        self.assertEqual(len(self.msgs("SWAP")), 1)
+        self.assertIn("swap to alt1", self.msgs("SWAP")[0])
+
+    def test_health_alert_on_change_and_daily_reminder(self):
+        self.not_first_run()
+        self.low_video()
+        self.health = {"status": "FAIL read", "detail": "v9: timeout"}
+        self.write()
+        for hour in (12, 14, 16):
+            self.run_an(now=utc("2026-11-19T%02d:00:00Z" % hour))
+        self.assertEqual(len(self.msgs("health")), 1)
+        self.run_an(now=utc("2026-11-20T12:00:00Z"))   # next local day, still failing: one reminder
+        self.assertEqual(len(self.msgs("health")), 2)
+        self.health = {"status": "FAIL auth", "detail": "signin"}
+        self.write()
+        self.run_an(now=utc("2026-11-20T13:00:00Z"))   # status changed: alert now
+        self.assertEqual(len(self.msgs("health")), 3)
+        self.assertIn("FAIL auth", self.msgs("health")[-1])
+        self.health = {"status": "PASS"}
+        self.write()
+        self.run_an(now=utc("2026-11-20T14:00:00Z"))
+        self.run_an(now=utc("2026-11-20T16:00:00Z"))
+        self.assertEqual(self.msgs("health")[3:], ["Studio loop health: PASS (was FAIL auth)"])
+
+    # -- I6a: the loop never stops silently
+
+    def test_stale_snapshots_alert_once_per_day_and_top_of_report(self):
+        self.not_first_run()
+        self.low_video()                              # newest snapshot 2026-11-19T10:00Z
+        late = utc("2026-11-20T12:30:00Z")            # 26.5 h later
+        self.run_an(now=late)
+        line = "Studio loop: no fresh data from the VPS since 2026-11-19T10:00:00Z"
+        self.assertEqual(self.msgs("no fresh data"), [line])
+        rep = self.report(late).splitlines()
+        self.assertEqual(rep[2], line)
+        self.assertLess(rep.index(line), rep.index("Health: ok"))
+        self.run_an(now=utc("2026-11-20T14:30:00Z"))  # same local day: no second alert
+        self.assertEqual(len(self.msgs("no fresh data")), 1)
+        self.run_an(now=utc("2026-11-21T12:30:00Z"))  # next local day
+        self.assertEqual(len(self.msgs("no fresh data")), 2)
+
+    def test_stale_health_alert(self):
+        self.not_first_run()
+        self.low_video()
+        self.health = {"status": "PASS", "at_utc": "2026-11-19T08:30:00Z"}   # 3.5 h before NOW
+        self.write()
+        self.run_an()
+        self.assertEqual(self.msgs("no fresh data"),
+                         ["Studio loop: no fresh data from the VPS since 2026-11-19T08:30:00Z"])
+        self.health = {"status": "PASS", "at_utc": "2026-11-19T09:30:00Z"}   # 2.5 h: fresh
+        self.write()
+        (self.cache / an.LAST_VERDICTS).write_text("{}", encoding="utf-8")
+        self.run_an()
+        self.assertEqual(len(self.msgs("no fresh data")), 1)
+        self.assertNotIn("no fresh data", self.report())
+
+    # -- C2: the owner's thumbnail is never overridden
+
+    def manual_video(self):
+        t0 = utc("2026-11-01T06:10:00Z")
+
+        def at(k, h, impr, ctr):
+            return snap("v1", (t0 + timedelta(days=k)).strftime("%Y-%m-%dT%H:%M:%SZ"), 100 + 24 * k, impr, ctr, h=h)
+        self.snaps = [at(0, "A", 20000, 0.06), at(1, "A", 30000, 0.06), at(2, "M", 31000, 0.058),
+                      at(3, "M", 32000, 0.0565)]
+        self.snaps += [at(k, "M", 32000 + 1000 * (k - 3), 0.0565 - 0.0012 * (k - 3)) for k in range(4, 14)]
+        self.feats = [feat("gunA", "main"), feat("gunA", "alt1")]
+        self.hist = [("v1", "gunA")]
+        self.write()
+        return at
+
+    def test_manual_video_never_gets_a_request_after_pause(self):
+        self.not_first_run()
+        self.manual_video()
+        now = utc("2026-11-14T08:00:00Z")            # pause ended 11-10
+        rows = self.run_an(now=now)
+        self.assertEqual((rows[0]["variant"], rows[0]["verdict"]), ("manual", "REVERT"))
+        self.assertTrue(rows[0]["reason"].endswith("(manual - alert only)"), rows[0]["reason"])
+        self.assertEqual(self.pending_files(), [])
+        self.run_an(now=now + timedelta(hours=2))
+        self.assertEqual(self.pending_files(), [])
+
+    def test_release_manual_treats_video_as_main_with_fresh_stats(self):
+        self.not_first_run()
+        at = self.manual_video()
+        now = utc("2026-11-14T08:00:00Z")
+        self.cfg["release_manual"] = ["v1"]
+        rows = self.run_an(now=now)                   # release recorded now; no snapshot after it yet
+        self.assertEqual(rows[0]["variant"], "manual")
+        saved = json.loads((self.cache / an.LAST_VERDICTS).read_text(encoding="utf-8"))
+        self.assertEqual(saved["released"], {"v1": "2026-11-14T08:00:00Z"})
+        self.assertEqual(self.pending_files(), [])
+        # later readings: 42,000 at 4.45% when released, then 4,000 more at 3.0% (cumulative 4.34%)
+        self.snaps += [at(13.1, "M", 42000, 0.0445), at(14, "M", 46000, (42000 * 0.0445 + 120) / 46000)]
+        self.write()
+        later = utc("2026-11-15T08:00:00Z")
+        rows = self.run_an(now=later)
+        st = an.build_states(an.lf.load_snapshots(self.cache), [], self.feats, later, bases={"v1": "gunA"},
+                             released={"v1": now})["v1"]
+        self.assertEqual(st.variant, "main")
+        self.assertIsNone(st.manual_until)
+        self.assertEqual(set(st.variant_stats), {"main"})
+        self.assertEqual(st.variant_stats["main"][0], 4000)
+        self.assertAlmostEqual(st.variant_stats["main"][1], 0.03)
+        self.assertEqual(rows[0]["verdict"], "SWAP")
+        self.assertNotIn("manual", rows[0]["reason"])
+        self.assertEqual(len(self.pending_files()), 1)
+        # the release time is kept across runs, and dropping the id forgets it
+        saved = json.loads((self.cache / an.LAST_VERDICTS).read_text(encoding="utf-8"))
+        self.assertEqual(saved["released"], {"v1": "2026-11-14T08:00:00Z"})
+        self.cfg["release_manual"] = []
+        self.run_an(now=later + timedelta(hours=1))
+        saved = json.loads((self.cache / an.LAST_VERDICTS).read_text(encoding="utf-8"))
+        self.assertEqual(saved["released"], {})
+
+    # -- I8: NOT_PACKAGING peers at the same age
+
+    def peers(self, ages):
+        self.snaps = [snap("s", "2026-11-19T10:00:00Z", 30, 2500, 0.06)]
+        for i, (age, impr) in enumerate(ages):
+            self.snaps += [snap("p%d" % i, "2026-11-10T10:00:00Z", age, impr, 0.06),
+                           snap("p%d" % i, "2026-11-19T09:00:00Z", 300, 200000, 0.06)]
+        self.write()
+        return {r["video_id"]: r for r in self.run_an()}
+
+    def test_not_packaging_uses_peer_snapshot_at_same_age(self):
+        rows = self.peers([(30, 10000), (34, 12000), (26, 9000)])
+        self.assertEqual(rows["s"]["verdict"], "NOT_PACKAGING")
+        self.assertIn("typical 10,000 impr", rows["s"]["reason"])
+
+    def test_not_packaging_skips_peers_without_a_snapshot_near_that_age(self):
+        rows = self.peers([(30, 10000), (34, 12000), (38, 9000)])    # 38 > 30 x 1.25
+        self.assertNotEqual(rows["s"]["verdict"], "NOT_PACKAGING")
+        self.assertIsNone(an._peer_typical_impr("s", 30, {"a": [{"age_hours": 37.6, "impressions": 1}]}))
+
+    # -- m5
+
+    def test_report_counts_rows_not_since_published(self):
+        self.low_video()
+        self.snaps.append(snap("v1", "2026-11-19T10:00:00Z", 30, 9, 0.5, period="last_48h"))
+        self.write()
+        self.run_an()
+        self.assertIn("Snapshot rows not since_published (not used): 1", self.report())
 
     def test_health_fail_auth_reported_first(self):
         self.health = {"status": "fail_auth", "detail": "token expired"}

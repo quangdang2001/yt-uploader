@@ -16,6 +16,8 @@ Moi loi co mot test rieng ben duoi, danh dau ro.
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import logging
 import sys
@@ -432,7 +434,7 @@ class TestOnSuccessArg(unittest.TestCase):
             self.assertEqual(args.on_success, mode)
 
     def test_tu_choi_gia_tri_la(self):
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             yu.parse_args(["--channel", "k", "--on-success", "xoa-het"])
 
 
@@ -462,11 +464,12 @@ class TestMaxPerRun(Base):
     def test_tu_choi_0_va_so_am(self):
         """items[:0] im lang khong lam gi; items[:-1] xu ly gan het — ca hai sai."""
         for bad in ("0", "-1", "-3"):
-            with self.subTest(bad=bad), self.assertRaises(SystemExit):
+            with self.subTest(bad=bad), self.assertRaises(SystemExit), \
+                    contextlib.redirect_stderr(io.StringIO()):
                 yu.parse_args(["--channel", "k", "--max-per-run", bad])
 
     def test_tu_choi_gia_tri_khong_phai_so(self):
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             yu.parse_args(["--channel", "k", "--max-per-run", "abc"])
 
     def test_van_dat_duoc_gia_tri_lon_hon(self):

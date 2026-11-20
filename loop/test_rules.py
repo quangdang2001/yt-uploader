@@ -59,10 +59,90 @@ class RulesTest(unittest.TestCase):
     def test_revert(self):
         st = state(variant="alt1", swaps=1, last_swap_utc=NOW - timedelta(hours=30),
                    impr_at_last_swap=5000, alts_left=["alt2"],
-                   variant_stats={"main": (5000, 0.052), "alt1": (2500, 0.030)})
+                   variant_stats={"main": (5000, 0.052), "alt1": (2500, 0.030)},
+                   main_baseline=(5000, 0.052))
         self.assertEqual(run(snap(ctr=0.030, impr=7500), st)[0], Verdict.REVERT)
-        st.reverts = 1
-        self.assertEqual(run(snap(ctr=0.030, impr=7500), st)[0], Verdict.SWAP)
+        st.reverts = 1      # I5: after the one revert, no more swaps even with alt2 left
+        v, reason = run(snap(ctr=0.030, impr=7500), st)
+        self.assertEqual(v, Verdict.CHANGE_TITLE)
+        self.assertIn("no swap left", reason)
+
+    # -- C1: the owner's Test & Compare wins
+
+    def test_test_running_blocks_revert(self):
+        st = state(variant="alt1", swaps=1, last_swap_utc=NOW - timedelta(hours=30),
+                   impr_at_last_swap=5000, alts_left=["alt2"],
+                   variant_stats={"alt1": (2500, 0.030)}, main_baseline=(5000, 0.052))
+        self.assertEqual(run(snap(ctr=0.030, impr=7500), st)[0], Verdict.REVERT)
+        self.assertEqual(run(snap(ctr=0.030, impr=7500, running=True), st), (Verdict.WATCH, "test running"))
+
+    def test_test_running_blocks_swap(self):
+        self.assertEqual(run(snap(), state())[0], Verdict.SWAP)
+        self.assertEqual(run(snap(running=True), state()), (Verdict.WATCH, "test running"))
+
+    # -- C2: the owner's thumbnail is judged for the report only
+
+    def test_manual_after_pause_is_alert_only(self):
+        st = state(variant="manual", manual_until=NOW - timedelta(seconds=1), alts_left=["alt1"],
+                   variant_stats={"manual": (2500, 0.030)}, main_baseline=(5000, 0.052))
+        v, reason = run(snap(ctr=0.030, impr=7500), st)
+        self.assertEqual(v, Verdict.REVERT)                 # computed as usual, for the report
+        self.assertTrue(reason.endswith(" (manual - alert only)"), reason)
+        st.variant_stats = {"manual": (7500, 0.060)}
+        v, reason = run(snap(ctr=0.060, impr=7500), st)
+        self.assertEqual(v, Verdict.KEEP)
+        self.assertTrue(reason.endswith(" (manual - alert only)"), reason)
+        st.manual_until = NOW + timedelta(days=1)
+        v, reason = run(snap(ctr=0.030, impr=7500), st)
+        self.assertEqual(v, Verdict.PAUSED)
+        self.assertNotIn("alert only", reason)
+
+    # -- I4: noise
+
+    def test_swap_interval_widened_by_display_step(self):
+        self.assertEqual(rules.CTR_DISPLAY_HALF_STEP, 0.0005)
+        # Wilson hi of 4.70% at 4,000 is 5.282%: under the 5.3% bar, but not by half a display step
+        self.assertLess(ctr_interval(0.047, 4000)[1], 0.053)
+        self.assertEqual(run(snap(ctr=0.047, impr=4000), state())[0], Verdict.WATCH)
+        self.assertEqual(run(snap(ctr=0.046, impr=4000), state())[0], Verdict.SWAP)
+
+    def test_revert_interval_widened_by_display_step(self):
+        st = state(variant="alt1", swaps=1, last_swap_utc=NOW - timedelta(hours=30), impr_at_last_swap=5000,
+                   alts_left=["alt2"], variant_stats={"alt1": (5000, 0.0423), "alt2": (20000, 0.05)})
+        # raw intervals do not overlap (gap 0.03 pt), the widened ones do
+        self.assertLess(ctr_interval(0.0423, 5000)[1], ctr_interval(0.05, 20000)[0])
+        self.assertNotEqual(run(snap(ctr=0.045, impr=30000), st)[0], Verdict.REVERT)
+        st.variant_stats["alt1"] = (5000, 0.040)
+        self.assertEqual(run(snap(ctr=0.045, impr=30000), st)[0], Verdict.REVERT)
+
+    def test_revert_uses_main_baseline_not_lifetime(self):
+        # main's lifetime looks great, but its last 3 intervals before the swap hold too few impressions
+        st = state(variant="alt1", swaps=1, last_swap_utc=NOW - timedelta(hours=30), impr_at_last_swap=5000,
+                   alts_left=["alt2"], variant_stats={"main": (50000, 0.09), "alt1": (5000, 0.030)},
+                   main_baseline=(1999, 0.09))
+        self.assertEqual(rules.revert_candidates(st), {})
+        self.assertNotEqual(run(snap(ctr=0.030, impr=55000), st)[0], Verdict.REVERT)
+        st.main_baseline = (2000, 0.09)
+        self.assertEqual(run(snap(ctr=0.030, impr=55000), st)[0], Verdict.REVERT)
+        st.main_baseline = None
+        self.assertNotEqual(run(snap(ctr=0.030, impr=55000), st)[0], Verdict.REVERT)
+
+    # -- I5: one revert, then stop
+
+    def test_worst_alt2_reverts_to_best_not_change_title(self):
+        st = state(variant="alt2", swaps=2, reverts=0, last_swap_utc=NOW - timedelta(hours=30),
+                   impr_at_last_swap=30000, alts_left=[],
+                   variant_stats={"main": (20000, 0.045), "alt1": (8000, 0.048), "alt2": (5000, 0.020)},
+                   main_baseline=(6000, 0.045))
+        v, reason = run(snap(ctr=0.04, impr=40000, age=300), st)
+        self.assertEqual(v, Verdict.REVERT)
+        self.assertIn("below alt1", reason)
+        self.assertEqual(rules.revert_target(st), "alt1")
+
+    def test_no_swap_after_revert(self):
+        st = state(variant="main", swaps=1, reverts=1, last_swap_utc=NOW - timedelta(days=3),
+                   impr_at_last_swap=2000, alts_left=["alt2"])
+        self.assertEqual(run(snap(), st)[0], Verdict.CHANGE_TITLE)
 
     def test_change_title_after_alts(self):
         v, reason = run(snap(), state(swaps=2, alts_left=[]))
@@ -73,7 +153,7 @@ class RulesTest(unittest.TestCase):
 
     def test_manual_pause(self):
         st = state(variant="manual", manual_until=NOW + timedelta(days=3), alts_left=["alt1"],
-                   variant_stats={"main": (5000, 0.052), "manual": (2500, 0.030)})
+                   variant_stats={"main": (5000, 0.052), "manual": (2500, 0.030)}, main_baseline=(5000, 0.052))
         self.assertEqual(run(snap(ctr=0.030, impr=7500), st)[0], Verdict.PAUSED)
         st.manual_until = NOW - timedelta(seconds=1)
         self.assertEqual(run(snap(ctr=0.030, impr=7500), st)[0], Verdict.REVERT)

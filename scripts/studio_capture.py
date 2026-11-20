@@ -46,6 +46,7 @@ from pathlib import Path
 from googleapiclient.errors import HttpError
 
 import studio_actions as sa
+from google_creds import TokenError, load_creds  # noqa: F401  (sc.TokenError / sc.load_creds)
 import studio_browser as sb
 import studio_parse as sp
 import studio_store as ss
@@ -61,6 +62,8 @@ FRESH_HOURS = 72
 FRESH_EVERY = timedelta(hours=2)
 FRESH_SLACK = timedelta(minutes=10)    # bu cho jitter: 1 gio 50 van tinh la den han
 UPLOADS_CAP = 200
+VIDEOS_CACHE_TTL = timedelta(hours=6)  # danh sach video cong khai giu trong state 6 gio
+ALL_PARSE_FAILED = "all reads failed twice - possible challenge page"
 SHORTS_MAX_S = 60
 JITTER_S = 600
 PAUSE_S = (5, 15)
@@ -71,6 +74,7 @@ LOCK_STALE_S = 6 * 3600                # giong yu.Lock
 UPLOADER_MIDRUN_MIN_AGE_S = 60         # giua chung chi dung neu uploader da chay > 60 s
 THUMB_TIMEOUT_S = 20
 THUMB_URL = "https://i.ytimg.com/vi/{}/{}"
+THUMB_RENDITION = "hqdefault.jpg"      # mot ban co dinh cho moi video, moi lan
 VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,20}$")
 
 AUTH_MSG = "Studio sign-in needed on the VPS: run studio_spike.py --login"
@@ -232,42 +236,7 @@ def notify_daily(deps, state: dict, kind: str, message: str) -> None:
 
 
 # ---------------------------------------------------------------- token
-
-
-class TokenError(Exception):
-    """Token Google khong dung duoc ma khong can nguoi. drive: Drive da ket noi (neu co)."""
-
-    def __init__(self, message, drive=None):
-        super().__init__(message)
-        self.drive = drive
-
-
-def load_creds(token: Path, scopes: list, label: str):
-    """Doc token cua uploader; het han thi refresh TRONG BO NHO.
-
-    Khong bao gio ghi lai file token (uploader ghi no moi 5 phut) va khong bao gio
-    mo InstalledAppFlow (khong ai o VPS de dang nhap). Token hong / bi thu hoi
-    (RefreshError) -> TokenError. Loi mang khi refresh (TransportError) thi de nguyen:
-    do la loi API tam thoi, khong phai token can dang nhap lai."""
-    from google.auth.exceptions import RefreshError
-    from google.auth.transport.requests import Request
-    from google.oauth2.credentials import Credentials
-    token = Path(token)
-    if not token.exists():
-        raise TokenError(f"{label}: {token.name} missing")
-    try:
-        creds = Credentials.from_authorized_user_file(str(token), scopes)
-    except Exception as e:
-        raise TokenError(f"{label}: {token.name} unreadable ({type(e).__name__}: {e})") from e
-    if creds.valid:
-        return creds
-    if not (creds.expired and creds.refresh_token):
-        raise TokenError(f"{label}: token not valid and no refresh token")
-    try:
-        creds.refresh(Request())
-    except RefreshError as e:
-        raise TokenError(f"{label}: refresh failed ({type(e).__name__}: {e})") from e
-    return creds
+# TokenError / load_creds song o google_creds.py, dung chung voi loop/ tren may chu kenh.
 
 
 def connect(args):
@@ -382,24 +351,21 @@ def fetch_url(url: str) -> bytes:
 
 
 def thumb_hash(video_id: str, fetch=None) -> str | None:
-    """sha256 cua maxresdefault.jpg (404 -> hqdefault.jpg). Loi -> None, khong bao gio raise."""
+    """sha256 cua MOT ban co dinh, hqdefault.jpg (video nao cung co). Khong bao gio doi sang ban khac
+    (maxres xuat hien muon hon -> hash doi ma thumbnail khong doi -> "manual" gia). Loi -> None, khong raise."""
     fetch = fetch or fetch_url
-    for name in ("maxresdefault.jpg", "hqdefault.jpg"):
-        url = THUMB_URL.format(video_id, name)
-        try:
-            data = fetch(url)
-        except urllib.error.HTTPError as e:
-            code = e.code
-            e.close()
-            if code == 404:
-                continue
-            log.warning("  thumb %s: HTTP %s, thumb_hash de trong", video_id, code)
-            return None
-        except Exception as e:
-            log.warning("  thumb %s: %s, thumb_hash de trong", video_id, e)
-            return None
-        return hashlib.sha256(data).hexdigest()
-    return None
+    url = THUMB_URL.format(video_id, THUMB_RENDITION)
+    try:
+        data = fetch(url)
+    except urllib.error.HTTPError as e:
+        code = e.code
+        e.close()
+        log.warning("  thumb %s: HTTP %s, thumb_hash de trong", video_id, code)
+        return None
+    except Exception as e:
+        log.warning("  thumb %s: %s, thumb_hash de trong", video_id, e)
+        return None
+    return hashlib.sha256(data).hexdigest()
 
 
 # ---------------------------------------------------------------- phu thuoc
@@ -491,7 +457,7 @@ def _run_locked(args, deps: Deps) -> int:
             if not args.dry_run:
                 copy_history(drive, folders["channel"], sf)
                 if not args.no_actions:
-                    _run_actions(deps, drive, youtube, folders, ch)
+                    _run_actions(deps, drive, youtube, folders, ch, state, persist)
             return 3
         return _capture_phase(args, deps, state, persist, drive, youtube, folders, sf)
     except Exception as e:
@@ -539,10 +505,29 @@ def _token_failed(args, deps, state, persist, e: TokenError) -> int:
     return 3
 
 
+def cached_videos(youtube, state: dict, now: datetime, need: str | None = None) -> list[dict]:
+    """list_videos, giu trong state 6 gio (moi lan list ton ~9 don vi quota, chay moi 30 phut).
+    Lam moi som hon chi khi lan doc can mot video ma cache khong biet (--only <id>)."""
+    cache = state.get("videos_cache")
+    at = parse_time(cache.get("at_utc")) if isinstance(cache, dict) else None
+    known = None
+    if at is not None and timedelta(0) <= now - at < VIDEOS_CACHE_TTL:
+        try:
+            known = [dict(v, public_at=parse_time(v.get("public_at"))) for v in cache["videos"]]
+        except (KeyError, TypeError, AttributeError):
+            known = None
+    if known is not None and (need is None or any(v["video_id"] == need for v in known)):
+        return known
+    videos = list_videos(youtube)
+    state["videos_cache"] = {"at_utc": iso_z(now), "videos": [
+        dict(v, public_at=iso_z(v["public_at"]) if v.get("public_at") else None) for v in videos]}
+    return videos
+
+
 def _capture_phase(args, deps, state, persist, drive, youtube, folders, sf) -> int:
     ch = args.channel
     now = deps.now()
-    videos = list_videos(youtube)
+    videos = cached_videos(youtube, state, now, need=args.only)
     by_id = {v["video_id"]: v for v in videos}
     if args.only:
         if args.only not in by_id:
@@ -584,6 +569,18 @@ def _capture_phase(args, deps, state, persist, drive, youtube, folders, sf) -> i
             print(browser_error)
         return 4 if browser_error or any(nav for _, nav in failures.values()) else 0
 
+    # Moi video doc trong lan nay deu loi parse (khong doc duoc dong nao, khong loi dieu huong):
+    # hai lan chay lien tiep nhu vay thi coi nhu trang thu thach, giu nhu FAIL auth.
+    parse_hold = False
+    if not blocked and not browser_error and not rows and failures and \
+            not any(nav for _, nav in failures.values()):
+        n = int(state.get("parse_fail_runs", 0)) + 1
+        state["parse_fail_runs"] = n
+        if n >= 2:
+            blocked, parse_hold = ALL_PARSE_FAILED, True
+    elif rows:
+        state.pop("parse_fail_runs", None)
+
     # So sach video loi TRUOC khi ghi dong: neu ghi Drive loi (raise ra _run_locked ->
     # FAIL api, state van duoc luu) thi lan thu va dem loi cua lan nay khong bi mat.
     reached = []
@@ -593,7 +590,7 @@ def _capture_phase(args, deps, state, persist, drive, youtube, folders, sf) -> i
         state["last_attempt"][vid] = attempts[vid]
         if n == 2:
             reached.append(f"{vid} ({reason[:120]})")
-    if reached:
+    if reached and not parse_hold:      # tin dang nhap ben duoi da du
         deps.notify(f"[{ch}] Studio read failed twice in a row for {len(reached)} video(s): "
                     + "; ".join(reached))
 
@@ -611,6 +608,7 @@ def _capture_phase(args, deps, state, persist, drive, youtube, folders, sf) -> i
     if blocked:
         state["auth_blocked"] = {"at_utc": iso_z(deps.now()), "detail": blocked,
                                  "profile_stamp": profile_stamp(args.profile)}
+        state.pop("parse_fail_runs", None)
         persist()
         ss.write_health(drive, sf, "FAIL auth", blocked, len(rows), len(failures))
         deps.notify(AUTH_MSG)
@@ -630,7 +628,7 @@ def _capture_phase(args, deps, state, persist, drive, youtube, folders, sf) -> i
 
     copy_history(drive, folders["channel"], sf)
     if not args.no_actions:
-        _run_actions(deps, drive, youtube, folders, ch)
+        _run_actions(deps, drive, youtube, folders, ch, state, persist)
 
     return 4 if browser_error or any(nav for _, nav in failures.values()) else 0
 
@@ -736,22 +734,27 @@ def copy_history(drive, chan_folder: str, sf: dict) -> None:
         log.warning("Khong chep duoc %s vao studio/: %s", yu.HISTORY_NAME, e)
 
 
-def _run_actions(deps, drive, youtube, folders, ch) -> None:
-    """Bo thuc thi doi thumbnail. Loi o day khong doi exit code cua lan doc."""
+def _run_actions(deps, drive, youtube, folders, ch, state: dict, persist) -> None:
+    """Bo thuc thi doi thumbnail. Loi o day khong doi exit code cua lan doc.
+
+    Trang thai cua bo thuc thi (file da bao, ngay het quota, yeu cau da dat nhung chua chuyen)
+    nam trong state["actions"] cua .studio-state-<kenh>.json, nen "bao mot lan" dung qua nhieu lan chay."""
     alock = acquire_lock(actions_lock_path(deps.home, ch))
     if alock is None:
         log.info("studio_actions dang chay rieng, bo qua lan nay.")
         return
+    state["actions"] = sa.normalize_state(state.get("actions"))
     try:
         with tempfile.TemporaryDirectory(prefix="studiocap-") as td:
             ok, failed = deps.run_actions(drive, youtube, folders["channel"], folders["done"],
-                                          Path(td))
+                                          Path(td), state=state["actions"])
         log.info("Swap requests: %d ok, %d failed", ok, failed)
     except Exception as e:
         log.exception("Bo thuc thi doi thumbnail loi")
         deps.notify(f"[{ch}] Swap executor error: {type(e).__name__}: {e}")
     finally:
         release_lock(alock)
+        persist()
 
 
 # ---------------------------------------------------------------- CLI

@@ -333,6 +333,17 @@ class BrowserTest(unittest.TestCase):
         with self.assertRaises(sb.Blocked):
             sb.capture_tabs(page, "abc123")
 
+    def test_vietnamese_challenge_text_is_blocked(self):
+        import unicodedata
+        for text in ("Xác minh đó là bạn", "XÁC MINH DANH TÍNH", "Đăng nhập", "Tôi không phải là người máy",
+                     "Chúng tôi phát hiện hoạt động bất thường", "Lưu lượng truy cập bất thường"):
+            for form in ("NFC", "NFD"):         # a page can hand back decomposed accents
+                page = FakePage([[{"a": 1}]], text="Studio\n" + unicodedata.normalize(form, text))
+                with self.assertRaises(sb.Blocked, msg=f"{form} {text}"):
+                    sb.capture_tabs(page, "abc123")
+        self.assertEqual(sb.capture_tabs(FakePage([[{"a": 1}], []], text="Kênh của bạn - Số liệu phân tích"),
+                                         "abc123"), [{"a": 1}])
+
     def test_navigation_error_raises_nav_error(self):
         page = FakePage([])
 
@@ -388,6 +399,7 @@ class RunTest(unittest.TestCase):
         self.capture_plan = {}     # video_id -> list cua (payloads | Exception), lan luot
         self.browser_opened = 0
         self.actions_calls = []
+        self.actions_states = []
         self.actions_error = None
         self.thumb_error = None
 
@@ -406,8 +418,9 @@ class RunTest(unittest.TestCase):
             raise item
         return item
 
-    def fake_actions(self, drive, youtube, chan, done, tmpdir):
+    def fake_actions(self, drive, youtube, chan, done, tmpdir, state=None):
         self.actions_calls.append((chan, done))
+        self.actions_states.append(state)
         if self.actions_error:
             raise self.actions_error
         return 0, 0
@@ -536,19 +549,26 @@ class RunTest(unittest.TestCase):
         self.assertEqual(row["thumb_hash"], "")
         self.assertEqual(row["impressions"], "159")
 
-    def test_thumb_hash_falls_back_to_hq_on_404(self):
+    def test_thumb_hash_always_hqdefault(self):
+        # one fixed rendition: a maxres image appearing later can never flip the hash
         seen = []
 
         def fetch(url):
             seen.append(url)
-            if "maxresdefault" in url:
-                raise urllib.error.HTTPError(url, 404, "nf", {}, None)
-            return b"HQ"
-        h = sc.thumb_hash("abc", fetch)
-        self.assertEqual(seen, ["https://i.ytimg.com/vi/abc/maxresdefault.jpg",
-                                "https://i.ytimg.com/vi/abc/hqdefault.jpg"])
+            return b"MAX" if "maxres" in url else b"HQ"
         import hashlib
-        self.assertEqual(h, hashlib.sha256(b"HQ").hexdigest())
+        for _ in range(2):
+            self.assertEqual(sc.thumb_hash("abc", fetch), hashlib.sha256(b"HQ").hexdigest())
+        self.assertEqual(seen, ["https://i.ytimg.com/vi/abc/hqdefault.jpg"] * 2)
+        # the capture itself hashes that URL
+        self.thumb_urls = []
+        self.assertEqual(self.run_it(fetch_thumb=lambda url: self.thumb_urls.append(url) or b"HQ"), 0)
+        self.assertEqual(sorted(self.thumb_urls), ["https://i.ytimg.com/vi/vidA0000001/hqdefault.jpg",
+                                                   "https://i.ytimg.com/vi/vidB0000002/hqdefault.jpg"])
+
+        def missing(url):
+            raise urllib.error.HTTPError(url, 404, "nf", {}, None)
+        self.assertIsNone(sc.thumb_hash("abc", missing))       # no fallback to another rendition
 
         def bad(url):
             raise urllib.error.HTTPError(url, 500, "x", {}, None)
@@ -791,7 +811,7 @@ class RunTest(unittest.TestCase):
     def test_watchdog_during_run_frees_both_locks(self):
         exits = []
 
-        def actions_then_watchdog(drive, youtube, chan, done, tmpdir):
+        def actions_then_watchdog(drive, youtube, chan, done, tmpdir, state=None):
             self.assertTrue(sc.lock_path(self.home, CHANNEL).exists())
             self.assertTrue(sc.actions_lock_path(self.home, CHANNEL).exists())
             sc.watchdog_fire(self.sent.append, exit_fn=exits.append)
@@ -917,6 +937,7 @@ class RunTest(unittest.TestCase):
 
     def test_many_failures_one_message(self):
         bad = sp.ParseError("missing metric ctr")
+        self.yt.resources.append(resource("vidC0000003", published="2026-11-20T07:00:00Z"))  # reads fine
         self.capture_plan = {"vidB0000002": [bad, bad], "vidA0000001": [bad, bad]}
         self.run_it()
         self.assertEqual(self.sent, [])
@@ -926,6 +947,97 @@ class RunTest(unittest.TestCase):
         self.assertIn("vidB0000002", self.sent[0])
         self.assertIn("vidA0000001", self.sent[0])
         self.assertIn("2 video(s)", self.sent[0])
+
+    # -- I9: every read failing to parse, twice in a row, is a challenge page
+
+    def test_all_parse_failures_twice_is_auth_hold(self):
+        prof = self.home / "profile" / "Default"
+        prof.mkdir(parents=True)
+        (prof / "Cookies").write_bytes(b"x")
+        bad = sp.ParseError("missing metric ctr")
+        self.capture_plan = {"vidB0000002": [bad, bad, bad], "vidA0000001": [bad, bad, bad]}
+        self.assertEqual(self.run_it(), 0)
+        self.assertEqual(self.health()["status"], "FAIL read")
+        self.assertEqual(self.sent, [])
+        self.clock.t += timedelta(hours=2)
+        self.assertEqual(self.run_it(), 3)
+        h = self.health()
+        self.assertEqual((h["status"], h["detail"]), ("FAIL auth", "all reads failed twice - possible challenge page"))
+        self.assertEqual(self.sent, [sc.AUTH_MSG])           # the sign-in message only, no read-failure one
+        self.assertIn("auth_blocked", self.state())
+        # the existing auth hold applies: no Studio until the profile changes
+        self.clock.t += timedelta(hours=2)
+        self.captured.clear()
+        self.assertEqual(self.run_it(), 3)
+        self.assertEqual(self.captured, [])
+        self.assertEqual(self.sent, [sc.AUTH_MSG])
+
+    def test_parse_failures_with_one_good_read_are_not_auth(self):
+        bad = sp.ParseError("missing metric ctr")
+        self.capture_plan = {"vidB0000002": [bad, bad]}
+        self.run_it()
+        self.clock.t += timedelta(hours=2)
+        self.assertEqual(self.run_it(), 0)
+        self.assertEqual(self.health()["status"], "FAIL read")
+        self.assertNotIn("auth_blocked", self.state())
+
+    # -- I7d / m1: the executor's notify state lives in the state file
+
+    def test_executor_state_persists_across_runs(self):
+        f, sf = self.folders()
+        self.drive._add("b1.alt1.jpg", [sf["thumb_alts"]], "image/jpeg", b"ALT1")
+        req = {"video_id": "vid001", "base": "b1", "to_variant": "alt1", "from_variant": "main",
+               "reason": "t", "requested_utc": "2026-11-20T11:00:00Z"}
+        fid = self.drive._add("vid001__x.json", [sf["actions_pending"]], "application/json",
+                              json.dumps(req).encode())
+        sets = []
+        move_ok = [False]
+        real_move = ss.move_json
+
+        def move(drive, file_id, src, dest, obj):
+            if not move_ok[0]:
+                raise ConnectionResetError("drive reset")
+            return real_move(drive, file_id, src, dest, obj)
+        import studio_actions as sa
+        with mock.patch.object(yu, "set_thumbnail", lambda yt, v, p: sets.append(v)), \
+                mock.patch.object(yu, "download_to", lambda d, i, dest, label: Path(dest).write_bytes(b"x")), \
+                mock.patch.object(yu, "notify", self.sent.append), \
+                mock.patch.object(ss, "move_json", move), \
+                mock.patch.object(sa, "_now", self.clock.now):
+            for _ in range(3):
+                self.assertEqual(self.run_it(run_actions=sa.run_actions), 0)
+                self.clock.t += timedelta(hours=2)
+            self.assertEqual(sets, ["vid001"])                 # set once, never re-set
+            self.assertEqual(len([m for m in self.sent if "not moved" in m]), 1)   # one alert over 3 runs
+            self.assertIn(fid, self.state()["actions"]["applied"])
+            move_ok[0] = True
+            self.run_it(run_actions=sa.run_actions)
+        self.assertEqual(sets, ["vid001"])
+        self.assertEqual(self.drive.items[fid]["parents"], [sf["actions_done"]])
+        res = json.loads(self.drive.items[fid]["data"])["result"]
+        self.assertEqual((res["status"], res["at_utc"]), ("ok", "2026-11-20T12:00:05Z"))  # the real set time
+        self.assertEqual(self.state()["actions"]["applied"], {})
+
+    # -- m4: the video list is cached for 6 h
+
+    def channel_calls(self):
+        return sum(1 for kind, _ in self.yt.calls if kind == "channels")
+
+    def test_video_list_cached_6h(self):
+        self.run_it()
+        self.clock.t += timedelta(hours=2)
+        self.run_it()
+        self.assertEqual(self.channel_calls(), 1)
+        self.assertEqual(self.captured, ["vidB0000002", "vidA0000001"] * 2)
+        self.clock.t += timedelta(hours=4)                  # 6 h after the list was read
+        self.run_it()
+        self.assertEqual(self.channel_calls(), 2)
+        # a due check that needs a video the cache does not know refreshes at once
+        self.yt.resources.insert(0, resource("vidN0000009", published="2026-11-20T15:00:00Z"))
+        self.clock.t += timedelta(minutes=30)
+        self.assertEqual(self.run_it("--only", "vidN0000009"), 0)
+        self.assertEqual(self.channel_calls(), 3)
+        self.assertIn("vidN0000009", self.captured)
 
     def test_stops_after_three_consecutive_failures(self):
         ids = self.five_videos()
