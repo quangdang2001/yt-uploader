@@ -10,7 +10,7 @@ import re
 import time
 import unicodedata
 from contextlib import contextmanager
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 log = logging.getLogger("uploader.studio_browser")
 
@@ -202,7 +202,56 @@ def scroll_phase(page, clock=time.monotonic):
 
 
 def _open_tab(page, video_id, tab, settle_ms):
-    url = tab_url(video_id, tab)
+    _open_url(page, tab_url(video_id, tab), settle_ms)
+
+
+def channel_tab_urls(channel_id):
+    """{khoa: URL} cua cac tab phan tich KENH: 4 tab hub_* va 3 luong video cua tab Nghien cuu."""
+    import studio_channel as sch
+    base = f"https://studio.youtube.com/channel/{channel_id}/analytics/"
+    urls = {tab: base + tab for tab in sch.CHANNEL_TABS}
+    for key, feed in sch.RESEARCH_FEEDS.items():
+        f = json.dumps({"contentTypeFilter": "CONTENT_TYPE_FILTER_VIDEOS", "landingPageFeedType": feed},
+                       separators=(",", ":"))
+        urls[key] = base + "hub_research?filter=" + quote(f, safe="")
+    return urls
+
+
+def capture_channel(page, channel_id, settle_ms=SETTLE_MS):
+    """Mo tung tab phan tich kenh, cuon, tra ve ({khoa: [body JSON]}, {khoa: loi}).
+    Tab loi thi ghi vao dict loi va di tiep; Blocked (dang nhap/thu thach) thi dung ngay."""
+    out, errors = {}, {}
+    for key, url in channel_tab_urls(channel_id).items():
+        bodies = []
+
+        def on_response(resp, bodies=bodies):
+            try:
+                if resp.status != 200 or not wanted(resp.url):
+                    return
+                if "json" not in (resp.headers.get("content-type") or "").lower():
+                    return
+                bodies.append(scrub(json.loads(resp.body().decode("utf-8"))))
+            except Exception:
+                return
+
+        page.on("response", on_response)
+        try:
+            _open_url(page, url, settle_ms)
+        except Blocked:
+            raise
+        except Exception as e:
+            errors[key] = f"{type(e).__name__}: {e}"[:300]
+            log.warning("tab kenh %s loi: %s", key, errors[key])
+        finally:
+            try:
+                page.remove_listener("response", on_response)
+            except Exception:
+                pass
+        out[key] = bodies
+    return out, errors
+
+
+def _open_url(page, url, settle_ms):
     try:
         page.goto(url, wait_until="domcontentloaded", timeout=GOTO_TIMEOUT_MS)
     except Exception as e:

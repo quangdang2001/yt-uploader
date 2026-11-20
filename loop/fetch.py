@@ -82,6 +82,19 @@ def fetch(drive, chan_folder: str | None, cache: Path, studio_id: str | None = N
         state[key] = f["modifiedTime"]
         snaps += 1
 
+    # trang phan tich kenh: studio/channel/<ngay>.json (mot file moi ngay)
+    chans = 0
+    for f in ss.list_files(drive, folders["channel"]):
+        if not f["name"].endswith(".json"):
+            continue
+        key = f"channel/{f['name']}"
+        dest = cache / key
+        if dest.exists() and state.get(key) == f["modifiedTime"] and _parses(dest):
+            continue
+        _write(dest, ss.read_text(drive, f["id"]))
+        state[key] = f["modifiedTime"]
+        chans += 1
+
     # pending/ truoc done/: VPS chuyen pending -> done, nen liet ke nguoc lai co the thay yeu cau
     # o ca hai cho hoac khong thay o cho nao
     pending = [f["name"] for f in ss.list_files(drive, folders["actions_pending"])
@@ -132,7 +145,7 @@ def fetch(drive, chan_folder: str | None, cache: Path, studio_id: str | None = N
             state[HISTORY_NAME] = hist["modifiedTime"]
 
     _write(cache / ".state.json", json.dumps(state, indent=2))
-    return {"snapshots_downloaded": snaps, "actions_downloaded": acts,
+    return {"snapshots_downloaded": snaps, "channel_downloaded": chans, "actions_downloaded": acts,
             "actions_unreadable": unreadable,
             "pending": len(pending), "health_status": health_status}
 

@@ -112,10 +112,10 @@ class StudioStoreTest(unittest.TestCase):
         self.assertEqual(len(self.drive.items), before)
         self.assertEqual(again, self.folders)
         self.assertEqual(set(self.folders), {
-            "studio", "snapshots", "raw", "thumb_alts",
+            "studio", "snapshots", "raw", "channel", "thumb_alts",
             "actions_pending", "actions_done", "actions_failed"})
-        # studio + snapshots + raw + thumb-alts + actions + 3 con = 8 folder
-        self.assertEqual(before, 8)
+        # studio + snapshots + raw + channel + thumb-alts + actions + 3 con = 9 folder
+        self.assertEqual(before, 9)
         actions = self.drive.items[self.folders["actions_pending"]]["parents"][0]
         self.assertEqual(self.drive.items[actions]["name"], "actions")
         self.assertEqual(self.drive.items[self.folders["actions_done"]]["parents"], [actions])
@@ -126,14 +126,14 @@ class StudioStoreTest(unittest.TestCase):
         got = ss.studio_folders_by_id(drive, studio)
         self.assertEqual(got["studio"], studio)
         self.assertEqual(set(got), set(self.folders))
-        self.assertEqual(len(drive.items), 8)  # studio co san + 7 folder con
+        self.assertEqual(len(drive.items), 9)  # studio co san + 8 folder con
         top = [f for f in drive.items.values() if f["id"] != studio and studio not in f["parents"]
                and f["name"] != "pending" and f["name"] != "done" and f["name"] != "failed"]
         self.assertEqual(top, [])
         self.assertEqual([f["name"] for f in drive.items.values() if "SHARED" in f["parents"]], ["studio"])
         again = ss.studio_folders_by_id(drive, studio)
         self.assertEqual(again, got)
-        self.assertEqual(len(drive.items), 8)
+        self.assertEqual(len(drive.items), 9)
 
     def test_snapshot_header_once(self):
         cols = ("video_id", "views")

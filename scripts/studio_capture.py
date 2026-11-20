@@ -48,6 +48,7 @@ from googleapiclient.errors import HttpError
 import studio_actions as sa
 from google_creds import TokenError, load_creds  # noqa: F401  (sc.TokenError / sc.load_creds)
 import studio_browser as sb
+import studio_channel as sch
 import studio_parse as sp
 import studio_store as ss
 import youtube_uploader as yu
@@ -318,6 +319,65 @@ def _eligible(v: dict, now: datetime | None) -> bool:
     return now is None or v["public_at"] <= now
 
 
+def channel_due(state: dict, now: datetime, daily_hour: int, tz=None) -> bool:
+    """Trang phan tich KENH: mot lan moi ngay, tu daily_hour (gio `tz`, mac dinh gio may)."""
+    last = parse_time(state.get("channel_last"))
+    if last is None:
+        return True
+    local = now.astimezone(tz) if tz is not None else now.astimezone()
+    boundary = local.replace(hour=daily_hour, minute=0, second=0, microsecond=0)
+    if local < boundary:
+        boundary -= timedelta(days=1)
+    return last < boundary
+
+
+def channel_id(youtube, state: dict) -> str:
+    cid = state.get("channel_id")
+    if isinstance(cid, str) and cid.startswith("UC"):
+        return cid
+    items = youtube.channels().list(mine=True, part="id").execute().get("items") or []
+    if not items:
+        raise RuntimeError("Data API: khong thay kenh cua token")
+    state["channel_id"] = items[0]["id"]
+    return state["channel_id"]
+
+
+def _capture_channel(args, deps, page, youtube, state, drive, sf, notes) -> str | None:
+    """Doc cac tab phan tich kenh + Nghien cuu, ghi studio/channel/<ngay UTC>.json va raw/.
+    Loi cua phan nay chi thanh mot ghi chu trong health; Blocked tra ve ly do (dung ca lan chay)."""
+    try:
+        cid = channel_id(youtube, state)
+        bodies, errors = deps.capture_channel(page, cid)
+    except sb.Blocked as e:
+        return str(e)
+    except Exception as e:
+        notes.append(f"channel: {type(e).__name__}: {e}"[:300])
+        log.warning("Doc trang phan tich kenh loi: %s", e)
+        return None
+    cap = deps.now()
+    doc = sch.parse_channel(bodies, iso_z(cap))
+    n = sch.card_count(doc)
+    research = sum(len(v) for v in doc["research"].values())
+    if errors:
+        notes.append("channel tabs failed: " + ", ".join(sorted(errors)))
+    log.info("Trang kenh: %d the, %d video Nghien cuu, %d tab loi", n, research, len(errors))
+    if args.dry_run:
+        print(f"CHANNEL {n} cards, {research} research videos, errors={sorted(errors)}")
+        return None
+    if n == 0:
+        notes.append("channel: no cards read")
+        return None
+    day = utc_day(cap)
+    ss.put_json(drive, sf["channel"], f"{day}.json", doc)
+    try:
+        ss.put_raw(drive, sf, day, "channel", stamp_z(cap), bodies)
+    except Exception as e:
+        log.warning("Khong ghi duoc raw/ cua trang kenh: %s", e)
+    state["channel_last"] = iso_z(cap)
+    notes.append(f"channel ok ({n} cards, {research} research videos)")
+    return None
+
+
 def due_videos(videos: list[dict], last_by_video: dict, now: datetime, daily_hour: int,
                tz=None) -> list[str]:
     """Video can doc lan nay. Tuoi tinh tu luc cong khai (public_at).
@@ -368,6 +428,7 @@ class Deps:
         self.connect = connect
         self.open_browser = sb.open_browser
         self.capture = sb.capture_tabs
+        self.capture_channel = sb.capture_channel
         self.now = lambda: datetime.now(timezone.utc)
         self.sleep = time.sleep
         self.notify = yu.notify
@@ -525,7 +586,9 @@ def _capture_phase(args, deps, state, persist, drive, youtube, folders, sf) -> i
         due = [args.only]
     else:
         due = due_videos(videos, last_by_video(state), now, args.daily_hour, tz=deps.tz)
-    log.info("%d video cong khai, %d den han", len(videos), len(due))
+    want_channel = not args.only and channel_due(state, now, args.daily_hour, tz=deps.tz)
+    log.info("%d video cong khai, %d den han, trang kenh %s", len(videos), len(due),
+             "den han" if want_channel else "da doc hom nay")
 
     rows: list[dict] = []
     failures: dict[str, tuple[str, bool]] = {}   # video_id -> (ly do, la loi dieu huong)
@@ -533,13 +596,17 @@ def _capture_phase(args, deps, state, persist, drive, youtube, folders, sf) -> i
     notes: list[str] = []
     blocked = None
     browser_error = None
-    if due:
+    if due or want_channel:
         started = False
         try:
             with deps.open_browser(args.profile) as page:
                 started = True
-                blocked = _capture_loop(args, deps, page, due, by_id, rows, failures,
-                                        attempts, notes, sf)
+                if want_channel:
+                    blocked = _capture_channel(args, deps, page, youtube, state, drive, sf, notes)
+                    persist()
+                if due and not blocked:
+                    blocked = _capture_loop(args, deps, page, due, by_id, rows, failures,
+                                            attempts, notes, sf)
         except Exception as e:
             if started:
                 raise
@@ -592,7 +659,7 @@ def _capture_phase(args, deps, state, persist, drive, youtube, folders, sf) -> i
         if n == 2:
             deps.notify(f"[{ch}] Studio capture: Chrome did not start twice in a row: "
                         f"{browser_error}")
-    elif due:
+    elif due or want_channel:
         state.pop("browser_failed", None)
 
     if blocked:
@@ -604,7 +671,7 @@ def _capture_phase(args, deps, state, persist, drive, youtube, folders, sf) -> i
         deps.notify(AUTH_MSG)
         log.error("FAIL auth: %s", blocked)
         return 3
-    if due and not browser_error:
+    if (due or want_channel) and not browser_error:
         state.pop("auth_blocked", None)
     persist()
 
@@ -612,7 +679,7 @@ def _capture_phase(args, deps, state, persist, drive, youtube, folders, sf) -> i
     if browser_error:
         bad.insert(0, browser_error)
     status = "FAIL read" if bad else "PASS"
-    detail = "; ".join(bad + notes) or (f"{len(rows)} read" if due else "nothing due")
+    detail = "; ".join(bad + ([f"{len(rows)} read"] if due else []) + notes) or "nothing due"
     ss.write_health(drive, sf, status, detail[:2000], len(rows), len(failures))
     log.info("Health %s: %d doc, %d loi", status, len(rows), len(failures))
 

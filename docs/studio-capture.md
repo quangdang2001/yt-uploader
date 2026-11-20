@@ -112,6 +112,18 @@ Không cần task riêng cho `studio_actions.py`, vì mỗi lần chạy `studio
 thực thi một lần. Nếu vẫn chạy `studio_actions.py --watch` riêng thì hai bên dùng chung lock
 `.studio-actions-<kênh>.lock`; bên đến sau sẽ bỏ qua lượt của mình.
 
+### Trang phân tích kênh
+
+Mỗi ngày một lần (từ `daily_hour`), trước phần đọc video, script mở các tab phân tích của kênh: Tổng quan (`hub_overview`), Nội dung (`hub_content`), Đối tượng người xem (`hub_audience`), Doanh thu (`hub_revenue`), và ba luồng video của tab Nghiên cứu (video nổi bật cùng ngách, video khán giả của kênh đã xem, video mới đăng cùng ngách).
+
+`studio_channel.py` đọc mọi thẻ theo `accessibilityId`: giá trị chính, các dòng, các biểu đồ 28 ngày theo từng ngày, và bảng giờ khán giả online. Kết quả ghi vào `studio/channel/<ngày UTC>.json`; bản gốc gzip vào `studio/raw/<ngày>/channel__<giờ>.json.gz`.
+
+- Tab nào lỗi thì chỉ thành một ghi chú trong `health.json`; phần đọc video vẫn chạy.
+- Gặp trang đăng nhập/thử thách thì dừng cả lần chạy (FAIL auth), như với video.
+- `--only <video>` bỏ qua trang kênh.
+
+Script `studio_channel_spike.py` lưu JSON thô của mọi tab để soi khi Studio đổi giao diện.
+
 ### Lịch và nhịp
 
 - Mỗi lần chạy chờ ngẫu nhiên 0–10 phút trước khi bắt đầu (`--no-jitter` để bỏ chờ).

@@ -49,7 +49,7 @@ class FetchTest(unittest.TestCase):
         self.put("thumbnail-features.csv", self.f["studio"], "a,b\n1,2\n")
         self.put("health.json", self.f["studio"], json.dumps({"status": "ok"}))
         res = lf.fetch(self.drive, "CHAN", self.cache)
-        self.assertEqual(res, {"snapshots_downloaded": 1, "actions_downloaded": 2,
+        self.assertEqual(res, {"snapshots_downloaded": 1, "channel_downloaded": 0, "actions_downloaded": 2,
                                "actions_unreadable": 0,
                                "pending": 1, "health_status": "ok"})
         self.assertEqual((self.cache / "actions" / "pending.txt").read_text().split(), ["p1.json"])
@@ -165,7 +165,7 @@ class FetchTest(unittest.TestCase):
             lf.fetch(drive, None, self.cache, studio_id=studio)
         self.assertEqual(lf.load_history(self.cache), {"v1": "gunA"})
         self.assertEqual([f["name"] for f in drive.items.values() if "SHARED" in f["parents"]], ["studio"])
-        self.assertEqual(len(drive.items), n + 7)
+        self.assertEqual(len(drive.items), n + 8)
 
     def test_by_id_without_history_does_not_fall_back(self):
         drive = FakeDrive()

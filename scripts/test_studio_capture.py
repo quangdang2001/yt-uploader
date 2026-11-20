@@ -173,7 +173,7 @@ class FakeYouTube:
         class C:
             def list(self, **kw):
                 yt.calls.append(("channels", kw))
-                return _Exec({"items": [{"contentDetails": {
+                return _Exec({"items": [{"id": "UCabcdefghijklmnopqrstuv", "contentDetails": {
                     "relatedPlaylists": {"uploads": "UUx"}}}]})
         return C()
 
@@ -544,6 +544,8 @@ class RunTest(unittest.TestCase):
         self.actions_states = []
         self.actions_error = None
         self.thumb_error = None
+        self.channel_reads = []
+        self.channel_result = None   # None -> mot the gia; Exception -> nem ra
 
     # -- fakes
 
@@ -560,6 +562,16 @@ class RunTest(unittest.TestCase):
             raise item
         return item
 
+    def fake_capture_channel(self, page, channel_id):
+        self.channel_reads.append(channel_id)
+        if isinstance(self.channel_result, Exception):
+            raise self.channel_result
+        if self.channel_result is not None:
+            return self.channel_result
+        card = {"cardViewModel": {"accessibilityId": "analytics_hub.FEanalytics_hub_channel_overview.key_metric_views",
+                "bodyContent": {"simpleMetricViewModel": {"value": {"content": "1,2 N"}}}}}
+        return {"hub_overview": [card]}, {}
+
     def fake_actions(self, drive, youtube, chan, done, tmpdir, state=None):
         self.actions_calls.append((chan, done))
         self.actions_states.append(state)
@@ -575,6 +587,7 @@ class RunTest(unittest.TestCase):
     def deps(self, **over):
         d = sc.Deps(drive=self.drive, youtube=self.yt,
                     open_browser=self.fake_open_browser, capture=self.fake_capture,
+                    capture_channel=self.fake_capture_channel,
                     now=self.clock.now, sleep=self.clock.sleep, notify=self.sent.append,
                     fetch_thumb=self.fake_fetch, run_actions=self.fake_actions,
                     home=self.home, tz=UTC, uniform=lambda a, b: a)
@@ -614,6 +627,55 @@ class RunTest(unittest.TestCase):
 
     # -- tests
 
+    def channel_doc(self, day="2026-11-20"):
+        _, sf = self.folders()
+        hits = self.drive.named(f"{day}.json", sf["channel"])
+        return json.loads(hits[0]["data"]) if hits else None
+
+    def test_channel_read_once_a_day_before_videos(self):
+        self.assertEqual(self.run_it(), 0)
+        self.assertEqual(self.channel_reads, ["UCabcdefghijklmnopqrstuv"])
+        doc = self.channel_doc()
+        self.assertEqual(doc["tabs"]["hub_overview"][0]["value"], 1200)
+        self.assertEqual(doc["captured_at_utc"], "2026-11-20T12:00:00Z")
+        self.assertEqual(self.state()["channel_last"], "2026-11-20T12:00:00Z")
+        self.assertIn("channel ok (1 cards", self.health()["detail"])
+        # cung ngay: khong doc lai; sau daily_hour hom sau: doc lai
+        self.clock.t = dt("2026-11-20T20:00:00Z")
+        self.run_it()
+        self.assertEqual(len(self.channel_reads), 1)
+        self.clock.t = dt("2026-11-21T07:00:00Z")
+        self.run_it()
+        self.assertEqual(len(self.channel_reads), 2)
+        self.assertIsNotNone(self.channel_doc("2026-11-21"))
+
+    def test_channel_error_is_a_note_and_videos_still_read(self):
+        self.channel_result = RuntimeError("tab broke")
+        self.assertEqual(self.run_it(), 0)
+        self.assertEqual(self.captured, ["vidB0000002", "vidA0000001"])
+        h = self.health()
+        self.assertEqual(h["status"], "PASS")
+        self.assertIn("channel: RuntimeError: tab broke", h["detail"])
+        self.assertNotIn("channel_last", self.state())
+
+    def test_channel_blocked_stops_the_run(self):
+        self.channel_result = sb.Blocked("trang co o nhap mat khau")
+        self.assertEqual(self.run_it(), 3)
+        self.assertEqual(self.captured, [])
+        self.assertEqual(self.health()["status"], "FAIL auth")
+
+    def test_channel_with_no_cards_is_not_written(self):
+        self.channel_result = ({"hub_overview": []}, {"hub_content": "NavError: x"})
+        self.assertEqual(self.run_it(), 0)
+        self.assertIsNone(self.channel_doc())
+        detail = self.health()["detail"]
+        self.assertIn("channel tabs failed: hub_content", detail)
+        self.assertIn("channel: no cards read", detail)
+
+    def test_only_mode_skips_channel(self):
+        self.run_it("--only", "vidA0000001")
+        self.assertEqual(self.channel_reads, [])
+
     def test_happy_path_rows_raw_health_state(self):
         rc = self.run_it()
         self.assertEqual(rc, 0)
@@ -636,7 +698,7 @@ class RunTest(unittest.TestCase):
         day = self.drive.named("2026-11-20", sf["raw"])
         self.assertEqual(len(day), 1)
         raws = [f for f in self.drive.items.values() if day[0]["id"] in f["parents"]]
-        self.assertEqual(len(raws), 2)
+        self.assertEqual(len(raws), 3)   # 2 video + trang kenh
         self.assertEqual(self.browser_opened, 1)
         self.assertEqual(len(self.actions_calls), 1)
         # lan chay thu hai ngay sau: khong video nao den han
@@ -1193,7 +1255,7 @@ class RunTest(unittest.TestCase):
     # -- m4: the video list is cached for 6 h
 
     def channel_calls(self):
-        return sum(1 for kind, _ in self.yt.calls if kind == "channels")
+        return sum(1 for kind, kw in self.yt.calls if kind == "channels" and kw.get("part") == "contentDetails")
 
     def test_video_list_cached_6h(self):
         self.run_it()

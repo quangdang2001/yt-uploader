@@ -43,6 +43,7 @@ def studio_folders_by_id(drive, studio_id: str) -> dict:
         "studio": studio,
         "snapshots": yu.ensure_folder(drive, "snapshots", studio),
         "raw": yu.ensure_folder(drive, "raw", studio),
+        "channel": yu.ensure_folder(drive, "channel", studio),
         "thumb_alts": yu.ensure_folder(drive, "thumb-alts", studio),
         "actions_pending": yu.ensure_folder(drive, "pending", actions),
         "actions_done": yu.ensure_folder(drive, "done", actions),
