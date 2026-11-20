@@ -163,19 +163,21 @@ def read_snapshots(cache_dir):
 
 
 def build_daily(snaps, tz_offset_h=7):
-    """Per local day: the last capture of each video that day, summed."""
+    """Per local day: the newest capture of EVERY video known by the end of that day, summed.
+
+    A day's run may read only a few videos (the fresh ones), so a video not read that day keeps
+    its last known numbers; summing only that day's reads would make the total collapse."""
     tz = timezone(timedelta(hours=tz_offset_h))
     by_day = {}
     for r in snaps:
         t = datetime.strptime(r["captured_at_utc"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
         day = t.astimezone(tz).strftime("%Y-%m-%d")
-        by_day.setdefault(day, {})
-        prev = by_day[day].get(r["video_id"])
-        if prev is None or r["captured_at_utc"] > prev["captured_at_utc"]:
-            by_day[day][r["video_id"]] = r
-    rows = []
+        by_day.setdefault(day, []).append(r)
+    rows, known = [], {}
     for day in sorted(by_day):
-        vids = by_day[day].values()
+        for r in sorted(by_day[day], key=lambda x: x["captured_at_utc"]):
+            known[r["video_id"]] = r
+        vids = known.values()
         views = sum(int(_f(v["views"]) or 0) for v in vids)
         impr = sum(int(_f(v["impressions"]) or 0) for v in vids)
         clicks = sum((_f(v["impressions"]) or 0) * (_f(v["ctr"]) or 0) for v in vids)
@@ -184,7 +186,8 @@ def build_daily(snaps, tz_offset_h=7):
             "tong_view": views,
             "tong_hien_thi": impr,
             "ctr_kenh_pct": round(clicks / impr * 100, 2) if impr else None,
-            "so_video": len(by_day[day]),
+            "so_video": len(known),
+            "so_video_doc_moi": len({r["video_id"] for r in by_day[day]}),
         })
     return rows
 

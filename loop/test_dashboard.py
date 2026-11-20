@@ -43,7 +43,10 @@ class DailyTest(unittest.TestCase):
         self.assertEqual(rows[0]["tong_view"], 25)
         self.assertEqual(rows[0]["tong_hien_thi"], 300)
         self.assertAlmostEqual(rows[0]["ctr_kenh_pct"], 6.67)
-        self.assertEqual(rows[1]["so_video"], 1)
+        # ngay 2 chi doc lai video a: video b giu so cu, tong khong bi tut
+        self.assertEqual((rows[1]["so_video"], rows[1]["so_video_doc_moi"]), (2, 1))
+        self.assertEqual(rows[1]["tong_view"], 35)
+        self.assertEqual(rows[1]["tong_hien_thi"], 400)
 
 
 if __name__ == "__main__":
