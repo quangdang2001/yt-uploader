@@ -89,12 +89,13 @@ Chạy mỗi 30 phút, chỉ khi user đang đăng nhập (`/IT`). Gõ lệnh n�
 (cmd)**, không gõ trong PowerShell, vì PowerShell 5.1 hiểu sai dấu `\"`:
 
 ```bat
-schtasks /Create /SC MINUTE /MO 30 /TN "Studio Capture" /IT /F /TR "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location C:\yt\yt-uploader\scripts; python studio_capture.py --channel 'Bare Skull' --once\""
+schtasks /Create /SC MINUTE /MO 30 /TN "Studio Capture" /IT /F /TR "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location C:\yt\yt-uploader\scripts; python studio_capture.py --channel 'Bare Skull' --once; exit $LASTEXITCODE\""
 ```
 
 Lệnh trên đúng với cấu hình
-`powershell -NoProfile -ExecutionPolicy Bypass -Command "Set-Location C:\yt\yt-uploader\scripts; python studio_capture.py --channel 'Bare Skull' --once"`,
-chạy mỗi 30 phút với "Run only when user is logged on".
+`powershell -NoProfile -ExecutionPolicy Bypass -Command "Set-Location C:\yt\yt-uploader\scripts; python studio_capture.py --channel 'Bare Skull' --once; exit $LASTEXITCODE"`,
+chạy mỗi 30 phút với "Run only when user is logged on". Đoạn `exit $LASTEXITCODE` giữ lại
+mã thoát của script, nhờ đó cột "Last Run Result" của Task Scheduler hiện 0, 1, 2, 3 hoặc 4.
 
 Chạy ngay một lần để thử: `schtasks /Run /TN "Studio Capture"`.
 
@@ -117,11 +118,13 @@ thực thi một lần. Nếu vẫn chạy `studio_actions.py --watch` riêng th
 - Video công khai dưới 72 giờ được đọc khoảng 2 giờ/lần. Tuổi video tính từ lúc nó thành
   công khai.
 - Video cũ hơn được đọc mỗi ngày một lần, từ `daily_hour` giờ VPS.
-- Sau 30 phút đọc, script không mở video mới; phần còn lại để lần chạy sau. Nếu cả lần chạy
-  vượt 50 phút, watchdog sẽ dừng nó.
+- Sau 35 phút kể từ lúc khởi động (tính cả thời gian chờ jitter), script không mở video mới;
+  phần còn lại để lần chạy sau. Nếu cả lần chạy vượt 50 phút, watchdog sẽ dừng nó và gỡ lock
+  của nó.
 - Nếu uploader đang chạy (`.uploader-<kênh>.lock` còn mới), lần này bỏ qua hoàn toàn và
-  thoát 0, vì upload được ưu tiên. Nếu uploader bắt đầu giữa chừng, script dừng mở video
-  mới; các dòng đã đọc vẫn được ghi.
+  thoát 0, vì upload được ưu tiên. Nếu giữa chừng có lock uploader đã giữ quá 60 s, script
+  dừng mở video mới; các dòng đã đọc vẫn được ghi. Một lượt quét `pending/` vài giây của
+  uploader thì không làm script dừng.
 
 ## 5. Trạng thái `studio/health.json`
 
@@ -129,34 +132,38 @@ thực thi một lần. Nếu vẫn chạy `studio_actions.py --watch` riêng th
 |---|---|---|
 | `PASS` | mọi video đến hạn đều đọc được (hoặc không có video nào đến hạn) | không cần làm gì |
 | `FAIL read` | ít nhất một video không đọc được (Studio không trả số, trang không mở, hoặc Chrome không khởi động). `detail` ghi tên từng video và lý do | không cần làm gì nếu chỉ một lần; video lỗi sẽ được đọc lại ở lần sau. Không bao giờ ghi số 0 thay cho lần đọc lỗi |
-| `FAIL auth` | Studio hiện trang đăng nhập, CAPTCHA hoặc "verify it's you" | làm lại mục 2 |
+| `FAIL auth` | Studio hiện trang đăng nhập, CAPTCHA hoặc "verify it's you". Nếu `detail` bắt đầu bằng `token:` thì token Google API của uploader hỏng | Studio: làm lại mục 2. Token: chạy uploader một lần bằng tay (`python youtube_uploader.py --channel "Bare Skull" --once`) để đăng nhập lại |
+| `FAIL api` | Data API hoặc Drive báo lỗi (quota, mạng, quyền). `detail` ghi loại lỗi | thường tự hết; nếu kéo dài, xem log |
 
 `videos_read` và `videos_failed` là số video đọc được và đọc lỗi trong lần chạy gần nhất.
 
-Sau một lần `FAIL auth`, các lần chạy sau **không mở Studio nữa** (thoát 3, không gửi lại
-Telegram) cho tới khi profile Chrome thay đổi, tức là có người đã mở profile để đăng nhập
-lại. Lần chạy kế tiếp sau đó sẽ tự đọc lại.
+Sau một lần `FAIL auth` do Studio, các lần chạy sau **không mở Studio nữa** (thoát 3, không
+gửi lại Telegram) cho tới khi profile Chrome thay đổi, tức là có người đã mở profile để đăng
+nhập lại. Trong thời gian chờ, script vẫn chép `upload-history.csv` và vẫn chạy bộ thực thi
+đổi thumbnail, vì hai việc này chỉ cần token API, không cần Studio. Lần chạy kế tiếp sau khi
+profile thay đổi sẽ tự đọc lại.
 
 ## 6. Tin nhắn Telegram
 
 | tin nhắn | nghĩa |
 |---|---|
 | `Studio sign-in needed on the VPS: run studio_spike.py --login` | phiên Google hết hạn hoặc bị thử thách; làm lại mục 2 |
-| `[Bare Skull] Studio read failed twice in a row for <id>: <lý do>` | một video không đọc được hai lần liên tiếp; nếu kéo dài, có thể Studio đã đổi giao diện, nên xem `studio/raw/` |
+| `Google API token on the VPS needs re-auth: run the uploader once by hand` | token Drive/YouTube không refresh được. Script không bao giờ tự mở trang đăng nhập OAuth và không ghi lại file token. Chạy uploader một lần bằng tay qua RDP. Tối đa một tin mỗi ngày |
+| `[Bare Skull] Studio read failed twice in a row for N video(s): <id> (<lý do>); …` | mỗi lần chạy có tối đa một tin, liệt kê các video vừa lỗi lần thứ hai liên tiếp. Nếu kéo dài, có thể Studio đã đổi giao diện, nên xem `studio/raw/`. Video lỗi được thử lại sau đúng chu kỳ bình thường, tính từ lần thử cuối. Ba video lỗi liên tiếp, hoặc Chrome bị đóng, thì lần chạy dừng sớm |
 | `[Bare Skull] Studio capture: Chrome did not start twice in a row: …` | Chrome không mở được profile hai lần liên tiếp, thường do một cửa sổ Chrome khác đang giữ `C:\yt\studio-profile`; đóng cửa sổ đó |
 | `[Bare Skull] Swap executor error: …` | bộ thực thi đổi thumbnail lỗi; việc đọc số vẫn xong bình thường |
 | `Swap <id> -> alt1: ok` / `FAILED …` / `quota exceeded …` | kết quả từng yêu cầu đổi thumbnail (từ `studio_actions`) |
 | `Studio capture: watchdog after 50 min, run killed` | lần chạy treo quá 50 phút và đã bị dừng; nếu Chrome còn mở thì đóng nó |
-| `[Bare Skull] Studio capture ERROR: …` | lỗi khác (Drive, Data API, token). Xem log |
+| `[Bare Skull] Studio capture ERROR: …` | Data API hoặc Drive lỗi (`FAIL api`), hoặc lỗi khác. Tối đa một tin cho mỗi loại lỗi mỗi ngày UTC. Xem log |
 
 ## 7. Mã thoát và file
 
 | mã | nghĩa |
 |---|---|
 | 0 | xong (kể cả khi bỏ qua vì uploader đang chạy, hoặc không có video nào đến hạn) |
-| 1 | lỗi khác, `--only` chỉ vào video không công khai, hoặc watchdog |
+| 1 | lỗi Data API / Drive (`FAIL api`), `--only` chỉ vào video không công khai, hoặc watchdog |
 | 2 | một `studio_capture` khác đang chạy (`.studio-capture-<kênh>.lock`) |
-| 3 | đăng nhập hoặc thử thách (`FAIL auth`) |
+| 3 | đăng nhập Studio, thử thách, hoặc token Google hỏng (`FAIL auth`) |
 | 4 | không mở được trang của ít nhất một video, hoặc Chrome không khởi động |
 
 File cục bộ trong `scripts\` (đều đã nằm trong `.gitignore`):

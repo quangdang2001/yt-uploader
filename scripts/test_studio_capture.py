@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -36,6 +37,19 @@ PARSE_DIR = HERE / "fixtures" / "studio" / "parse"
 RUGER = "mwKhntLxOlk__20261120T041236Z"
 CHANNEL = "Bare Skull"
 UTC = timezone.utc
+
+_QUIET = logging.NullHandler()
+
+
+def setUpModule():
+    # log canh bao/traceback co chu dich trong test: khong in ra man hinh
+    for name in ("uploader", "studio_actions"):
+        logging.getLogger(name).addHandler(_QUIET)
+
+
+def tearDownModule():
+    for name in ("uploader", "studio_actions"):
+        logging.getLogger(name).removeHandler(_QUIET)
 
 
 def fixture_payloads(stem=RUGER):
@@ -564,15 +578,28 @@ class RunTest(unittest.TestCase):
         os.utime(lock, (old, old))
         self.assertEqual(self.run_it(), 0)
         self.assertEqual(len(self.captured), 2)
-        # uploader bat dau giua chung -> dung doc video tiep theo, van ghi dong da co
+        # uploader bat dau giua chung va da chay > 60 s -> dung doc video tiep theo,
+        # van ghi dong da co
         self.captured.clear()
         (self.home / f".studio-state-{CHANNEL}.json").unlink()
 
-        def capture_then_upload(page, video_id):
+        def capture_then_upload(page, video_id, age=120):
             lock.write_text("456")
+            t = time.time() - age
+            os.utime(lock, (t, t))
             return self.fake_capture(page, video_id)
         self.assertEqual(self.run_it(capture=capture_then_upload), 0)
         self.assertEqual(self.captured, ["vidB0000002"])
+        self.assertIn("vidB0000002", self.snapshot_text())
+
+    def test_midrun_uploader_lock_under_60s_does_not_stop(self):
+        lock = self.home / f".uploader-{CHANNEL}.lock"
+
+        def capture_then_quick_scan(page, video_id):
+            lock.write_text("456")       # moi tao: uploader chi quet pending/ vai giay
+            return self.fake_capture(page, video_id)
+        self.assertEqual(self.run_it(capture=capture_then_quick_scan), 0)
+        self.assertEqual(self.captured, ["vidB0000002", "vidA0000001"])
 
     def test_auth_exit_3_health_fail_notify(self):
         self.capture_plan = {"vidB0000002": [sb.Blocked("URL co dau hieu dang nhap")]}
@@ -592,10 +619,16 @@ class RunTest(unittest.TestCase):
         cookies.write_bytes(b"x")
         self.capture_plan = {"vidB0000002": [sb.Blocked("signin")]}
         self.assertEqual(self.run_it(), 3)
-        # lan sau: khong mo trinh duyet, khong bao lai
+        self.assertEqual(self.actions_calls, [])
+        # lan sau: khong mo trinh duyet, khong bao lai; van chep history va chay bo thuc thi
+        f, sf = self.folders()
+        self.drive._add(yu.HISTORY_NAME, [f["channel"]], "text/csv", b"h\n")
         self.assertEqual(self.run_it(), 3)
         self.assertEqual(self.browser_opened, 1)
         self.assertEqual(self.sent, [sc.AUTH_MSG])
+        self.assertEqual(len(self.actions_calls), 1)
+        self.assertEqual(len(self.drive.named(yu.HISTORY_NAME, sf["studio"])), 1)
+        self.assertEqual(self.health()["status"], "FAIL auth")
         # chu kenh dang nhap lai -> profile doi -> doc lai binh thuong
         later = time.time() + 60
         os.utime(cookies, (later, later))
@@ -614,20 +647,21 @@ class RunTest(unittest.TestCase):
         self.assertEqual(self.state()["failed"], {"vidA0000001": 1})
         self.assertNotIn("vidA0000001", self.state()["last"])
         self.assertNotIn("vidA0000001", self.snapshot_text())
-        # lan hai: video A van den han (khong co dong), bao Telegram mot lan
-        self.clock.t += timedelta(minutes=30)
+        # lan hai (het chu ky 2 gio): video A van den han (khong co dong), bao Telegram mot lan
+        self.clock.t += timedelta(hours=2)
         self.assertEqual(self.run_it(), 0)
         self.assertEqual(len(self.sent), 1)
         self.assertIn("vidA0000001", self.sent[0])
         # lan ba: khong bao lai
-        self.clock.t += timedelta(minutes=30)
+        self.clock.t += timedelta(hours=2)
         self.run_it()
         self.assertEqual(len(self.sent), 1)
         self.assertNotIn("vidA0000001", self.snapshot_text())
-        # doc duoc -> xoa dem
-        self.clock.t += timedelta(minutes=30)
+        # doc duoc -> xoa dem va lan thu
+        self.clock.t += timedelta(hours=2)
         self.run_it()
         self.assertNotIn("vidA0000001", self.state()["failed"])
+        self.assertNotIn("vidA0000001", self.state()["last_attempt"])
         self.assertIn("vidA0000001", self.snapshot_text())
 
     def test_navigation_error_exit_4_no_row(self):
@@ -697,11 +731,228 @@ class RunTest(unittest.TestCase):
 
     def test_budget_stops_new_videos(self):
         def slow_capture(page, video_id):
-            self.clock.t += timedelta(seconds=sc.CAPTURE_BUDGET_S + 1)
+            self.clock.t += timedelta(seconds=sc.CAPTURE_CAP_S + 1)
             return self.fake_capture(page, video_id)
         self.assertEqual(self.run_it(capture=slow_capture), 0)
         self.assertEqual(self.captured, ["vidB0000002"])
         self.assertIn("vidB0000002", self.snapshot_text())
+        self.assertIn("time cap", self.health()["detail"])
+
+    def test_cap_counts_jitter(self):
+        # jitter 10 phut + 26 phut doc video dau = 36 phut tu luc khoi dong > 35 -> dung
+        def capture_26min(page, video_id):
+            self.clock.t += timedelta(minutes=26)
+            return self.fake_capture(page, video_id)
+        args = sc.parse_args(["--channel", CHANNEL, "--config", str(self.cfg), "--once"])
+        with redirect_stdout(io.StringIO()):
+            rc = sc.run(args, self.deps(capture=capture_26min, uniform=lambda a, b: b))
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.captured, ["vidB0000002"])
+        # khong jitter: 26 phut + nghi < 35 -> doc ca hai
+        self.captured.clear()
+        (self.home / f".studio-state-{CHANNEL}.json").unlink()
+        self.assertEqual(self.run_it(capture=capture_26min), 0)
+        self.assertEqual(self.captured, ["vidB0000002", "vidA0000001"])
+
+    def test_watchdog_releases_actions_lock(self):
+        mine = [sc.lock_path(self.home, CHANNEL), sc.actions_lock_path(self.home, CHANNEL)]
+        for p in mine:
+            p.write_text(str(os.getpid()))
+        other = self.home / ".studio-actions-Other.lock"
+        other.write_text("999999")
+        exits = []
+        sc.watchdog_fire(mine + [other], self.sent.append, exit_fn=exits.append)
+        self.assertEqual(exits, [1])
+        self.assertFalse(any(p.exists() for p in mine))
+        self.assertTrue(other.exists())                  # lock cua tien trinh khac giu nguyen
+        self.assertEqual(len(self.sent), 1)
+
+    # -- token
+
+    def write_token(self, name, text):
+        p = self.home / name
+        p.write_text(text, encoding="utf-8")
+        return p
+
+    def token_args(self, drive_tok, yt_tok):
+        return sc.parse_args(["--channel", CHANNEL, "--config", str(self.cfg), "--once",
+                              "--no-jitter", "--token-drive", str(drive_tok),
+                              "--token-youtube", str(yt_tok)])
+
+    def test_bad_token_never_prompts_and_exits_3(self):
+        bad = self.write_token("token-drive.json", "{not json")
+        expired = json.dumps({
+            "token": "x", "refresh_token": "r", "client_id": "c", "client_secret": "s",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "expiry": "2020-01-01T00:00:00Z", "scopes": yu.YOUTUBE_SCOPES})
+        exp = self.write_token("token-youtube.json", expired)
+        before = (bad.read_bytes(), exp.read_bytes())
+        from google.auth.exceptions import RefreshError
+        from google.oauth2.credentials import Credentials
+
+        def no_prompt(*a, **kw):
+            raise AssertionError("OAuth browser flow must never start")
+        with mock.patch.object(yu.InstalledAppFlow, "from_client_secrets_file", no_prompt), \
+             mock.patch.object(yu, "get_credentials", no_prompt), \
+             mock.patch.object(Credentials, "refresh", side_effect=RefreshError("invalid_grant")):
+            # token Drive hong
+            with redirect_stdout(io.StringIO()):
+                rc = sc.run(self.token_args(bad, exp), self.deps(drive=None, youtube=None,
+                                                                 connect=sc.connect))
+            self.assertEqual(rc, 3)
+            self.assertEqual(self.sent, [sc.TOKEN_MSG])
+            # token YouTube het han, refresh loi: cung khong mo trinh duyet
+            with self.assertRaises(sc.TokenError) as cm:
+                sc.load_creds(exp, yu.YOUTUBE_SCOPES, "YouTube")
+            self.assertIn("refresh failed", str(cm.exception))
+            # cung ngay: khong bao lai
+            with redirect_stdout(io.StringIO()):
+                rc = sc.run(self.token_args(bad, exp), self.deps(drive=None, youtube=None,
+                                                                 connect=sc.connect))
+            self.assertEqual(rc, 3)
+            self.assertEqual(self.sent, [sc.TOKEN_MSG])
+        self.assertEqual((bad.read_bytes(), exp.read_bytes()), before)   # khong ghi lai token
+        self.assertEqual(self.captured, [])
+        self.assertEqual(self.actions_calls, [])
+
+    def test_token_failure_writes_health_when_drive_available(self):
+        def connect(args):
+            raise sc.TokenError("YouTube: refresh failed (invalid_grant)", drive=self.drive)
+        self.assertEqual(self.run_it(drive=None, youtube=None, connect=connect), 3)
+        h = self.health()
+        self.assertEqual(h["status"], "FAIL auth")
+        self.assertEqual(h["detail"], "token: YouTube: refresh failed (invalid_grant)")
+        self.assertEqual(self.sent, [sc.TOKEN_MSG])
+
+    # -- backoff va gioi han Telegram
+
+    def five_videos(self):
+        self.yt.resources = [resource(f"vid{c}000000{i}", published="2026-11-20T09:00:00Z")
+                             for i, c in enumerate("CDEFG")]
+        return [r["id"] for r in self.yt.resources]
+
+    def test_many_failures_one_message(self):
+        bad = sp.ParseError("missing metric ctr")
+        self.capture_plan = {"vidB0000002": [bad, bad], "vidA0000001": [bad, bad]}
+        self.run_it()
+        self.assertEqual(self.sent, [])
+        self.clock.t += timedelta(hours=2)
+        self.run_it()
+        self.assertEqual(len(self.sent), 1)
+        self.assertIn("vidB0000002", self.sent[0])
+        self.assertIn("vidA0000001", self.sent[0])
+        self.assertIn("2 video(s)", self.sent[0])
+
+    def test_stops_after_three_consecutive_failures(self):
+        ids = self.five_videos()
+        bad = sb.NavError("net::ERR_TIMED_OUT")
+        self.capture_plan = {v: [bad] for v in ids}
+        self.assertEqual(self.run_it(), 4)
+        self.assertEqual(self.captured, ids[:3])
+        st = self.state()
+        self.assertEqual(set(st["last_attempt"]), set(ids[:3]))   # hai video sau van den han
+        self.assertIn("3 failures in a row", self.health()["detail"])
+        # trang / trinh duyet da dong -> dung ngay sau video do
+        self.captured.clear()
+        (self.home / f".studio-state-{CHANNEL}.json").unlink()
+        self.capture_plan = {ids[0]: [RuntimeError(
+            "Target page, context or browser has been closed")]}
+        self.assertEqual(self.run_it(), 4)
+        self.assertEqual(self.captured, ids[:1])
+        self.assertIn("browser closed", self.health()["detail"])
+        # mot lan thanh cong o giua thi dem lai tu dau
+        self.captured.clear()
+        (self.home / f".studio-state-{CHANNEL}.json").unlink()
+        self.capture_plan = {ids[0]: [bad], ids[1]: [bad], ids[3]: [bad], ids[4]: [bad]}
+        self.run_it()
+        self.assertEqual(self.captured, ids)
+
+    def test_failed_video_backs_off(self):
+        self.capture_plan = {"vidA0000001": [sb.NavError("timeout")]}
+        self.run_it()
+        self.assertEqual(self.state()["last_attempt"], {"vidA0000001": "2026-11-20T12:00:05Z"})
+        # 30 phut sau: chua den han lai (tinh tu lan thu, khong tu lan thanh cong)
+        self.captured.clear()
+        self.clock.t += timedelta(minutes=30)
+        self.run_it()
+        self.assertEqual(self.captured, [])
+        # het chu ky 2 gio: thu lai
+        self.clock.t += timedelta(hours=1, minutes=30)
+        self.run_it()
+        self.assertEqual(self.captured, ["vidB0000002", "vidA0000001"])
+        # video cu (doc hang ngay) loi sau 06:00 -> doi toi 06:00 hom sau
+        old = [vid("o", dt("2026-11-01T00:00:00Z"))]
+        state = {"last": {"o": "2026-11-19T07:00:00Z"}, "last_attempt": {"o": "2026-11-20T07:00:00Z"}}
+        last = sc.last_by_video(state)
+        self.assertEqual(sc.due_videos(old, last, dt("2026-11-20T20:00:00Z"), 6, tz=UTC), [])
+        self.assertEqual(sc.due_videos(old, last, dt("2026-11-21T06:30:00Z"), 6, tz=UTC), ["o"])
+
+    # -- loi API / Drive
+
+    def quota_youtube(self):
+        from googleapiclient.errors import HttpError
+
+        class _Resp:
+            status = 403
+            reason = "Forbidden"
+
+        class C:
+            def list(self, **kw):
+                return _Exec(HttpError(_Resp(), b'{"error": {"errors": [{"reason": "quotaExceeded"}]}}'))
+
+        yt = FakeYouTube([])
+        yt.channels = lambda: C()
+        return yt
+
+    def test_api_failure_writes_fail_api(self):
+        self.assertEqual(self.run_it(youtube=self.quota_youtube()), 1)
+        h = self.health()
+        self.assertEqual(h["status"], "FAIL api")
+        self.assertIn("quota", h["detail"])
+        self.assertEqual(len(self.sent), 1)
+        self.assertIn("quota", self.sent[0])
+        self.assertEqual(self.captured, [])
+
+    def test_api_error_notified_once_per_day(self):
+        yt = self.quota_youtube()
+        self.assertEqual(self.run_it(youtube=yt), 1)
+        self.clock.t += timedelta(hours=1)
+        self.assertEqual(self.run_it(youtube=yt), 1)
+        self.assertEqual(len(self.sent), 1)
+        # loai loi khac cung ngay -> bao rieng
+        broken = FakeYouTube([])
+        broken.channels = lambda: (_ for _ in ()).throw(ConnectionResetError("reset"))
+        self.assertEqual(self.run_it(youtube=broken), 1)
+        self.assertEqual(len(self.sent), 2)
+        # ngay UTC moi -> bao lai
+        self.clock.t += timedelta(days=1)
+        self.assertEqual(self.run_it(youtube=yt), 1)
+        self.assertEqual(len(self.sent), 3)
+
+    def test_partial_append_keeps_first_day(self):
+        # qua nua dem: file ngay 20 ghi xong, file ngay 21 loi -> chi video ngay 20 co "last"
+        self.clock = Clock(dt("2026-11-20T23:59:58Z"))
+        real = ss.append_snapshot_rows
+
+        def flaky(drive, folders, day, cols, rows):
+            if day == "2026-11-21":
+                raise ConnectionResetError("drive reset")
+            return real(drive, folders, day, cols, rows)
+        with mock.patch.object(ss, "append_snapshot_rows", flaky):
+            self.assertEqual(self.run_it(), 1)
+        st = self.state()
+        self.assertEqual(set(st["last"]), {"vidB0000002"})
+        self.assertEqual(self.health()["status"], "FAIL api")
+        # lan sau chi doc lai video chua len Drive -> khong trung dong
+        self.captured.clear()
+        self.clock.t += timedelta(minutes=30)
+        self.assertEqual(self.run_it(), 0)
+        self.assertEqual(self.captured, ["vidA0000001"])
+        self.assertEqual(self.snapshot_text("2026-11-20").count("vidB0000002"), 1)
+
+    def test_runbook_task_keeps_exit_code(self):
+        text = (HERE.parent / "docs" / "studio-capture.md").read_text(encoding="utf-8")
+        self.assertIn("--once; exit $LASTEXITCODE", text)
 
     def test_config_and_cli(self):
         a = sc.parse_args(["--config", str(self.cfg)])

@@ -7,8 +7,10 @@ Task Scheduler goi moi 30 phut:
 
 Mot lan chay:
     lock rieng -> jitter 0-10 phut -> bo qua neu uploader dang chay
+    -> token Google (chi doc, refresh trong bo nho, khong bao gio mo trinh duyet OAuth)
     -> Data API: danh sach video cong khai (bo Shorts, rieng tu, khong cong khai, hen gio)
-    -> video den han: < 72 h moi 2 gio, con lai moi ngay mot lan tu daily_hour (gio VPS)
+    -> video den han: < 72 h moi 2 gio, con lai moi ngay mot lan tu daily_hour (gio VPS);
+       video doc loi cung cho het chu ky tinh tu lan THU cuoi
     -> Chrome that, profile da dang nhap: mo tab Reach + Engagement cua tung video,
        nghi 5-15 s giua cac video, doc JSON cua Studio
     -> studio/snapshots/<ngay UTC>.csv (mot lan ghi moi file ngay), studio/raw/,
@@ -19,8 +21,9 @@ Khong bao gio dien form dang nhap. Gap trang dang nhap / thu thach: dung ca lan 
 FAIL auth, Telegram, exit 3, va khong mo lai Studio cho toi khi profile thay doi
 (chu kenh da mo profile de dang nhap lai).
 
-Exit: 0 ok (ke ca bo qua vi uploader dang chay), 1 loi / watchdog 50 phut,
-2 lock dang bi giu, 3 dang nhap / thu thach, 4 khong mo duoc trang hoac trinh duyet.
+Exit: 0 ok (ke ca bo qua vi uploader dang chay), 1 loi API/Drive / watchdog 50 phut,
+2 lock dang bi giu, 3 dang nhap / thu thach / token hong, 4 khong mo duoc trang hoac
+trinh duyet.
 """
 from __future__ import annotations
 
@@ -39,6 +42,8 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+from googleapiclient.errors import HttpError
 
 import studio_actions as sa
 import studio_browser as sb
@@ -60,13 +65,16 @@ SHORTS_MAX_S = 60
 JITTER_S = 600
 PAUSE_S = (5, 15)
 WATCHDOG_S = 50 * 60
-CAPTURE_BUDGET_S = 30 * 60             # sau moc nay khong mo video moi, de lai lan sau
+CAPTURE_CAP_S = 35 * 60                # tinh tu luc khoi dong (gom jitter): sau moc nay khong mo video moi
+MAX_CONSECUTIVE_FAILS = 3              # 3 video loi lien tiep -> dung, phan con lai de lan sau
 LOCK_STALE_S = 6 * 3600                # giong yu.Lock
+UPLOADER_MIDRUN_MIN_AGE_S = 60         # giua chung chi dung neu uploader da chay > 60 s
 THUMB_TIMEOUT_S = 20
 THUMB_URL = "https://i.ytimg.com/vi/{}/{}"
 VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,20}$")
 
 AUTH_MSG = "Studio sign-in needed on the VPS: run studio_spike.py --login"
+TOKEN_MSG = "Google API token on the VPS needs re-auth: run the uploader once by hand"
 
 _DURATION_RE = re.compile(r"^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$")
 
@@ -109,6 +117,10 @@ def lock_path(home, channel: str) -> Path:
     return Path(home) / f".studio-capture-{channel}.lock"
 
 
+def actions_lock_path(home, channel: str) -> Path:
+    return Path(home) / f".studio-actions-{channel}.lock"   # cung ten voi studio_actions.main()
+
+
 def uploader_lock_path(home, channel: str) -> Path:
     return Path(home) / f".uploader-{channel}.lock"   # ten trong youtube_uploader.main()
 
@@ -117,13 +129,14 @@ def state_path(home, channel: str) -> Path:
     return Path(home) / f".studio-state-{channel}.json"
 
 
-def uploader_busy(home, channel: str) -> bool:
-    """Lock cua uploader con moi (< 6 h, cung nguong voi yu.Lock) = dang upload."""
+def uploader_busy(home, channel: str, min_age: float = 0) -> bool:
+    """Lock cua uploader con moi (< 6 h, cung nguong voi yu.Lock) va da giu it nhat min_age giay."""
     p = uploader_lock_path(home, channel)
     try:
-        return time.time() - p.stat().st_mtime < LOCK_STALE_S
+        age = time.time() - p.stat().st_mtime
     except OSError:
         return False
+    return min_age <= age < LOCK_STALE_S
 
 
 def profile_stamp(profile_dir) -> float:
@@ -139,6 +152,14 @@ def profile_stamp(profile_dir) -> float:
     return best
 
 
+def error_kind(exc: BaseException) -> str:
+    if yu.is_quota_error(exc):
+        return "quota"
+    if isinstance(exc, HttpError):
+        return f"http{getattr(exc.resp, 'status', '?')}"
+    return type(exc).__name__
+
+
 # ---------------------------------------------------------------- trang thai
 
 
@@ -149,10 +170,9 @@ def load_state(path: Path) -> dict:
         data = {}
     if not isinstance(data, dict):
         data = {}
-    if not isinstance(data.get("last"), dict):
-        data["last"] = {}
-    if not isinstance(data.get("failed"), dict):
-        data["failed"] = {}
+    for key in ("last", "last_attempt", "failed", "notified"):
+        if not isinstance(data.get(key), dict):
+            data[key] = {}
     return data
 
 
@@ -163,12 +183,72 @@ def save_state(path: Path, state: dict) -> None:
 
 
 def last_by_video(state: dict) -> dict:
+    """Lan doc gan nhat cua moi video: lan thanh cong, hoac lan thu loi neu muon hon."""
     out = {}
-    for vid, text in state.get("last", {}).items():
-        d = parse_time(text)
-        if d is not None:
-            out[vid] = d
+    for key in ("last", "last_attempt"):
+        for vid, text in state.get(key, {}).items():
+            d = parse_time(text)
+            if d is not None and (vid not in out or d > out[vid]):
+                out[vid] = d
     return out
+
+
+def notify_daily(deps, state: dict, kind: str, message: str) -> None:
+    """Gui Telegram toi da mot lan moi loai loi moi ngay UTC (nho trong state)."""
+    day = utc_day(deps.now())
+    if state["notified"].get(kind) == day:
+        log.info("Da bao loi %s hom nay, khong bao lai.", kind)
+        return
+    state["notified"][kind] = day
+    deps.notify(message)
+
+
+# ---------------------------------------------------------------- token
+
+
+class TokenError(Exception):
+    """Token Google khong dung duoc ma khong can nguoi. drive: Drive da ket noi (neu co)."""
+
+    def __init__(self, message, drive=None):
+        super().__init__(message)
+        self.drive = drive
+
+
+def load_creds(token: Path, scopes: list, label: str):
+    """Doc token cua uploader; het han thi refresh TRONG BO NHO.
+
+    Khong bao gio ghi lai file token (uploader ghi no moi 5 phut) va khong bao gio
+    mo InstalledAppFlow (khong ai o VPS de dang nhap). Loi -> TokenError."""
+    from google.auth.transport.requests import Request
+    from google.oauth2.credentials import Credentials
+    token = Path(token)
+    if not token.exists():
+        raise TokenError(f"{label}: {token.name} missing")
+    try:
+        creds = Credentials.from_authorized_user_file(str(token), scopes)
+    except Exception as e:
+        raise TokenError(f"{label}: {token.name} unreadable ({type(e).__name__}: {e})") from e
+    if creds.valid:
+        return creds
+    if not (creds.expired and creds.refresh_token):
+        raise TokenError(f"{label}: token not valid and no refresh token")
+    try:
+        creds.refresh(Request())
+    except Exception as e:
+        raise TokenError(f"{label}: refresh failed ({type(e).__name__}: {e})") from e
+    return creds
+
+
+def connect(args):
+    from googleapiclient.discovery import build
+    dc = load_creds(Path(args.token_drive), yu.DRIVE_SCOPES, "Drive")
+    drive = build("drive", "v3", credentials=dc, cache_discovery=False)
+    try:
+        yc = load_creds(Path(args.token_youtube), yu.YOUTUBE_SCOPES, "YouTube")
+    except TokenError as e:
+        e.drive = drive
+        raise
+    return drive, build("youtube", "v3", credentials=yc, cache_discovery=False)
 
 
 # ---------------------------------------------------------------- Data API
@@ -278,9 +358,11 @@ def thumb_hash(video_id: str, fetch=None) -> str | None:
         try:
             data = fetch(url)
         except urllib.error.HTTPError as e:
-            if e.code == 404:
+            code = e.code
+            e.close()
+            if code == 404:
                 continue
-            log.warning("  thumb %s: HTTP %s, thumb_hash de trong", video_id, e.code)
+            log.warning("  thumb %s: HTTP %s, thumb_hash de trong", video_id, code)
             return None
         except Exception as e:
             log.warning("  thumb %s: %s, thumb_hash de trong", video_id, e)
@@ -290,16 +372,6 @@ def thumb_hash(video_id: str, fetch=None) -> str | None:
 
 
 # ---------------------------------------------------------------- phu thuoc
-
-
-def connect(args):
-    from googleapiclient.discovery import build
-    dc = yu.get_credentials(Path(args.client_secret), Path(args.token_drive),
-                            yu.DRIVE_SCOPES, "Drive")
-    yc = yu.get_credentials(Path(args.client_secret), Path(args.token_youtube),
-                            yu.YOUTUBE_SCOPES, "YouTube")
-    return (build("drive", "v3", credentials=dc, cache_discovery=False),
-            build("youtube", "v3", credentials=yc, cache_discovery=False))
 
 
 class Deps:
@@ -319,6 +391,7 @@ class Deps:
         self.home = yu.SCRIPT_DIR    # noi dat lock va state
         self.tz = None               # None -> gio may (gio VPS)
         self.uniform = random.uniform
+        self.launched_at = None      # None -> luc run() bat dau
         for k, v in kw.items():
             if not hasattr(self, k):
                 raise TypeError(f"unknown dep {k}")
@@ -329,6 +402,8 @@ class Deps:
 
 
 def run(args, deps: Deps) -> int:
+    if deps.launched_at is None:
+        deps.launched_at = deps.now()
     lock = yu.Lock(lock_path(deps.home, args.channel))
     try:
         lock.__enter__()
@@ -356,20 +431,76 @@ def _run_locked(args, deps: Deps) -> int:
     manual = bool(args.only or args.dry_run)
     spath = state_path(deps.home, ch)
     state = load_state(spath)
+
+    def persist():
+        if not args.dry_run:
+            save_state(spath, state)
+
     held = state.get("auth_blocked")
+    hold = False
     if held and not manual:
-        if profile_stamp(args.profile) == held.get("profile_stamp"):
-            log.warning("Van FAIL auth tu %s, profile chua doi: khong mo Studio. %s",
-                        held.get("at_utc"), AUTH_MSG)
-            return 3
-        log.info("Profile da doi tu luc FAIL auth (%s), thu doc lai.", held.get("at_utc"))
+        hold = profile_stamp(args.profile) == held.get("profile_stamp")
+        if not hold:
+            log.info("Profile da doi tu luc FAIL auth (%s), thu doc lai.", held.get("at_utc"))
 
     if deps.drive is None or deps.youtube is None:
-        deps.drive, deps.youtube = deps.connect(args)
+        try:
+            deps.drive, deps.youtube = deps.connect(args)
+        except TokenError as e:
+            return _token_failed(args, deps, state, persist, e)
     drive, youtube = deps.drive, deps.youtube
-    folders = yu.resolve_folders(drive, args.drive_root, ch)
-    sf = None if args.dry_run else ss.studio_folders(drive, folders["channel"])
 
+    sf = None
+    try:
+        folders = yu.resolve_folders(drive, args.drive_root, ch)
+        if not args.dry_run:
+            sf = ss.studio_folders(drive, folders["channel"])
+        if hold:
+            log.warning("Van FAIL auth tu %s, profile chua doi: khong mo Studio. %s",
+                        held.get("at_utc"), AUTH_MSG)
+            if not args.dry_run:
+                copy_history(drive, folders["channel"], sf)
+                if not args.no_actions:
+                    _run_actions(deps, drive, youtube, folders, ch)
+            return 3
+        return _capture_phase(args, deps, state, persist, drive, youtube, folders, sf)
+    except Exception as e:
+        kind = error_kind(e)
+        detail = f"{kind}: {type(e).__name__}: {e}"
+        log.exception("Loi API/Drive (%s)", kind)
+        if args.dry_run:
+            print(f"FAIL api: {detail}")
+            return 1
+        if sf is not None:
+            try:
+                ss.write_health(drive, sf, "FAIL api", detail[:2000], 0, 0)
+            except Exception as e2:
+                log.warning("Khong ghi duoc health: %s", e2)
+        notify_daily(deps, state, f"api:{kind}", f"[{ch}] Studio capture ERROR: {detail}"[:1000])
+        persist()
+        return 1
+
+
+def _token_failed(args, deps, state, persist, e: TokenError) -> int:
+    reason = str(e)
+    log.error("Token Google khong dung duoc: %s", reason)
+    if args.dry_run:
+        print(f"FAIL auth: token: {reason}")
+        return 3
+    if e.drive is not None:
+        try:
+            folders = yu.resolve_folders(e.drive, args.drive_root, args.channel)
+            sf = ss.studio_folders(e.drive, folders["channel"])
+            ss.write_health(e.drive, sf, "FAIL auth", f"token: {reason}"[:2000], 0, 0)
+        except Exception as e2:
+            log.warning("Khong ghi duoc health: %s", e2)
+    notify_daily(deps, state, "token", TOKEN_MSG)
+    persist()
+    return 3
+
+
+def _capture_phase(args, deps, state, persist, drive, youtube, folders, sf) -> int:
+    ch = args.channel
     now = deps.now()
     videos = list_videos(youtube)
     by_id = {v["video_id"]: v for v in videos}
@@ -385,6 +516,7 @@ def _run_locked(args, deps: Deps) -> int:
 
     rows: list[dict] = []
     failures: dict[str, tuple[str, bool]] = {}   # video_id -> (ly do, la loi dieu huong)
+    attempts: dict[str, str] = {}                # video_id -> luc thu (cho video loi)
     notes: list[str] = []
     blocked = None
     browser_error = None
@@ -393,7 +525,8 @@ def _run_locked(args, deps: Deps) -> int:
         try:
             with deps.open_browser(args.profile) as page:
                 started = True
-                blocked = _capture_loop(args, deps, page, due, by_id, rows, failures, notes, sf)
+                blocked = _capture_loop(args, deps, page, due, by_id, rows, failures,
+                                        attempts, notes, sf)
         except Exception as e:
             if started:
                 raise
@@ -411,15 +544,20 @@ def _run_locked(args, deps: Deps) -> int:
             print(browser_error)
         return 4 if browser_error or any(nav for _, nav in failures.values()) else 0
 
-    _write_rows(drive, sf, rows)          # loi -> raise, khong cap nhat state
-    for r in rows:
-        state["last"][r["video_id"]] = r["captured_at_utc"]
-        state["failed"].pop(r["video_id"], None)
+    # Ghi tung file ngay; moi file ghi xong moi cap nhat "last" cua cac dong trong do.
+    # Loi giua chung -> raise ra _run_locked (FAIL api), state da luu phan da ghi.
+    _write_rows(drive, sf, rows, state)
+
+    reached = []
     for vid, (reason, _) in failures.items():
         n = int(state["failed"].get(vid, 0)) + 1
         state["failed"][vid] = n
+        state["last_attempt"][vid] = attempts[vid]
         if n == 2:
-            deps.notify(f"[{ch}] Studio read failed twice in a row for {vid}: {reason}")
+            reached.append(f"{vid} ({reason[:120]})")
+    if reached:
+        deps.notify(f"[{ch}] Studio read failed twice in a row for {len(reached)} video(s): "
+                    + "; ".join(reached))
     if browser_error:
         n = int(state.get("browser_failed", 0)) + 1
         state["browser_failed"] = n
@@ -432,14 +570,14 @@ def _run_locked(args, deps: Deps) -> int:
     if blocked:
         state["auth_blocked"] = {"at_utc": iso_z(deps.now()), "detail": blocked,
                                  "profile_stamp": profile_stamp(args.profile)}
-        save_state(spath, state)
+        persist()
         ss.write_health(drive, sf, "FAIL auth", blocked, len(rows), len(failures))
         deps.notify(AUTH_MSG)
         log.error("FAIL auth: %s", blocked)
         return 3
     if due and not browser_error:
         state.pop("auth_blocked", None)
-    save_state(spath, state)
+    persist()
 
     bad = [f"{v}: {r}" for v, (r, _) in failures.items()]
     if browser_error:
@@ -456,21 +594,37 @@ def _run_locked(args, deps: Deps) -> int:
     return 4 if browser_error or any(nav for _, nav in failures.values()) else 0
 
 
-def _capture_loop(args, deps, page, due, by_id, rows, failures, notes, sf) -> str | None:
+def _page_gone(page, exc: BaseException) -> bool:
+    """Trang / trinh duyet da dong: doc tiep chi ra loi hang loat."""
+    if type(exc).__name__ == "TargetClosedError" or "has been closed" in str(exc):
+        return True
+    is_closed = getattr(page, "is_closed", None)
+    if is_closed is None:
+        return False
+    try:
+        return bool(is_closed())
+    except Exception:
+        return True
+
+
+def _capture_loop(args, deps, page, due, by_id, rows, failures, attempts, notes, sf) -> str | None:
     """Doc lan luot. Tra ve ly do neu gap dang nhap/thu thach (dung ngay), nguoc lai None."""
-    t0 = deps.now()
+    streak = 0
     for i, vid in enumerate(due):
+        left = len(due) - i
         if i:
             deps.sleep(deps.uniform(*PAUSE_S))
-        if (deps.now() - t0).total_seconds() > CAPTURE_BUDGET_S:
-            notes.append(f"time budget: {len(due) - i} video(s) left for next run")
-            log.warning("Het %d phut, de %d video cho lan sau.", CAPTURE_BUDGET_S // 60, len(due) - i)
+        if (deps.now() - deps.launched_at).total_seconds() > CAPTURE_CAP_S:
+            notes.append(f"time cap: {left} video(s) left for next run")
+            log.warning("Qua %d phut tu luc khoi dong, de %d video cho lan sau.",
+                        CAPTURE_CAP_S // 60, left)
             break
-        if uploader_busy(deps.home, args.channel):
-            notes.append(f"uploader started: {len(due) - i} video(s) left for next run")
-            log.info("Uploader vua chay, dung doc; %d video de lan sau.", len(due) - i)
+        if uploader_busy(deps.home, args.channel, min_age=UPLOADER_MIDRUN_MIN_AGE_S):
+            notes.append(f"uploader running: {left} video(s) left for next run")
+            log.info("Uploader dang chay, dung doc; %d video de lan sau.", left)
             break
         log.info("Doc %s (%d/%d)", vid, i + 1, len(due))
+        tried = deps.now()
         try:
             payloads = deps.capture(page, vid)
             row = sp.parse_snapshot(payloads, vid)
@@ -479,8 +633,19 @@ def _capture_loop(args, deps, page, due, by_id, rows, failures, notes, sf) -> st
         except Exception as e:
             reason = f"{type(e).__name__}: {e}"[:300]
             failures[vid] = (reason, not isinstance(e, sp.ParseError))
+            attempts[vid] = iso_z(tried)
             log.warning("  %s: khong doc duoc, khong ghi dong: %s", vid, reason)
+            streak += 1
+            if _page_gone(page, e):
+                notes.append(f"browser closed: {left - 1} video(s) left for next run")
+                log.error("Trang/trinh duyet da dong, dung doc.")
+                break
+            if streak >= MAX_CONSECUTIVE_FAILS:
+                notes.append(f"{streak} failures in a row: {left - 1} video(s) left for next run")
+                log.error("%d video loi lien tiep, dung doc.", streak)
+                break
             continue
+        streak = 0
         cap = deps.now()
         row["captured_at_utc"] = iso_z(cap)
         row["age_hours"] = round((cap - by_id[vid]["public_at"]).total_seconds() / 3600, 2)
@@ -496,13 +661,20 @@ def _capture_loop(args, deps, page, due, by_id, rows, failures, notes, sf) -> st
     return None
 
 
-def _write_rows(drive, sf, rows: list[dict]) -> None:
-    """Mot lan append cho moi file ngay (UTC theo captured_at_utc)."""
+def _write_rows(drive, sf, rows: list[dict], state: dict) -> None:
+    """Mot lan append cho moi file ngay (UTC theo captured_at_utc). Moi file ngay ghi
+    xong thi cap nhat ngay state["last"] cua cac video trong do, de loi o file sau
+    khong lam doc lai (va ghi trung) cac dong da len Drive."""
     by_day: dict[str, list] = {}
     for r in rows:
         by_day.setdefault(r["captured_at_utc"][:10], []).append(r)
-    for day, day_rows in by_day.items():
-        ss.append_snapshot_rows(drive, sf, day, sp.SNAPSHOT_COLS, day_rows)
+    for day in sorted(by_day):
+        ss.append_snapshot_rows(drive, sf, day, sp.SNAPSHOT_COLS, by_day[day])
+        for r in by_day[day]:
+            vid = r["video_id"]
+            state["last"][vid] = r["captured_at_utc"]
+            state["failed"].pop(vid, None)
+            state["last_attempt"].pop(vid, None)
 
 
 def _print_rows(rows: list[dict]) -> None:
@@ -525,7 +697,7 @@ def copy_history(drive, chan_folder: str, sf: dict) -> None:
 
 def _run_actions(deps, drive, youtube, folders, ch) -> None:
     """Bo thuc thi doi thumbnail. Loi o day khong doi exit code cua lan doc."""
-    alock = yu.Lock(Path(deps.home) / f".studio-actions-{ch}.lock")
+    alock = yu.Lock(actions_lock_path(deps.home, ch))
     try:
         alock.__enter__()
     except SystemExit:
@@ -567,7 +739,6 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--config", help=f"JSON: profile_dir, daily_hour, channel (mac dinh {CONFIG_NAME} neu co)")
     p.add_argument("--profile", help=f"Profile Chrome da dang nhap (mac dinh {DEFAULT_PROFILE})")
     p.add_argument("--drive-root", default="YouTube-Upload")
-    p.add_argument("--client-secret", default=str(yu.SCRIPT_DIR / "client_secret.json"))
     p.add_argument("--token-drive", default=str(yu.SCRIPT_DIR / "token-drive.json"))
     p.add_argument("--token-youtube", default=str(yu.SCRIPT_DIR / "token-youtube.json"))
     p.add_argument("--log-file", default=str(yu.SCRIPT_DIR / "logs" / "studio_capture.log"))
@@ -595,28 +766,32 @@ def parse_args(argv=None) -> argparse.Namespace:
     return a
 
 
-def start_watchdog(lock_file: Path, notify, seconds: int = WATCHDOG_S) -> threading.Timer:
-    """Qua `seconds` thi bao, go lock cua minh (os._exit bo qua finally) va thoat 1."""
-    def fire():
-        log.error("WATCHDOG: qua %d phut, thoat.", seconds // 60)
+def watchdog_fire(lock_files, notify, seconds: int = WATCHDOG_S, exit_fn=os._exit) -> None:
+    """Bao, go cac lock ma tien trinh nay dang giu (os._exit bo qua finally), thoat 1."""
+    log.error("WATCHDOG: qua %d phut, thoat.", seconds // 60)
+    try:
+        notify(f"Studio capture: watchdog after {seconds // 60} min, run killed")
+    except Exception:
+        pass
+    me = str(os.getpid())
+    for lock_file in lock_files:
         try:
-            notify(f"Studio capture: watchdog after {seconds // 60} min, run killed")
-        except Exception:
-            pass
-        try:
-            if lock_file.read_text().strip() == str(os.getpid()):
-                lock_file.unlink()
+            if Path(lock_file).read_text().strip() == me:
+                Path(lock_file).unlink()
         except OSError:
             pass
-        os._exit(1)
+    exit_fn(1)
 
-    t = threading.Timer(seconds, fire)
+
+def start_watchdog(lock_files, notify, seconds: int = WATCHDOG_S) -> threading.Timer:
+    t = threading.Timer(seconds, watchdog_fire, args=(list(lock_files), notify, seconds))
     t.daemon = True
     t.start()
     return t
 
 
 def main(argv=None) -> int:
+    launched = datetime.now(timezone.utc)
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
@@ -627,8 +802,9 @@ def main(argv=None) -> int:
     alog.setLevel(logging.DEBUG if args.verbose else logging.INFO)
     for h in yu.log.handlers:
         alog.addHandler(h)
-    deps = Deps()
-    wd = start_watchdog(lock_path(deps.home, args.channel), deps.notify)
+    deps = Deps(launched_at=launched)
+    wd = start_watchdog([lock_path(deps.home, args.channel),
+                         actions_lock_path(deps.home, args.channel)], deps.notify)
     try:
         return run(args, deps)
     except Exception as e:
