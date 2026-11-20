@@ -235,6 +235,55 @@ Manual thumbnail changes are detected here from `thumb_hash` changes with no mat
 `D:/Youtube/n8n-upload`. If the raw Studio format changes, this PC re-parses `raw/` with the same
 `scripts/studio_parse.py`. Thumbnail production and features stay in the build repo.
 
+## 5.9 Revision 2026-11-20: from thumbnail loop to pipeline feedback (owner approved)
+
+Owner, 2026-11-20:
+- "remove the Telegram requirement";
+- "currently we can have all the data that we can introduce the feedback loop to improve our video topic idea and
+  creation process?";
+- then, on the three proposed steps: "1. Do it 2. Do it 3. do it also, and also … I want a scheduler in the claude
+  rather than in this PC".
+
+**Telegram is optional.** `notify()` is already a no-op without the env vars. Every alert also lands in a file:
+- the top of the studio report;
+- the 21:00 nightly note, which now copies the loop's health, stale-data and verdict-change lines.
+
+**1. Close the data gaps.** The collector scrolls each Studio tab to the bottom, so lazily loaded cards arrive. The
+parser adds:
+- `ret_30s`, `ret_60s` from the audience-retention curve;
+- `apv_pct` (average percentage viewed);
+- the traffic-source split: `src_browse`, `src_suggested`, `src_search`, `src_other`.
+
+Card ids come from a live capture on the VPS. If a card isn't served, its columns stay None and are never 0.
+
+**2. Per-video ledger** (`loop/ledger.py`, on the owner's PC): one row per public video, joining what was made with
+how it did. Written to `<report_dir>/ledger.csv` plus a readable `ledger.md`. The join key is the YouTube video id →
+project slug, taken from `studio/upload-history.csv`; when that is missing, an exact title match between the channel
+list (yt-dlp) and the project's `UPLOAD.md`/`tieu-de.md`. Unmatched videos get a row with empty "made" fields.
+
+| Side | Fields |
+|---|---|
+| Made | slug, lane (`cach` from the work board), packaging kind, title, title shape (`topic_engine/ctr/own_shapes.json` substring match), title word count, has number/price/year, thumbnail main features (`thumbnail-features.csv` when present, else measured from `output/final/thumbnail.jpg` with `thumb_gate.measure`), script words, runtime s, footage share %, cuts per min (from the film when available), publish weekday/hour local |
+| Did | CTR, impressions and views at about 24 h and about 7 d (nearest snapshot), latest; avd_s, apv_pct, ret_30s, ret_60s, traffic split (latest); verdict |
+
+**3. Weekly improvement agent:** a Claude scheduled task, Sunday 17:00, two hours before the topic-selection task.
+- **Reads:** the ledger, the week's studio reports, `bai-hoc/gia-thuyet.md`, `topic_engine/ctr/*`, `raw/form-thumbnail.md`.
+- **Finds** patterns between the "made" and "did" columns. A pattern counts only when it is seen in ≥ 3 videos and
+  holds against the rest. The confidence is written next to it.
+- **Mode B (owner pick, 2026-11-20, "do it" on the recommended mode):**
+  - **Applies on its own:** writes `van-hanh/bao-cao/tuan/<date>-feedback.md`; updates the lessons and hypothesis
+    files (`van-hanh/bai-hoc/bai-hoc-van-hanh.md`, `gia-thuyet.md`) and a "Feedback tuần" section that the
+    topic-selection task and the topic handbook read.
+  - **Only proposes, for the owner:** changes to locked rules (`raw/`), thresholds, POLICY_GATE, skills, code. These
+    go into `van-hanh/ke-hoach/<date>-de-xuat-thay-doi.md`, with the evidence.
+  - Never touches policy rules.
+
+**Scheduling moves into Claude.** The PC-side Windows task "BareSkull StudioLoop" is replaced by a Claude scheduled
+task (Haiku) that runs `loop/run.ps1` and then `loop/ledger.py`, every 3 h. The improvement agent and the existing
+21:00, 06:10, hourly and Sunday tasks are Claude scheduled tasks too. The VPS collector stays in the VPS Task
+Scheduler, because Claude does not run on the VPS. Cloud routines are not used: every step needs files and tokens on
+this PC.
+
 ## 6. Left to the builder
 
 - The exact Studio URLs and the JSON endpoints to listen to (verify against the live Studio).
