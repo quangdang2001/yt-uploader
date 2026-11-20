@@ -20,16 +20,50 @@ from datetime import datetime, timezone, timedelta
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 VERDICT_VI = {
-    "KEEP": "Giữ",
-    "WATCH": "Theo dõi",
-    "CHANGE_TITLE": "Nên đổi tiêu đề",
-    "NOT_PACKAGING": "Không do đóng gói",
-    "TOO_EARLY": "Còn sớm",
-    "SWAP": "Đổi thumbnail",
-    "REVERT": "Hoàn lại thumbnail",
-    "PAUSED": "Tạm dừng (đổi tay)",
+    "KEEP": "Tốt",
+    "WATCH": "Tạm ổn",
+    "CHANGE_TITLE": "Yếu, nên đổi",
+    "NOT_PACKAGING": "Ít được giới thiệu",
+    "TOO_EARLY": "Mới đăng",
+    "SWAP": "Đang thử thumbnail khác",
+    "REVERT": "Đã trả lại thumbnail cũ",
+    "PAUSED": "Tạm dừng (vừa đổi tay)",
 }
-PACKAGING_VI = {"gia": "Giá", "lineup": "Dòng sản phẩm", "xep-hang": "Xếp hạng", "other": "Khác"}
+PACKAGING_VI = {"gia": "Một khẩu, có giá", "lineup": "Súng mới của một hãng", "xep-hang": "Xếp hạng",
+                "other": "Khác"}
+
+
+def _vn_num(s: str) -> str:
+    """'5,263' -> '5.263'; '3.5' -> '3,5'."""
+    s = s.replace(",", "")
+    if "." in s:
+        a, b = s.split(".", 1)
+        return f"{int(a):,}".replace(",", ".") + "," + b
+    return f"{int(s):,}".replace(",", ".")
+
+
+def reason_plain(code: str, raw: str) -> str:
+    """Viet lai ly do cua analyse.py thanh mot cau de hieu."""
+    raw = raw or ""
+    def grab(pat):
+        m = re.search(pat, raw)
+        return _vn_num(m.group(1)) if m else None
+    ctr, bar = grab(r"CTR ([\d.]+)%"), grab(r"bar ([\d.]+)%")
+    impr = grab(r"at ([\d,]+) impr") or grab(r", ([\d,]+) impr \(")
+    typical, age = grab(r"typical ([\d,]+) impr"), grab(r"age ([\d.]+) h")
+    if code == "KEEP" and ctr and bar:
+        return f"Cứ 100 người thấy thumbnail thì {ctr} người bấm xem, đạt mức cần có {bar}%."
+    if code == "WATCH" and ctr and bar:
+        return f"Cứ 100 người thấy thì {ctr} người bấm, sát mức cần có {bar}%. Chờ thêm số rồi mới kết luận."
+    if code == "CHANGE_TITLE" and ctr and bar:
+        return (f"Cứ 100 người thấy chỉ {ctr} người bấm, dưới mức cần có {bar}% (đã đủ {impr} lượt hiển thị để "
+                f"chắc chắn). Nên thử tiêu đề hoặc thumbnail khác.")
+    if code == "NOT_PACKAGING" and ctr and typical:
+        return (f"Người thấy vẫn bấm nhiều ({ctr}%), nhưng YouTube mới hiện video {impr} lần, chưa tới một nửa "
+                f"mức thường của kênh ({typical}). Vấn đề nằm ở chủ đề hoặc độ giữ chân, không phải tiêu đề.")
+    if code == "TOO_EARLY" and age:
+        return f"Mới đăng {age} giờ, {impr} lượt hiển thị. Cần ít nhất 6 giờ và 2.000 lượt hiển thị mới đánh giá được."
+    return reason_vi(raw)
 
 
 def _f(x):
@@ -76,7 +110,7 @@ def read_report_reasons(report_dir):
     for line in open(path, encoding="utf-8"):
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
         if len(cells) >= 4 and re.fullmatch(r"[A-Za-z0-9_-]{11}", cells[0]):
-            out[cells[0]] = reason_vi(cells[3])
+            out[cells[0]] = reason_plain(cells[2], cells[3])
     return out, os.path.basename(path)
 
 
@@ -173,9 +207,15 @@ def build_health(cache_dir, report_dir):
     hp = os.path.join(cache_dir, "health.json")
     if os.path.exists(hp):
         h = json.load(open(hp, encoding="utf-8"))
-        detail = (h.get("detail") or "").replace("nothing due", "lần chạy gần nhất không có video tới lượt đọc")
+        ok = h.get("status") == "PASS"
         if h.get("videos_read"):
-            detail = f"đọc {h['videos_read']} video, lỗi {h.get('videos_failed', 0)}. {detail}".strip()
+            detail = f"Đọc được {h['videos_read']} video, lỗi {h.get('videos_failed', 0)}."
+        elif (h.get("detail") or "") == "nothing due":
+            detail = "Lần gần nhất không có video nào cần đọc."
+        else:
+            detail = h.get("detail") or ""
+        if not ok:
+            detail = f"Có lỗi, cần mở VPS kiểm tra. Chi tiết: {detail}"
         try:
             at = datetime.strptime(h.get("at_utc") or "", "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
             at_s = at.astimezone(timezone(timedelta(hours=7))).strftime("%Y-%m-%d %H:%M")
@@ -183,9 +223,9 @@ def build_health(cache_dir, report_dir):
             at_s = h.get("at_utc") or ""
         rows.append({
             "thoi_diem": at_s,
-            "loai": "Máy VPS thu số liệu",
-            "trang_thai": "Ổn" if h.get("status") == "PASS" else "Lỗi",
-            "noi_dung": f"{h.get('status')}: {detail}",
+            "loai": "Máy chủ VPS đọc YouTube Studio",
+            "trang_thai": "Ổn" if ok else "Lỗi",
+            "noi_dung": detail,
         })
     ap = os.path.join(report_dir, "alerts.md")
     if os.path.exists(ap):
@@ -194,11 +234,36 @@ def build_health(cache_dir, report_dir):
             m = re.match(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2})\S*\s+(.*)", l)
             rows.append({
                 "thoi_diem": m.group(1) if m else "",
-                "loai": "Cảnh báo vòng studio",
+                "loai": "Máy này phân tích số liệu",
                 "trang_thai": "Lỗi",
                 "noi_dung": (m.group(2) if m else l)[:240],
             })
     return rows
+
+
+_PATTERN_WORDS = [
+    (r"\s*\(?`?thumb_brightness`?\)?", ""),
+    (r"\(avd_s ÷ runtime_s\)", "(thời gian xem trung bình chia độ dài phim)"),
+    (r"`?packaging`? xếp hạng vs giá", "Dạng xếp hạng so với dạng một khẩu có giá"),
+    (r"\bxep-hang\b", "xếp hạng"),
+    (r"\bvs gia\b", "vs một khẩu có giá"),
+    (r"CTR → PHÂN PHỐI \(lượt hiển thị\)", "Tỉ lệ bấm cao thì YouTube có giới thiệu video nhiều hơn không"),
+    (r"NỘI DUNG: ", "Nội dung: "),
+    (r"\bCTR\b", "tỉ lệ bấm"),
+    (r"chỉ video > (\d+) giờ", r"chỉ tính video đăng hơn \1 giờ"),
+    (r"\bnhóm A\b", "nhóm đầu"),
+    (r"\bnhóm B\b", "nhóm sau"),
+    (r" vs ", " so với "),
+    (r"\bvạch\b", "mức"),
+    (r"[*`]", ""),
+]
+
+
+def plain_pattern(s: str) -> str:
+    for pat, rep in _PATTERN_WORDS:
+        s = re.sub(pat, rep, s)
+    s = s.strip()
+    return s[:1].upper() + s[1:]
 
 
 def build_patterns(improve_dir):
@@ -217,10 +282,19 @@ def build_patterns(improve_dir):
             c = [x.strip() for x in line.strip().strip("|").split("|")]
             if len(c) >= 7:
                 tin = re.sub(r"\*", "", c[6])
+                word = tin.split(" ")[0].split("(")[0].strip()
+                if "thấp" in word and "vừa" in word:
+                    ma, nhan = "thap", "Chưa chắc lắm"
+                elif "cao" in word:
+                    ma, nhan = "cao", "Chắc chắn"
+                elif "vừa" in word:
+                    ma, nhan = "vua", "Khá chắc"
+                else:
+                    ma, nhan = "thap", "Chưa chắc"
                 rows.append({
-                    "ma": c[0], "noi_dung": re.sub(r"[*`]", "", c[1]), "so_sanh": re.sub(r"[*`]", "", c[2]),
-                    "so_video": c[3], "ket_qua": re.sub(r"[*`]", "", c[4]),
-                    "do_tin": tin.split(" ")[0].split("(")[0].strip(), "ghi_chu": tin,
+                    "ma": c[0], "noi_dung": plain_pattern(c[1]), "so_sanh": plain_pattern(c[2]),
+                    "so_video": c[3].replace(" vs ", " và "), "ket_qua": plain_pattern(c[4]),
+                    "do_tin": nhan, "do_tin_ma": ma, "ghi_chu": tin,
                 })
     return rows, os.path.basename(path)
 

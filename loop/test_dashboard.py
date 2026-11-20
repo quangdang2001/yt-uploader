@@ -13,6 +13,22 @@ class ReasonTest(unittest.TestCase):
         self.assertEqual(s, "tuổi 4,9 giờ, 15.153 lượt hiển thị (cần 6 giờ và 2.000 lượt hiển thị)")
 
 
+class PlainReasonTest(unittest.TestCase):
+    def test_change_title(self):
+        s = db.reason_plain("CHANGE_TITLE", "CTR 4.0% < bar 5.3% at 3,097 impr, no swap left")
+        self.assertIn("chỉ 4,0 người bấm", s)
+        self.assertIn("5,3%", s)
+        self.assertIn("3.097", s)
+
+    def test_not_packaging(self):
+        s = db.reason_plain("NOT_PACKAGING", "CTR 6.1% >= bar 4.8% at 14,403 impr, typical 39,677 impr")
+        self.assertIn("14.403", s)
+        self.assertIn("39.677", s)
+
+    def test_unknown_code_falls_back(self):
+        self.assertEqual(db.reason_plain("SWAP", "CTR 3.5% at 2,100 impr"), "CTR 3,5% với 2.100 lượt hiển thị")
+
+
 class DailyTest(unittest.TestCase):
     def test_last_capture_per_video_per_local_day(self):
         snaps = [
