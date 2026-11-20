@@ -14,12 +14,15 @@ vao file (quota hoi lai hom sau, khong phai loi cua yeu cau) va dung han.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import re
 import sys
 import tempfile
 import time
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -31,6 +34,40 @@ import youtube_uploader as yu
 log = logging.getLogger("studio_actions")
 
 VARIANTS = ("alt1", "alt2", "main")
+
+THUMB_TIMEOUT_S = 20
+THUMB_URL = "https://i.ytimg.com/vi/{}/{}"
+THUMB_RENDITION = "hqdefault.jpg"      # mot ban co dinh cho moi video, moi lan
+
+
+def fetch_url(url: str) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=THUMB_TIMEOUT_S) as r:
+        return r.read()
+
+
+def thumb_url(video_id: str, now: datetime | None = None) -> str:
+    """hqdefault kem query pha cache (?sqp=<giay unix>) de CDN tra byte moi."""
+    t = int((now or datetime.now(timezone.utc)).timestamp())
+    return THUMB_URL.format(video_id, THUMB_RENDITION) + f"?sqp={t}"
+
+
+def thumb_hash(video_id: str, fetch=None, now: datetime | None = None) -> str | None:
+    """sha256 cua MOT ban co dinh, hqdefault.jpg (video nao cung co). Khong bao gio doi sang ban khac
+    (maxres xuat hien muon hon -> hash doi ma thumbnail khong doi -> "manual" gia). Loi -> None, khong raise.
+    Dung chung cho capture va bo thuc thi: cung URL, cung ham bam."""
+    fetch = fetch or fetch_url
+    try:
+        data = fetch(thumb_url(video_id, now))
+    except urllib.error.HTTPError as e:
+        code = e.code
+        e.close()
+        log.warning("  thumb %s: HTTP %s, thumb_hash de trong", video_id, code)
+        return None
+    except Exception as e:
+        log.warning("  thumb %s: %s, thumb_hash de trong", video_id, e)
+        return None
+    return hashlib.sha256(data).hexdigest()
 
 
 STALE_H = 24     # yeu cau cu hon (theo requested_utc) khong bao gio duoc thuc hien
@@ -233,6 +270,17 @@ def run_actions(drive, youtube, chan_folder: str, done_folder: str,
 
         name = _target_name(req)
         src_folder = done_folder if req["to_variant"] == "main" else folders["thumb_alts"]
+        expect = req.get("expect_hash")
+        if isinstance(expect, str) and expect:
+            cur = thumb_hash(req["video_id"])
+            if cur is not None and cur != expect:      # kiem tra la rao chan, khong phai cong: loi mang thi cho qua
+                detail = "thumbnail changed since request"
+                if _finish(drive, folders, item, "error", detail):
+                    yu.notify(f"{label}: FAILED {detail}")
+                else:
+                    _notify_once(state, fid, f"{label}: FAILED {detail}, file not moved")
+                failed += 1
+                continue
         counter += 1
         local = Path(tmpdir) / f"swap{counter}.jpg"
         try:

@@ -98,16 +98,17 @@ class BuildStatesTest(unittest.TestCase):
         self.assertIsNone(st.manual_until)
 
     def test_change_after_three_unchanged_snapshots_is_manual(self):
-        # the window counts snapshots, not hours: three unchanged readings after the action close it
+        # the window ends at the LATER of 3 snapshots and 24 h: a change first seen 27 h on is manual
         snaps = [snap("v1", "2026-11-19T10:00:00Z", 30, 1000, 0.04),
                  snap("v1", "2026-11-19T12:00:00Z", 32, 1500, 0.04),
                  snap("v1", "2026-11-19T14:00:00Z", 34, 2000, 0.04),
                  snap("v1", "2026-11-19T16:00:00Z", 36, 2500, 0.04),
-                 snap("v1", "2026-11-19T18:00:00Z", 38, 3000, 0.04, h="h1"),
-                 snap("v1", "2026-11-19T20:00:00Z", 40, 3500, 0.04, h="h1")]
+                 snap("v1", "2026-11-20T08:00:00Z", 38, 3000, 0.04),
+                 snap("v1", "2026-11-20T14:00:00Z", 40, 3500, 0.04, h="h1"),
+                 snap("v1", "2026-11-20T16:00:00Z", 42, 4000, 0.04, h="h1")]
         st = an.build_states(snaps, [done("v1", "alt1", "main", "2026-11-19T11:00:00Z")], [], self.NOW)["v1"]
         self.assertEqual(st.variant, "manual")
-        self.assertEqual(st.manual_until, utc("2026-11-26T18:00:00Z"))
+        self.assertEqual(st.manual_until, utc("2026-11-27T14:00:00Z"))
 
     def test_revert_counted_and_pending(self):
         snaps = [snap("v1", "2026-11-18T10:00:00Z", 10, 1000, 0.04),
@@ -138,16 +139,18 @@ class HashTimelineTest(unittest.TestCase):
         self.assertEqual(st.variant, "alt1")
         self.assertIsNone(st.manual_until)
 
-    def test_expectation_lapses_after_three_snapshots(self):
-        # first sighting in the 3rd snapshot after the action, confirmed in the 4th: outside the window
+    def test_expectation_lapses_after_three_snapshots_and_24h(self):
+        # first sighting 30 h after the action, with no further action: outside the window, manual
         snaps = [snap("v1", "2026-11-19T10:00:00Z", 10, 1000, 0.04),
                  snap("v1", "2026-11-19T12:00:00Z", 12, 1500, 0.04),
                  snap("v1", "2026-11-19T14:00:00Z", 14, 2000, 0.04),
-                 snap("v1", "2026-11-19T16:00:00Z", 16, 3000, 0.04, h="h1"),
-                 snap("v1", "2026-11-19T18:00:00Z", 18, 4000, 0.04, h="h1")]
+                 snap("v1", "2026-11-19T16:00:00Z", 16, 2500, 0.04),
+                 snap("v1", "2026-11-20T10:00:00Z", 34, 2800, 0.04),
+                 snap("v1", "2026-11-20T17:00:00Z", 41, 3000, 0.04, h="h1"),
+                 snap("v1", "2026-11-20T19:00:00Z", 43, 4000, 0.04, h="h1")]
         st = self.states(snaps, [done("v1", "alt1", "main", "2026-11-19T11:00:00Z")])
         self.assertEqual(st.variant, "manual")
-        self.assertEqual(st.manual_until, utc("2026-11-26T16:00:00Z"))  # tu lan thay dau tien
+        self.assertEqual(st.manual_until, utc("2026-11-27T17:00:00Z"))  # tu lan thay dau tien
 
     def test_one_snapshot_blip_is_not_manual(self):
         snaps = [snap("v1", "2026-11-19T10:00:00Z", 10, 1000, 0.04),
@@ -299,12 +302,34 @@ class AnalyseTest(unittest.TestCase):
         self.assertEqual([f["name"] for f in files], ["v1__20261119T120000Z.json"])
         body = json.loads(files[0]["data"].decode())
         self.assertEqual(set(body), {"video_id", "base", "to_variant", "from_variant", "reason",
-                                     "requested_utc"})
+                                     "requested_utc", "expect_hash"})
+        self.assertEqual(body["expect_hash"], "h0")      # the latest thumb_hash of that video
         self.assertEqual((body["video_id"], body["base"], body["to_variant"], body["from_variant"],
                           body["requested_utc"]), ("v1", "gunA", "alt1", "main", "2026-11-19T12:00:00Z"))
         v = self.drive.named("verdicts.csv", self.folders["studio"])[0]["data"].decode().splitlines()
         self.assertEqual(v[0], "video_id,base,verdict,reason,ctr,impressions,bar,variant,updated_utc")
         self.assertTrue(v[1].startswith("v1,gunA,SWAP,"))
+
+    def test_request_expects_the_latest_hash(self):
+        self.snaps = [snap("v1", "2026-11-19T08:00:00Z", 28, 5000, 0.03, h="old"),
+                      snap("v1", "2026-11-19T10:00:00Z", 30, 6000, 0.03, h="new")]
+        self.feats = [feat("gunA", "main"), feat("gunA", "alt1")]
+        self.hist = [("v1", "gunA")]
+        self.write()
+        self.run_an()
+        body = json.loads(self.pending_files()[0]["data"].decode())
+        self.assertEqual(body["expect_hash"], "new")
+
+    def test_stale_data_writes_no_request_but_keeps_verdict_and_report(self):
+        self.low_video()
+        late = utc("2026-11-20T12:30:00Z")            # newest snapshot 26.5 h old: stale
+        rows = self.run_an(now=late)
+        self.assertEqual(rows[0]["verdict"], "SWAP")
+        self.assertTrue(rows[0]["reason"].endswith("(stale data - no request)"), rows[0]["reason"])
+        self.assertFalse(rows[0]["requested"])
+        self.assertEqual(self.pending_files(), [])
+        self.assertIn("(stale data - no request)", self.report(late))
+        self.assertEqual(len(self.drive.named("verdicts.csv", self.folders["studio"])), 1)
 
     def test_dry_run_touches_neither_drive_nor_telegram(self):
         self.low_video()
@@ -455,6 +480,37 @@ class AnalyseTest(unittest.TestCase):
         self.run_an(now=utc("2026-11-20T14:00:00Z"))
         self.run_an(now=utc("2026-11-20T16:00:00Z"))
         self.assertEqual(self.msgs("health")[3:], ["Studio loop health: PASS (was FAIL auth)"])
+
+    def test_fail_read_alert_needs_two_runs_and_recovery_only_after_alert(self):
+        self.not_first_run()
+        self.low_video()
+        self.health = {"status": "FAIL read", "detail": "v9: timeout"}
+        self.write()
+        self.run_an(now=utc("2026-11-19T12:00:00Z"))
+        self.assertEqual(self.msgs("health"), [])            # one run: no alert
+        self.health = {"status": "PASS"}
+        self.write()
+        self.run_an(now=utc("2026-11-19T14:00:00Z"))
+        self.assertEqual(self.msgs("health"), [])            # blip over: no alert and no recovery either
+        self.health = {"status": "FAIL read", "detail": "v9: timeout"}
+        self.write()
+        self.run_an(now=utc("2026-11-19T16:00:00Z"))
+        self.assertEqual(self.msgs("health"), [])            # counter restarted
+        self.run_an(now=utc("2026-11-19T18:00:00Z"))
+        self.assertEqual(len(self.msgs("health")), 1)        # held 2 runs: alert
+        self.health = {"status": "PASS"}
+        self.write()
+        self.run_an(now=utc("2026-11-19T20:00:00Z"))
+        self.assertEqual(self.msgs("health")[1:], ["Studio loop health: PASS (was FAIL read)"])
+
+    def test_fail_auth_and_api_alert_immediately(self):
+        self.not_first_run()
+        self.low_video()
+        for status in ("FAIL auth", "FAIL api"):
+            self.health = {"status": status, "detail": "x"}
+            self.write()
+            self.run_an(now=utc("2026-11-19T12:00:00Z"))
+        self.assertEqual(len(self.msgs("health")), 2)
 
     # -- I6a: the loop never stops silently
 

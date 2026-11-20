@@ -335,14 +335,19 @@ class BrowserTest(unittest.TestCase):
 
     def test_vietnamese_challenge_text_is_blocked(self):
         import unicodedata
-        for text in ("Xác minh đó là bạn", "XÁC MINH DANH TÍNH", "Đăng nhập", "Tôi không phải là người máy",
-                     "Chúng tôi phát hiện hoạt động bất thường", "Lưu lượng truy cập bất thường"):
+        for text in ("Xác minh đó là bạn", "Đăng nhập để tiếp tục đến YouTube", "Tôi không phải là người máy",
+                     "Chọn tài khoản", "Lưu lượng truy cập bất thường"):
             for form in ("NFC", "NFD"):         # a page can hand back decomposed accents
                 page = FakePage([[{"a": 1}]], text="Studio\n" + unicodedata.normalize(form, text))
                 with self.assertRaises(sb.Blocked, msg=f"{form} {text}"):
                     sb.capture_tabs(page, "abc123")
         self.assertEqual(sb.capture_tabs(FakePage([[{"a": 1}], []], text="Kênh của bạn - Số liệu phân tích"),
                                          "abc123"), [{"a": 1}])
+
+    def test_vietnamese_menu_and_banner_text_is_not_blocked(self):
+        text = "Kênh của bạn\nĐăng nhập\nCảnh báo: hoạt động bất thường của video đã được xem xét\nSố liệu"
+        page = FakePage([[{"a": 1}], []], text=text)
+        self.assertEqual(sb.capture_tabs(page, "abc123"), [{"a": 1}])
 
     def test_navigation_error_raises_nav_error(self):
         page = FakePage([])
@@ -559,12 +564,13 @@ class RunTest(unittest.TestCase):
         import hashlib
         for _ in range(2):
             self.assertEqual(sc.thumb_hash("abc", fetch), hashlib.sha256(b"HQ").hexdigest())
-        self.assertEqual(seen, ["https://i.ytimg.com/vi/abc/hqdefault.jpg"] * 2)
+        self.assertEqual([u.split("?")[0] for u in seen], ["https://i.ytimg.com/vi/abc/hqdefault.jpg"] * 2)
         # the capture itself hashes that URL
         self.thumb_urls = []
         self.assertEqual(self.run_it(fetch_thumb=lambda url: self.thumb_urls.append(url) or b"HQ"), 0)
-        self.assertEqual(sorted(self.thumb_urls), ["https://i.ytimg.com/vi/vidA0000001/hqdefault.jpg",
-                                                   "https://i.ytimg.com/vi/vidB0000002/hqdefault.jpg"])
+        self.assertEqual(sorted(u.split("?")[0] for u in self.thumb_urls),
+                         ["https://i.ytimg.com/vi/vidA0000001/hqdefault.jpg",
+                          "https://i.ytimg.com/vi/vidB0000002/hqdefault.jpg"])
 
         def missing(url):
             raise urllib.error.HTTPError(url, 404, "nf", {}, None)
@@ -980,6 +986,35 @@ class RunTest(unittest.TestCase):
         self.assertEqual(self.run_it(), 0)
         self.assertEqual(self.health()["status"], "FAIL read")
         self.assertNotIn("auth_blocked", self.state())
+
+    def test_single_fresh_video_failing_never_arms_hold(self):
+        # a video that shows "—" right after publish fails alone: not a challenge page
+        self.yt.resources = [resource("vidB0000002", published="2026-11-20T09:00:00Z")]
+        bad = sp.ParseError("missing metric ctr")
+        self.capture_plan = {"vidB0000002": [bad, bad, bad, bad]}
+        for _ in range(4):
+            self.assertEqual(self.run_it(), 0)
+            self.assertNotIn("auth_blocked", self.state())
+            self.assertNotIn(sc.AUTH_MSG, self.sent)
+            self.clock.t += timedelta(hours=2)
+        self.assertNotEqual(self.health()["status"], "FAIL auth")
+
+    def test_two_previously_read_videos_failing_in_two_runs_arm_hold(self):
+        self.assertEqual(self.run_it(), 0)                    # both read cleanly: both in state["last"]
+        self.assertEqual(set(self.state()["last"]), {"vidA0000001", "vidB0000002"})
+        bad = sp.ParseError("missing metric ctr")
+        self.capture_plan = {"vidB0000002": [bad, bad], "vidA0000001": [bad, bad]}
+        self.clock.t += timedelta(hours=2)
+        self.assertEqual(self.run_it(), 0)
+        self.clock.t += timedelta(hours=2)
+        self.assertEqual(self.run_it(), 3)
+        self.assertEqual(self.health()["status"], "FAIL auth")
+        self.assertIn("auth_blocked", self.state())
+
+    def test_thumb_fetch_url_is_cache_busted(self):
+        seen = []
+        sc.thumb_hash("abc", lambda url: seen.append(url) or b"x")
+        self.assertRegex(seen[0], r"^https://i\.ytimg\.com/vi/abc/hqdefault\.jpg\?sqp=\d{10}$")
 
     # -- I7d / m1: the executor's notify state lives in the state file
 

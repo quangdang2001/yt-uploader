@@ -101,7 +101,7 @@ lỗi health báo khi trạng thái đổi, cộng một lần nhắc mỗi ngà
 | `… PAUSED - manual thumbnail change, paused until …` | Thumbnail đổi mà không có yêu cầu nào: anh đổi tay. Dừng 7 ngày. | Không cần. |
 | `… (manual - alert only)` ở cuối | Video đang chạy thumbnail anh đổi tay: chỉ báo cáo, **không bao giờ** ghi yêu cầu, kể cả sau 7 ngày. | Muốn vòng lặp xử lý lại: mục 4. |
 | `Studio loop health: FAIL auth …` | VPS cần đăng nhập lại Studio. | Làm theo `docs/studio-capture.md`. |
-| `Studio loop health: FAIL read / FAIL api / missing / corrupt …` | VPS đọc lỗi hoặc chưa ghi health. | Xem chi tiết; nhắc lại mỗi ngày nếu còn. |
+| `Studio loop health: FAIL read / FAIL api / missing / corrupt …` | VPS đọc lỗi hoặc chưa ghi health. `FAIL read` chỉ báo khi giữ 2 lần phân tích liên tiếp (một video đọc lỗi thoáng qua không báo); `PASS (was FAIL read)` chỉ gửi nếu đã gửi cảnh báo. | Xem chi tiết; nhắc lại mỗi ngày nếu còn. |
 | `Studio loop health: PASS (was …)` | Đã hết lỗi. | Không cần. |
 | `Studio loop: no fresh data from the VPS since <time>` | `health.json` cũ hơn 3 giờ hoặc snapshot mới nhất cũ hơn 26 giờ: VPS không chạy hoặc không đọc được gì. Cùng dòng này ở đầu báo cáo. | Kiểm tra VPS (RDP còn kết nối, Task Scheduler). |
 | `Studio loop on this PC: step fetch failed with exit code N - …` | Một bước trên máy này lỗi (mã ở mục 2). | Theo gợi ý trong tin. |
@@ -132,3 +132,22 @@ Muốn vòng lặp xử lý lại như bình thường:
 
 Lưu ý: sau khi thả, "main" vẫn là file `done/<base>.jpg` trên Drive. Nếu vòng lặp đổi sang alt
 rồi REVERT về main, nó đặt lại file gốc đó, không phải thumbnail anh đổi tay.
+
+---
+
+## 5. Changing a thumbnail by hand (đổi thumbnail bằng tay)
+
+- **Vòng lặp làm gì khi anh đổi tay.** Hash thumbnail đổi mà không có action nào giải thích: video thành
+  `manual`, dừng 7 ngày, chỉ báo cáo (`PAUSED - manual thumbnail change …`), không bao giờ ghi yêu cầu cho
+  video đó. Muốn xử lý lại: thêm id vào `release_manual` (mục 4).
+- **Ngay sau tin `Swap … ok`.** Cửa sổ chờ sau một swap kết thúc ở mốc MUỘN HƠN của: 3 snapshot có hash
+  sau action, hoặc 24 giờ sau action (CDN cần thời gian), và đóng sớm ở lần đổi đầu tiên được xác nhận
+  (2 snapshot liên tiếp). Hash mới thứ nhất trong cửa sổ là của swap. Nếu anh đổi tay ngay sau tin
+  `ok`, lần đổi của anh chỉ được nhận là `manual` SAU KHI swap đã được xác nhận (hoặc khi hai hash mới
+  khác nhau cùng xuất hiện trong cửa sổ); có thể chậm vài snapshot, tối đa tới khi cửa sổ đóng.
+- **VPS tự kiểm tra trước khi đặt.** Mỗi yêu cầu mang `expect_hash` (hash thumbnail mới nhất lúc phân
+  tích). Nếu lúc đặt thumbnail trên YouTube đã khác, VPS không đặt và chuyển yêu cầu sang `failed/` với
+  "thumbnail changed since request" (anh vừa đổi tay thì swap không đè lên). Không lấy được hash thì vẫn
+  đặt: đây là rào chắn, không phải cổng.
+- Khi dữ liệu cũ (health > 3 giờ hoặc snapshot > 26 giờ), phân tích không ghi yêu cầu nào; phán quyết và
+  báo cáo vẫn ra, kèm "(stale data - no request)".

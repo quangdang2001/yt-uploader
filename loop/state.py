@@ -4,9 +4,10 @@ Quy tac (spec 5.7): chi dung dong period == since_published; bien the doi theo a
 co result.status == ok; hash doi ma khong co action nao thi la nguoi doi tay (manual).
 
 Sau mot action ok, hash doi duoc xac nhan (2 snapshot lien tiep) la cua action neu xac nhan
-roi vao trong 3 snapshot co hash dau tien sau action. Cua so dong o lan xac nhan dau tien,
-hoac sau snapshot co hash thu 3 ma chua xac nhan. Dem theo snapshot, khong theo gio: dung
-cho ca nhip 2 gio lan nhip hang ngay. Dong khong co hash bi bo qua (khong dem, khong cat chuoi).
+roi vao cua so cho. Cua so dong o lan xac nhan dau tien, hoac khi DA qua ca 3 snapshot co hash
+sau action VA 24 gio ke tu action (cai nao muon hon): nhip 2 gio can 24 gio de CDN kip,
+nhip hang ngay can 3 snapshot. Dong khong co hash bi bo qua (khong dem, khong cat chuoi).
+Hai hash moi KHAC NHAU trong cua so: cai dau la cua action, cai sau la nguoi doi tay (manual).
 """
 from __future__ import annotations
 
@@ -15,7 +16,8 @@ from datetime import datetime, timedelta, timezone
 from loop.rules import MANUAL_PAUSE_D, VideoState
 
 ALTS = ("alt1", "alt2")
-EXPECT_SNAPS = 3        # cua so "cho thay doi" sau action: so snapshot co hash
+EXPECT_SNAPS = 3        # cua so "cho thay doi" sau action: so snapshot co hash ...
+EXPECT_HOURS = 24     # ... va so gio; cua so dong khi DA qua ca hai
 MAIN_BASELINE_IVS = 3   # main de so sanh REVERT: 3 khoang snapshot cuoi truoc lan swap dau
 
 
@@ -85,7 +87,9 @@ def _build_one(snaps: list, acts: list, feature_variants: set, pending: bool,
     main_frozen = False
     released = release_at is None
     ai = 0
-    expect_left = None            # con bao nhieu snapshot co hash trong cua so cho action
+    win_at = None                 # luc action ok cuoi cung neu cua so cho dang mo
+    win_n = 0                     # so snapshot co hash tu luc do
+    win_seen: set = set()         # cac hash moi khac nhau da thay (chua xac nhan) trong cua so
     cand_hash, cand_count, cand_first = None, 0, None
 
     def leave_main() -> None:
@@ -98,7 +102,7 @@ def _build_one(snaps: list, acts: list, feature_variants: set, pending: bool,
             main_frozen = True
 
     def apply(at, act) -> bool:
-        nonlocal variant, before_last, swaps, reverts, last_swap, expect_left
+        nonlocal variant, before_last, swaps, reverts, last_swap, win_at, win_n, win_seen
         to = act["to_variant"]
         if to == variant:           # action trung lap: khong doi gi
             return False
@@ -108,7 +112,8 @@ def _build_one(snaps: list, acts: list, feature_variants: set, pending: bool,
             swaps += 1
         used.add(to)
         leave_main()
-        before_last, variant, last_swap, expect_left = variant, to, at, EXPECT_SNAPS
+        before_last, variant, last_swap = variant, to, at
+        win_at, win_n, win_seen = at, 0, set()
         return True
 
     for s in snaps:
@@ -129,12 +134,12 @@ def _build_one(snaps: list, acts: list, feature_variants: set, pending: bool,
                 # Chu kenh tha video: tu luc nay coi nhu main, so lieu dem lai tu dau.
                 variant, manual_until, stats = "main", None, {}
                 main_ivs, main_baseline, main_frozen = [], None, False
-                expect_left, cand_hash, cand_count = None, None, 0
+                win_at, cand_hash, cand_count = None, None, 0
                 prev_hash = h or prev_hash
                 prev_impr, prev_clicks = (None, 0.0) if rounded else (impr, clicks)
                 continue
         if h:
-            in_window = expect_left is not None
+            in_window = win_at is not None
             if prev_hash is None or h == prev_hash:
                 prev_hash, cand_hash, cand_count = prev_hash or h, None, 0
             else:
@@ -143,18 +148,22 @@ def _build_one(snaps: list, acts: list, feature_variants: set, pending: bool,
                     cand_count += 1
                 else:
                     cand_hash, cand_count, cand_first = h, 1, t
+                if in_window:
+                    win_seen.add(h)
                 if cand_count >= 2:
-                    if in_window:
-                        expect_left = None      # thay doi nay la cua action
+                    if in_window and win_seen <= {h}:
+                        win_at = None           # thay doi nay la cua action
                     else:
+                        # ngoai cua so, hoac hai hash moi khac nhau trong cua so: cai sau la tay chu kenh
                         leave_main()
                         variant = "manual"
                         manual_until = cand_first + timedelta(days=MANUAL_PAUSE_D)
+                        win_at = None
                     prev_hash, cand_hash, cand_count = h, None, 0
-            if expect_left is not None:
-                expect_left -= 1
-                if expect_left <= 0:
-                    expect_left = None
+            if win_at is not None:
+                win_n += 1
+                if win_n >= EXPECT_SNAPS and t >= win_at + timedelta(hours=EXPECT_HOURS):
+                    win_at = None
         # Dong lam tron ("1.2K") khong vao delta: khoang ke tiep tinh tu dong chinh xac truoc do.
         if rounded:
             continue

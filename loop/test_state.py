@@ -66,6 +66,46 @@ class HashWindowTest(unittest.TestCase):
         st = state(snaps, [act(T0 + timedelta(minutes=10))], T0 + 5 * H)
         self.assertEqual(st.variant, "manual")
 
+    def test_two_hourly_first_seen_at_snapshot_2_is_ours(self):
+        snaps = [snap(T0, "A")] + [snap(T0 + i * H, "A" if i < 2 else "B", 10000 + 1000 * i) for i in range(1, 5)]
+        st = state(snaps, [act(T0 + timedelta(minutes=10))], T0 + 5 * H)
+        self.assertEqual(st.variant, "alt1")
+        self.assertIsNone(st.manual_until)
+
+    def test_two_hourly_first_seen_at_snapshot_4_is_ours(self):
+        # CDN slack: ~8 h after the action, confirmed at snapshot 5 (10 h): still inside the 24 h window
+        snaps = [snap(T0, "A")] + [snap(T0 + i * H, "A" if i < 4 else "B", 10000 + 1000 * i) for i in range(1, 7)]
+        st = state(snaps, [act(T0 + timedelta(minutes=10))], T0 + 7 * H)
+        self.assertEqual(st.variant, "alt1")
+        self.assertIsNone(st.manual_until)
+
+    def test_daily_first_seen_at_25h_is_ours(self):
+        snaps = [snap(T0, "A"), snap(T0 + D + H, "B", 11000), snap(T0 + 2 * D + H, "B", 12000)]
+        st = state(snaps, [act(T0 + timedelta(minutes=10))], T0 + 3 * D)
+        self.assertEqual(st.variant, "alt1")
+        self.assertIsNone(st.manual_until)
+
+    def test_different_new_hash_30h_after_action_is_manual(self):
+        snaps = [snap(T0, "A")] + [snap(T0 + i * H, "A", 10000 + 1000 * i) for i in range(1, 16)] + \
+               [snap(T0 + 16 * H, "M", 30000), snap(T0 + 17 * H, "M", 31000)]
+        st = state(snaps, [act(T0 + timedelta(minutes=10))], T0 + 18 * H)
+        self.assertEqual(st.variant, "manual")           # M first seen 32 h after the action, nothing new in between
+
+    def test_second_different_hash_after_ours_confirmed_is_manual(self):
+        # B (ours) is confirmed at 4 h; the owner's M is confirmed at 8 h, still inside 24 h of the action
+        snaps = [snap(T0, "A"), snap(T0 + 1 * H, "B", 11000), snap(T0 + 2 * H, "B", 12000),
+                 snap(T0 + 3 * H, "M", 13000), snap(T0 + 4 * H, "M", 14000)]
+        st = state(snaps, [act(T0 + timedelta(minutes=10))], T0 + 5 * H)
+        self.assertEqual(st.variant, "manual")
+        self.assertEqual(st.manual_until, T0 + 3 * H + timedelta(days=7))
+
+    def test_owner_change_seen_before_ours_is_confirmed_is_manual(self):
+        # B seen once, then the owner's M held two snapshots: two different new hashes inside the window
+        snaps = [snap(T0, "A"), snap(T0 + 1 * H, "B", 11000), snap(T0 + 2 * H, "M", 12000),
+                 snap(T0 + 3 * H, "M", 13000)]
+        st = state(snaps, [act(T0 + timedelta(minutes=10))], T0 + 4 * H)
+        self.assertEqual(st.variant, "manual")
+
     def test_change_with_no_action_is_manual(self):
         snaps = [snap(T0, "A"), snap(T0 + D, "M", 11000), snap(T0 + 2 * D, "M", 12000)]
         self.assertEqual(state(snaps, [], T0 + 2 * D + H).variant, "manual")

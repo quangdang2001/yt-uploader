@@ -313,6 +313,8 @@ def analyse(cache: Path, cfg: dict, now: datetime, drive=None, folders: dict | N
     alert = alert_only(cfg, now)
     live = drive is not None and folders is not None and not dry_run and not alert
 
+    health = _health(cache)
+    stale = _stale_line(health["at"], snaps_all, now)   # du lieu cu: van phan quyet, khong ghi yeu cau
     fmap_all = {(f.get("base"), f.get("variant")) for f in features}
     rows, bars, requests = [], {}, []
     for vid in sorted(latest):
@@ -335,23 +337,24 @@ def analyse(cache: Path, cfg: dict, now: datetime, drive=None, folders: dict | N
             word = "swap" if verdict is Verdict.SWAP else "revert"
             if alert:
                 reason = "would %s to %s: %s" % (word, target, reason)
+            elif stale:
+                reason = "%s to %s: %s (stale data - no request)" % (word, target, reason)
             elif st.pending_action:
                 reason = "%s to %s already requested: %s" % (word, target, reason)
             elif _failed_recently(actions, vid, target, now):
                 reason = "%s to %s failed within 24 h, not retried: %s" % (word, target, reason)
             else:
                 reason = "%s to %s: %s" % (word, target, reason)
+                expect = next((r.get("thumb_hash") for r in reversed(by_vid[vid]) if r.get("thumb_hash")), "")
                 requests.append({"video_id": vid, "base": bases.get(vid, ""), "to_variant": target,
                                  "from_variant": st.variant, "reason": reason,
-                                 "requested_utc": _fmt_utc(now)})
+                                 "requested_utc": _fmt_utc(now), "expect_hash": expect})
                 requested = live
         rows.append({"video_id": vid, "base": bases.get(vid, ""), "verdict": verdict.value,
                      "reason": reason, "ctr": round(snap["ctr"] or 0.0, 4),
                      "impressions": snap["impressions"], "bar": round(bar, 4), "variant": st.variant,
                      "updated_utc": _fmt_utc(now), "age_hours": snap["age_hours"], "requested": requested})
 
-    health = _health(cache)
-    stale = _stale_line(health["at"], snaps_all, now)
     why = None
     local = now.astimezone(_tz(cfg))
     if local.weekday() == 0 or cfg.get("why"):
@@ -379,12 +382,19 @@ def analyse(cache: Path, cfg: dict, now: datetime, drive=None, folders: dict | N
     # health: khi trang thai doi, cong mot lan nhac moi ngay khi chua PASS/ok
     hprev = last_obj.get("health") if isinstance(last_obj.get("health"), dict) else {}
     status, hday = health["status"], hprev.get("day")
+    same_status = status == hprev.get("status")
+    h_sent = bool(hprev.get("sent", True)) if same_status else False    # da gui canh bao cho trang thai nay chua
+    h_runs = int(hprev.get("runs") or 0) + 1 if same_status else 1
     if not _healthy(status):
-        if status != hprev.get("status") or hday != today:
+        # FAIL read chi bao khi giu 2 lan analyse lien tiep (mot video doc loi khong lam on); FAIL auth/api bao ngay
+        debounced = status.lower().startswith("fail read") and h_runs < 2
+        if not debounced and (not h_sent or hday != today):
             notify("Studio loop health: %s%s" % (status, " " + health["detail"] if health["detail"] else ""))
-            hday = today
+            hday, h_sent = today, True
     elif hprev.get("status") is not None and not _healthy(str(hprev.get("status"))):
-        notify("Studio loop health: %s (was %s)" % (status, hprev.get("status")))
+        if bool(hprev.get("sent", True)):       # chi bao "PASS" khi da that su gui canh bao FAIL
+            notify("Studio loop health: %s (was %s)" % (status, hprev.get("status")))
+        h_sent = False
 
     stale_day = last_obj.get("stale_notified")
     if stale and stale_day != today:
@@ -421,7 +431,7 @@ def analyse(cache: Path, cfg: dict, now: datetime, drive=None, folders: dict | N
         notify(_digest(rows, len(requests) if live else 0))
 
     lf._write(last_path, json.dumps({"verdicts": {r["video_id"]: r["verdict"] for r in rows},
-                                     "videos": videos, "health": {"status": status, "day": hday},
+                                     "videos": videos, "health": {"status": status, "day": hday, "runs": h_runs, "sent": h_sent},
                                      "stale_notified": stale_day, "released": released}, indent=2))
     return rows
 

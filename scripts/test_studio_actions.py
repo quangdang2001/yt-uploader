@@ -110,6 +110,42 @@ class StudioActionsTest(unittest.TestCase):
         self.assertTrue(res["at_utc"].endswith("Z"))
         self.assertEqual(self.sent, ["Swap vid001 -> alt1: ok"])
 
+    def hash_is(self, value):
+        p = mock.patch.object(sa, "thumb_hash", lambda vid, fetch=None, now=None: value)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_expect_hash_mismatch_is_refused(self):
+        self.alt()
+        fid = self.request(expect_hash="aaa")
+        self.hash_is("bbb")
+        self.assertEqual(self.run_it(), (0, 1))
+        self.assertEqual(self.set_calls, [])
+        self.assertEqual(self.drive.items[fid]["parents"], [self.folders["actions_failed"]])
+        res = self.result_of(fid)
+        self.assertEqual((res["status"], res["detail"]), ("error", "thumbnail changed since request"))
+
+    def test_expect_hash_match_proceeds(self):
+        self.alt()
+        self.request(expect_hash="aaa")
+        self.hash_is("aaa")
+        self.assertEqual(self.run_it(), (1, 0))
+        self.assertEqual(self.set_calls, [("vid001", b"ALT1")])
+
+    def test_missing_expect_hash_proceeds_without_fetch(self):
+        self.alt()
+        self.request()
+        self.hash_is("whatever")
+        self.assertEqual(self.run_it(), (1, 0))
+        self.assertEqual(len(self.set_calls), 1)
+
+    def test_expect_hash_fetch_failure_proceeds(self):
+        self.alt()
+        self.request(expect_hash="aaa")
+        self.hash_is(None)
+        self.assertEqual(self.run_it(), (1, 0))
+        self.assertEqual(len(self.set_calls), 1)
+
     def test_missing_alt_moves_to_failed(self):
         fid = self.request()
         self.assertEqual(self.run_it(), (0, 1))

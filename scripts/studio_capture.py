@@ -344,28 +344,12 @@ def due_videos(videos: list[dict], last_by_video: dict, now: datetime, daily_hou
 # ---------------------------------------------------------------- thumbnail
 
 
-def fetch_url(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=THUMB_TIMEOUT_S) as r:
-        return r.read()
+fetch_url = sa.fetch_url
 
 
 def thumb_hash(video_id: str, fetch=None) -> str | None:
-    """sha256 cua MOT ban co dinh, hqdefault.jpg (video nao cung co). Khong bao gio doi sang ban khac
-    (maxres xuat hien muon hon -> hash doi ma thumbnail khong doi -> "manual" gia). Loi -> None, khong raise."""
-    fetch = fetch or fetch_url
-    url = THUMB_URL.format(video_id, THUMB_RENDITION)
-    try:
-        data = fetch(url)
-    except urllib.error.HTTPError as e:
-        code = e.code
-        e.close()
-        log.warning("  thumb %s: HTTP %s, thumb_hash de trong", video_id, code)
-        return None
-    except Exception as e:
-        log.warning("  thumb %s: %s, thumb_hash de trong", video_id, e)
-        return None
-    return hashlib.sha256(data).hexdigest()
+    """Xem sa.thumb_hash: cung ham, cung URL (hqdefault + ?sqp=<giay unix>) cho capture va bo thuc thi."""
+    return sa.thumb_hash(video_id, fetch)
 
 
 # ---------------------------------------------------------------- phu thuoc
@@ -571,14 +555,16 @@ def _capture_phase(args, deps, state, persist, drive, youtube, folders, sf) -> i
 
     # Moi video doc trong lan nay deu loi parse (khong doc duoc dong nao, khong loi dieu huong):
     # hai lan chay lien tiep nhu vay thi coi nhu trang thu thach, giu nhu FAIL auth.
+    # Chi tinh khi lan chay thu >= 2 video khac nhau va tat ca deu loi: mot video moi dang
+    # (hien "—" ngay sau khi dang) loi mot minh khong bao gio gay giu.
     parse_hold = False
-    if not blocked and not browser_error and not rows and failures and \
+    if not blocked and not browser_error and not rows and len(failures) >= 2 and \
             not any(nav for _, nav in failures.values()):
         n = int(state.get("parse_fail_runs", 0)) + 1
         state["parse_fail_runs"] = n
         if n >= 2:
             blocked, parse_hold = ALL_PARSE_FAILED, True
-    elif rows:
+    elif rows or (failures and len(failures) < 2):
         state.pop("parse_fail_runs", None)
 
     # So sach video loi TRUOC khi ghi dong: neu ghi Drive loi (raise ra _run_locked ->

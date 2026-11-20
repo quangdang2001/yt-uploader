@@ -14,8 +14,8 @@ TABS = ("tab-reach_viewers", "tab-interest_viewers")
 SCRUB_RE = re.compile(r"token|xsrf|session|auth|cookie|visitordata", re.I)
 URL_BAD_RE = re.compile(r"/sorry/|challenge|signin|servicelogin|consent", re.I)
 # Studio cua chu kenh co the hien tieng Viet: cung cac thu thach do, bang tieng Viet (NFC).
-TEXT_BAD_VI = ("xác minh đó là bạn", "xác minh danh tính", "đăng nhập", "tôi không phải là người máy",
-               "hoạt động bất thường", "lưu lượng truy cập bất thường")
+TEXT_BAD_VI = ("xác minh đó là bạn", "tôi không phải là người máy", "lưu lượng truy cập bất thường",
+               "đăng nhập để tiếp tục", "chọn tài khoản")
 TEXT_BAD_RE = re.compile(
     r"verify it.?s you|confirm it.?s you|unusual traffic|not a robot|captcha|"
     r"sign in to continue|choose an account|"
