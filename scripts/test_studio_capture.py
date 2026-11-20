@@ -303,15 +303,31 @@ class FakePage:
     def inner_text(self, sel):
         return self.text
 
+    # cuon: positions la danh sach vi tri tra ve moi buoc; het thi tang mai (khong bao gio dung)
+    scroll_positions = None
+    scrolls = 0
+    text_after_scroll = None
+
+    def evaluate(self, js):
+        self.scrolls += 1
+        if self.text_after_scroll is not None:
+            self.text = self.text_after_scroll
+        if self.scroll_positions is None:
+            return 0                      # trang khong cuon: vi tri khong doi
+        if self.scroll_positions:
+            return self.scroll_positions.pop(0)
+        return self.scrolls * 1200
+
 
 class BrowserTest(unittest.TestCase):
-    def test_capture_tabs_visits_both_tabs_and_scrubs(self):
+    def test_capture_tabs_visits_all_tabs_and_scrubs(self):
         page = FakePage([[{"a": 1, "xsrfToken": "secret"}], [{"b": 2}]])
         got = sb.capture_tabs(page, "abc123")
         self.assertEqual(got, [{"a": 1, "xsrfToken": "<scrubbed>"}, {"b": 2}])
         self.assertEqual(page.gotos, [
             "https://studio.youtube.com/video/abc123/analytics/tab-reach_viewers/period-default",
             "https://studio.youtube.com/video/abc123/analytics/tab-interest_viewers/period-default",
+            "https://studio.youtube.com/video/abc123/analytics/tab-build_audience/period-default",
         ])
         self.assertEqual(page.handlers, [])            # listener go ra sau khi xong
         self.assertIn(sb.SETTLE_MS, page.waits)
@@ -357,6 +373,80 @@ class BrowserTest(unittest.TestCase):
         page.goto = boom
         with self.assertRaises(sb.NavError):
             sb.capture_tabs(page, "abc123")
+
+    def test_scroll_stops_when_position_stops_changing(self):
+        page = FakePage([])
+        page.scroll_positions = [1200, 2400, 3000, 3000, 9999]
+        steps = sb.scroll_to_bottom(page)
+        self.assertEqual(steps, 4)                      # buoc 4 lap lai 3000 -> dung
+        self.assertEqual(page.scrolls, 4)
+        self.assertEqual(page.waits.count(sb.SCROLL_STEP_MS), 4)
+
+    def test_scroll_stops_at_twelve_steps(self):
+        page = FakePage([])
+        page.scroll_positions = []                      # luon cuon duoc, khong bao gio toi day
+        self.assertEqual(sb.scroll_to_bottom(page), 12)
+        self.assertEqual(page.scrolls, 12)
+
+    def test_scroll_phase_capped_by_seconds(self):
+        page = FakePage([])
+        page.scroll_positions = []
+        ticks = iter(range(0, 1000, 10))               # moi lan doi dong ho tang 10 s
+        steps = sb.scroll_to_bottom(page, cap_s=25, clock=lambda: next(ticks))
+        self.assertLess(steps, 12)
+
+    def test_scroll_survives_evaluate_errors(self):
+        page = FakePage([])
+
+        def boom(js):
+            raise RuntimeError("context destroyed")
+        page.evaluate = boom
+        self.assertEqual(sb.scroll_to_bottom(page), 1)
+
+    def test_third_tab_failure_does_not_fail_capture(self):
+        page = FakePage([[{"a": 1}], [{"b": 2}]])
+        real = page.goto
+
+        def goto(url, **kw):
+            if "build_audience" in url:
+                raise TimeoutError("net::ERR_TIMED_OUT")
+            return real(url, **kw)
+        page.goto = goto
+        self.assertEqual(sb.capture_tabs(page, "abc123"), [{"a": 1}, {"b": 2}])
+        self.assertEqual(page.handlers, [])
+        # tab bat buoc loi thi van la NavError
+        page = FakePage([])
+
+        def boom(url, **kw):
+            raise TimeoutError("x")
+        page.goto = boom
+        with self.assertRaises(sb.NavError):
+            sb.capture_tabs(page, "abc123")
+
+    def test_third_tab_challenge_still_blocks(self):
+        page = FakePage([[{"a": 1}], [{"b": 2}]])
+        real = page.goto
+
+        def goto(url, **kw):
+            real(url, **kw)
+            if "build_audience" in url:
+                page._url = "https://accounts.google.com/ServiceLogin"
+        page.goto = goto
+        with self.assertRaises(sb.Blocked):
+            sb.capture_tabs(page, "abc123")
+
+    def test_blocked_check_runs_after_scrolling(self):
+        page = FakePage([[{"a": 1}]])
+        page.text_after_scroll = "Verify it's you"      # thu thach hien ra khi cuon
+        with self.assertRaises(sb.Blocked):
+            sb.capture_tabs(page, "abc123")
+        self.assertGreaterEqual(page.scrolls, 1)
+
+    def test_capture_scrolls_every_tab(self):
+        page = FakePage([])
+        page.scroll_positions = []
+        sb.capture_tabs(page, "abc123")
+        self.assertGreaterEqual(page.scrolls, 3 * 2)
 
     def test_spike_uses_shared_helpers(self):
         import studio_spike

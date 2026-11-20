@@ -19,7 +19,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from studio_browser import (  # noqa: F401  (dung chung voi studio_capture.py)
-    SCRUB_RE, SETTLE_MS, TABS, TEXT_BAD_RE, URL_BAD_RE, blocked_reason, scrub, wanted)
+    OPTIONAL_TABS, SCROLL_IDLE_TIMEOUT_MS, SCRUB_RE, SETTLE_MS, TABS, TEXT_BAD_RE, URL_BAD_RE,
+    blocked_reason, scroll_to_bottom, scrub, wanted)
 
 KEY_RE = re.compile(r"impression|ctr|view|averageviewduration|retention", re.I)
 WATCHDOG_S = 300
@@ -174,6 +175,8 @@ def main():
                 page.goto(url, wait_until="domcontentloaded", timeout=60000)
             except Exception as e:
                 print(f"LOI mo trang {url}: {e}")
+                if tab in OPTIONAL_TABS:    # tab Audience loi: bo qua, giu hai tab kia
+                    continue
                 try:
                     ctx.close()
                 except Exception:
@@ -188,6 +191,14 @@ def main():
                 bail(ctx, why)
             page.wait_for_timeout(SETTLE_MS)
             why = blocked_reason(page)  # chuyen huong muon sau khi cho
+            if why:
+                bail(ctx, why)
+            scroll_to_bottom(page)      # the tai cham (retention, traffic) chi hien khi cuon toi
+            try:
+                page.wait_for_load_state("networkidle", timeout=SCROLL_IDLE_TIMEOUT_MS)
+            except Exception:
+                pass
+            why = blocked_reason(page)
             if why:
                 bail(ctx, why)
             try:
