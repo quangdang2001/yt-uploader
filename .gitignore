@@ -26,4 +26,4 @@ __pycache__/
 *.pyc
 
 # Ban chup Studio tho (co the chua du lieu rieng); chi commit ban da cat o fixtures/studio/parse/
-scripts/fixtures/studio/raw_spike/
+scripts/fixtures/studio/raw_spike*/

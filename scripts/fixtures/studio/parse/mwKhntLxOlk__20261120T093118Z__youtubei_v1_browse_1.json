@@ -1,0 +1,196 @@
+{
+ "trimmed": [
+  {
+   "cardStyle": "CARD_STYLE_OUTLINE",
+   "bodyContent": {
+    "linearLayoutViewModel": {
+     "items": [
+      {
+       "linearLayoutViewModel": {
+        "items": [
+         {
+          "basicContentViewModel": {
+           "paragraphs": [
+            {
+             "headline": {
+              "content": "Thời lượng xem trung bình",
+              "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+             }
+            }
+           ]
+          }
+         },
+         {
+          "simpleMetricViewModel": {
+           "value": {
+            "content": "4:35",
+            "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+           },
+           "icon": {},
+           "iconLabel": {
+            "content": "1:00",
+            "lineBreakMode": "LINE_BREAK_MODE_BY_TRUNCATING_TAIL"
+           },
+           "valueSize": "SIMPLE_METRIC_VALUE_SIZE_SMALL",
+           "iconTooltip": {
+            "tooltipViewModel": {
+             "tooltipText": "Cao hơn 1:00 so với mức thông thường là 3:13 – 3:35"
+            }
+           }
+          }
+         }
+        ],
+        "linearLayoutContainerConfiguration": {
+         "justifyContent": "JUSTIFY_CONTENT_FLEX_START",
+         "flexDirection": "FLEX_DIRECTION_COLUMN"
+        },
+        "accessibilityId": "analytics_hub.FEanalytics_hub_video_engagement.key_metrics_average_view_duration.left_section"
+       }
+      },
+      {
+       "lineChartViewModel": {
+        "series": [
+         {
+          "label": "Thời lượng xem trung bình"
+         }
+        ],
+        "domainAxis": {
+         "style": {
+          "showAxisLine": false,
+          "showGridlines": false
+         }
+        },
+        "primaryMeasureAxis": {
+         "ticks": [
+          {
+           "value": 0,
+           "label": "0:00"
+          },
+          {
+           "value": 160000,
+           "label": "2:40"
+          },
+          {
+           "value": 320000,
+           "label": "5:20"
+          }
+         ],
+         "style": {
+          "showAxisLine": false,
+          "showGridlines": true
+         }
+        },
+        "rangeSeries": [
+         {
+          "label": "Hiệu suất thông thường"
+         }
+        ],
+        "chartSize": "CHART_SIZE_SMALL",
+        "accessibilityLabel": "Thời lượng xem trung bình",
+        "showLegend": false
+       }
+      }
+     ],
+     "linearLayoutContainerConfiguration": {
+      "alignItems": "ALIGN_ITEMS_CENTER",
+      "justifyContent": "JUSTIFY_CONTENT_FLEX_START",
+      "flexDirection": "FLEX_DIRECTION_ROW",
+      "padding": {
+       "horizontal": "LINEAR_LAYOUT_SPACE_S4",
+       "vertical": "LINEAR_LAYOUT_SPACE_S4"
+      }
+     },
+     "itemConfigs": [
+      {
+       "flexGrow": "LINEAR_LAYOUT_FLEX_GROW_S0",
+       "flexShrink": "LINEAR_LAYOUT_FLEX_SHRINK_S0",
+       "alignSelf": "ALIGN_ITEMS_START",
+       "flexBasis": 210
+      },
+      {
+       "flexGrow": "LINEAR_LAYOUT_FLEX_GROW_S1",
+       "flexShrink": "LINEAR_LAYOUT_FLEX_SHRINK_S1"
+      }
+     ],
+     "accessibilityId": "analytics_hub.FEanalytics_hub_video_engagement.key_metrics_average_view_duration.body"
+    }
+   },
+   "disableBodyContentPadding": true,
+   "accessibilityId": "analytics_hub.FEanalytics_hub_video_engagement.key_metrics_average_view_duration",
+   "isAccessibilityContainer": true,
+   "rendererContext": {
+    "loggingContext": {
+     "loggingDirectives": {
+      "gestures": {
+       "types": "2"
+      },
+      "useGreenPath": true
+     }
+    },
+    "commandContext": {
+     "onTap": {
+      "innertubeCommand": {
+       "studioWebNavigationCommand": {
+        "routeName": "video.analytics.hub_engagement.explore",
+        "routeParams": [
+         {
+          "key": "entity_id",
+          "value": "mwKhntLxOlk"
+         },
+         {
+          "key": "granularity",
+          "value": "DAY"
+         },
+         {
+          "key": "time_period",
+          "value": "since_publish"
+         },
+         {
+          "key": "v_metrics",
+          "value": "EXTERNAL_VIEWS,ESTIMATED_UNIQUE_VIEWERS,EXTERNAL_WATCH_TIME,AVERAGE_WATCH_TIME,LIKES_PER_LIKES_PLUS_DISLIKES_PERCENT,SHARINGS"
+         },
+         {
+          "key": "metric",
+          "value": "AVERAGE_WATCH_TIME"
+         },
+         {
+          "key": "entity_type",
+          "value": "VIDEO"
+         },
+         {
+          "key": "t_metrics",
+          "value": "EXTERNAL_VIEWS,ESTIMATED_UNIQUE_VIEWERS,EXTERNAL_WATCH_TIME,AVERAGE_WATCH_TIME,LIKES_PER_LIKES_PLUS_DISLIKES_PERCENT,SHARINGS"
+         },
+         {
+          "key": "metrics_computation_type",
+          "value": "DELTA"
+         },
+         {
+          "key": "o_column",
+          "value": "AVERAGE_WATCH_TIME"
+         },
+         {
+          "key": "explore_type",
+          "value": "TABLE_AND_CHART"
+         },
+         {
+          "key": "o_direction",
+          "value": "ANALYTICS_ORDER_DIRECTION_DESC"
+         },
+         {
+          "key": "videoId",
+          "value": "mwKhntLxOlk"
+         },
+         {
+          "key": "dimension",
+          "value": "VIDEO"
+         }
+        ]
+       }
+      }
+     }
+    }
+   }
+  }
+ ]
+}

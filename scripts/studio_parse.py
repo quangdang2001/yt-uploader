@@ -6,6 +6,7 @@ May nay import theo duong dan de parse lai raw/.
 Moi so duoc tim theo accessibilityId cua the, khong theo vi tri trong mang.
 """
 import re
+import unicodedata
 
 SNAPSHOT_COLS = (
     "captured_at_utc", "video_id", "age_hours", "period",
@@ -22,9 +23,15 @@ ID_VIEWS = "analytics_hub.video_reach_views.left_section"
 ID_CTR = "analytics_hub.video_reach_ctr.left_section"
 ID_UNIQUE = "analytics_hub.video_reach_unique_viewers.left_section"
 ID_AVD = "analytics_hub.FEanalytics_hub_video_engagement.key_metrics_average_view_duration.left_section"
+ID_RET_METRICS = "analytics_hub.video_audience_retention_highlights_card.metrics"
+ID_RET_TAB = "analytics_hub.video_audience_retention_highlights_card.tab_metrics"
+ID_TABLE = "analytics_hub.basic_table_card"
 
 # cac the cha ma trim_fixture.py giu lai (moi the chua cac id o tren)
 KEEP_IDS = (
+    ID_RET_METRICS,
+    ID_RET_TAB,
+    ID_TABLE,
     ID_IMPRESSIONS_CARD,
     "analytics_hub.video_reach_views",
     "analytics_hub.video_reach_ctr",
@@ -182,14 +189,118 @@ def _impressions(payloads):
     return int(round(head)), True
 
 
-def _test_running(payloads):
+_BIDI = re.compile("[‎‏‪-‮⁦-⁩]")
+
+
+def _norm(text):
+    """Chuoi de so nhan: bo ky tu bidi, gop khoang trang, NFC, chu thuong."""
+    return unicodedata.normalize("NFC", _clean(_BIDI.sub("", str(text)))).lower()
+
+
+def _content(obj, *path):
+    """obj[path...]['content'] hoac None, khong bao gio nem loi."""
+    for key in path:
+        if not isinstance(obj, dict):
+            return None
+        obj = obj.get(key)
+    if isinstance(obj, dict):
+        obj = obj.get("content")
+    return obj if isinstance(obj, str) else None
+
+
+def _percent(text):
+    """'65,4%' -> 0.654; chuoi khong phai phan tram hoac khong doc duoc -> None."""
+    if not isinstance(text, str) or not _clean(text).endswith("%"):
+        return None
+    try:
+        return parse_number(text)
+    except ParseError:
+        return None
+
+
+# --- retention: the video_audience_retention_highlights_card (tab Engagement) ---
+_APV_LABELS = ("tỷ lệ phần trăm đã xem trung bình", "average percentage viewed")
+_RET30_LABEL = re.compile(r"giây thứ 30\b|\b30 seconds?\b")
+
+
+def _retention(payloads):
+    """(apv_pct, ret_30s); thieu the hoac khong doc duoc thi None. ret_60s khong duoc Studio tra."""
+    apv = ret30 = None
+    for aid in (ID_RET_METRICS, ID_RET_TAB):
+        for p in payloads:
+            for n in _nodes(p):
+                if n.get("accessibilityId") != aid:
+                    continue
+                for m in _nodes(n):
+                    vm = m.get("simpleMetricViewModel")
+                    if not isinstance(vm, dict):
+                        continue
+                    label = _norm(_content(vm, "subtitle") or "")
+                    value = _percent(_content(vm, "value"))
+                    if value is None:
+                        continue
+                    if apv is None and any(k in label for k in _APV_LABELS):
+                        apv = value
+                    elif ret30 is None and _RET30_LABEL.search(label):
+                        ret30 = value
+    return apv, ret30
+
+
+# --- cac the basic_table_card (tab Reach), nhan dien theo tieu de ---
+_TOTAL_LABELS = ("tổng tỷ lệ lưu lượng truy cập", "total traffic share")
+_SRC_HEADLINES = {
+    "src_search": ("cụm từ tìm kiếm trên youtube", "youtube search"),
+    "src_suggested": ("nội dung giúp người xem tìm thấy", "suggested videos"),
+    "src_other": ("trang web hoặc ứng dụng bên ngoài", "external websites"),
+}
+_AB_HEADLINES = ("thử nghiệm a/b", "a/b test", "test & compare", "test and compare")
+_AB_DONE = ("đã hoàn tất", "completed", "đã dừng", "stopped")
+
+
+def _table_cards(payloads):
+    """(headline da chuan hoa, node) cua moi the basic_table_card."""
     for p in payloads:
         for n in _nodes(p):
-            aid = n.get("accessibilityId")
-            if isinstance(aid, str):
-                low = aid.lower()
-                if "test" in low and "compare" in low:
-                    return True
+            if n.get("accessibilityId") == ID_TABLE:
+                head = _content(n, "topContent", "sectionHeaderViewModel", "headline")
+                if head:
+                    yield _norm(head), n
+
+
+def _card_total(node):
+    """Phan tram cua dong 'Tong ty le luu luong truy cap'; the 'Khong du du lieu' hoac khong co dong nay -> None."""
+    for n in _nodes(node):
+        item = n.get("listItemViewModel")
+        if isinstance(item, dict) and _norm(_content(item, "title") or "") in _TOTAL_LABELS:
+            return _percent(_content(item, "trailingLabel"))
+    return None
+
+
+_SINCE_PUBLISH = ("từ khi xuất bản", "since published")
+
+
+def _traffic_shares(payloads):
+    """Chi nhan the dung tieu de (bat dau bang) va co ky 'Tu khi xuat ban': ky khac thi None."""
+    out = dict.fromkeys(_SRC_HEADLINES)
+    for head, node in _table_cards(payloads):
+        sub = _norm(_content(node, "topContent", "sectionHeaderViewModel", "sublabel") or "")
+        if not any(s in sub for s in _SINCE_PUBLISH):
+            continue
+        for col, keys in _SRC_HEADLINES.items():
+            if out[col] is None and head.startswith(keys):
+                out[col] = _card_total(node)
+    return out
+
+
+def _test_running(payloads):
+    """True neu co the 'Thu nghiem A/B' ma trang thai khong phai da hoan tat/da dung.
+    Trang thai la hoac thieu dong trang thai tinh la dang chay (an toan: chay thi chan doi anh)."""
+    for head, node in _table_cards(payloads):
+        if head.startswith(_AB_HEADLINES):
+            sub = _content(node, "topContent", "sectionHeaderViewModel", "sublabel") or ""
+            parts = [_norm(s) for s in sub.split("•")]
+            if not any(s in _AB_DONE for s in parts):
+                return True
     return False
 
 
@@ -244,5 +355,8 @@ def parse_snapshot(payloads, video_id, period=None):
         raise ParseError("metric ctr out of range: %r" % row["ctr"])
     if row["avd_s"] < 0:
         raise ParseError("metric avd_s out of range: %r" % row["avd_s"])
+    # cac cot sau tuy chon: thieu thi None, khong bao gio ParseError va khong bao gio tinh bu
+    row["apv_pct"], row["ret_30s"] = _retention(payloads)
+    row.update(_traffic_shares(payloads))  # src_browse khong co trong Studio: de None
     row["test_running"] = _test_running(payloads)
     return row

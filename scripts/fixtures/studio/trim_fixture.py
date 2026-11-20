@@ -10,28 +10,55 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", ".."))
-from studio_parse import KEEP_IDS  # noqa: E402
+from studio_parse import ID_IMPRESSIONS_CARD, ID_TABLE, KEEP_IDS, _TOTAL_LABELS, _norm, _nodes  # noqa: E402
 
 DROP_EXACT = {"trackingParams", "clickTrackingParams"}
 
 
-def _drop(key):
-    return key in DROP_EXACT or key.endswith("Token")
+def _drop(key, val, keep_series):
+    if key in DROP_EXACT or key.endswith("Token"):
+        return True
+    if isinstance(val, str) and val.startswith(("http://", "https://")):
+        return True  # moi URL (anh, thumbnail, lien ket) la du lieu ben thu ba
+    if key in ("image", "leadingImage", "sources"):
+        return True
+    # chuoi diem du lieu: chi giu o the Impressions (parser doc cuoi chuoi tich luy)
+    return key in ("dataPoints", "dataHovercards") and not keep_series
 
 
-def _scrub(obj):
+def _scrub(obj, keep_series=False):
     if isinstance(obj, dict):
-        return {k: _scrub(v) for k, v in obj.items() if not _drop(k)}
+        return {k: _scrub(v, keep_series) for k, v in obj.items() if not _drop(k, v, keep_series)}
     if isinstance(obj, list):
-        return [_scrub(v) for v in obj]
+        return [_scrub(v, keep_series) for v in obj]
     return obj
+
+
+def _trim_table(node):
+    """The basic_table_card: chi giu id, tieu de + dong phu (ky/trang thai A/B) va dong tong luu luong.
+    Moi dong khac (tu khoa, kenh, tieu de video, trang ngoai) la du lieu ben thu ba hoac ca nhan."""
+    head = ((node.get("topContent") or {}).get("sectionHeaderViewModel")) or {}
+    out = {"accessibilityId": node.get("accessibilityId"),
+           "topContent": {"sectionHeaderViewModel": {k: _scrub(head[k]) for k in ("headline", "sublabel") if k in head}}}
+    for n in _nodes(node):
+        item = n.get("listItemViewModel")
+        title = ((item or {}).get("title") or {}).get("content")
+        if isinstance(title, str) and _norm(title) in _TOTAL_LABELS:
+            out["bodyContent"] = {"linearLayoutViewModel": {"items": [
+                {"listItemViewModel": {"title": _scrub(item["title"]), "trailingLabel": _scrub(item["trailingLabel"])}}]}}
+            break
+    return out
 
 
 def _collect(obj, out):
     """Nut ngoai cung mang accessibilityId trong KEEP_IDS; khong di sau vao nut da giu."""
     if isinstance(obj, dict):
-        if obj.get("accessibilityId") in KEEP_IDS:
-            out.append(_scrub(obj))
+        aid = obj.get("accessibilityId")
+        if aid == ID_TABLE:
+            out.append(_trim_table(obj))
+            return
+        if aid in KEEP_IDS:
+            out.append(_scrub(obj, keep_series=(aid == ID_IMPRESSIONS_CARD)))
             return
         for v in obj.values():
             _collect(v, out)
