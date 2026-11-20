@@ -100,11 +100,20 @@ class HashWindowTest(unittest.TestCase):
         self.assertEqual(st.manual_until, T0 + 3 * H + timedelta(days=7))
 
     def test_owner_change_seen_before_ours_is_confirmed_is_manual(self):
-        # B seen once, then the owner's M held two snapshots: two different new hashes inside the window
-        snaps = [snap(T0, "A"), snap(T0 + 1 * H, "B", 11000), snap(T0 + 2 * H, "M", 12000),
-                 snap(T0 + 3 * H, "M", 13000)]
-        st = state(snaps, [act(T0 + timedelta(minutes=10))], T0 + 4 * H)
+        # both new hashes confirmed inside the window: B is ours, C (the later one) is the owner's
+        snaps = [snap(T0, "A"), snap(T0 + 1 * H, "B", 11000), snap(T0 + 2 * H, "B", 12000),
+                 snap(T0 + 3 * H, "C", 13000), snap(T0 + 4 * H, "C", 14000)]
+        st = state(snaps, [act(T0 + timedelta(minutes=10))], T0 + 5 * H)
         self.assertEqual(st.variant, "manual")
+        self.assertEqual(st.manual_until, T0 + 3 * H + timedelta(days=7))
+
+    def test_blip_inside_window_does_not_make_own_swap_manual(self):
+        # A, X, A, B, B: X is a one-snapshot blip, never confirmed; B is the loop's own swap
+        snaps = [snap(T0, "A"), snap(T0 + 1 * H, "X", 11000), snap(T0 + 2 * H, "A", 12000),
+                 snap(T0 + 3 * H, "B", 13000), snap(T0 + 4 * H, "B", 14000)]
+        st = state(snaps, [act(T0 + timedelta(minutes=10))], T0 + 5 * H)
+        self.assertEqual(st.variant, "alt1")
+        self.assertIsNone(st.manual_until)
 
     def test_change_with_no_action_is_manual(self):
         snaps = [snap(T0, "A"), snap(T0 + D, "M", 11000), snap(T0 + 2 * D, "M", 12000)]

@@ -89,7 +89,7 @@ def _build_one(snaps: list, acts: list, feature_variants: set, pending: bool,
     ai = 0
     win_at = None                 # luc action ok cuoi cung neu cua so cho dang mo
     win_n = 0                     # so snapshot co hash tu luc do
-    win_seen: set = set()         # cac hash moi khac nhau da thay (chua xac nhan) trong cua so
+    win_seen: set = set()         # cac hash moi khac nhau DA XAC NHAN trong cua so
     cand_hash, cand_count, cand_first = None, 0, None
 
     def leave_main() -> None:
@@ -148,10 +148,12 @@ def _build_one(snaps: list, acts: list, feature_variants: set, pending: bool,
                     cand_count += 1
                 else:
                     cand_hash, cand_count, cand_first = h, 1, t
-                if in_window:
-                    win_seen.add(h)
                 if cand_count >= 2:
-                    if in_window and win_seen <= {h}:
+                    # chi hash DA XAC NHAN moi vao win_seen: mot blip mot snapshot khong tinh
+                    other_confirmed = bool(win_seen - {h})
+                    if in_window:
+                        win_seen.add(h)
+                    if in_window and not other_confirmed:
                         win_at = None           # thay doi nay la cua action
                     else:
                         # ngoai cua so, hoac hai hash moi khac nhau trong cua so: cai sau la tay chu kenh
