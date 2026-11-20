@@ -755,17 +755,52 @@ class RunTest(unittest.TestCase):
         self.assertEqual(self.captured, ["vidB0000002", "vidA0000001"])
 
     def test_watchdog_releases_actions_lock(self):
-        mine = [sc.lock_path(self.home, CHANNEL), sc.actions_lock_path(self.home, CHANNEL)]
-        for p in mine:
-            p.write_text(str(os.getpid()))
-        other = self.home / ".studio-actions-Other.lock"
+        # Lock that (fd con mo, nhu luc watchdog ban that). Tren Windows khong dong fd
+        # thi unlink loi WinError 32 va lock nam lai 6 gio.
+        cap = sc.acquire_lock(sc.lock_path(self.home, CHANNEL))
+        act = sc.acquire_lock(sc.actions_lock_path(self.home, CHANNEL))
+        self.assertIsNotNone(cap)
+        self.assertIsNotNone(act)
+        self.assertIsNotNone(act.fd)
+        other = self.home / ".studio-actions-Other.lock"   # cua tien trinh khac, khong dang ky
         other.write_text("999999")
         exits = []
-        sc.watchdog_fire(mine + [other], self.sent.append, exit_fn=exits.append)
+        try:
+            sc.watchdog_fire(self.sent.append, exit_fn=exits.append)
+        finally:
+            for lk in (cap, act):
+                sc.release_lock(lk)
         self.assertEqual(exits, [1])
-        self.assertFalse(any(p.exists() for p in mine))
-        self.assertTrue(other.exists())                  # lock cua tien trinh khac giu nguyen
+        self.assertFalse(sc.lock_path(self.home, CHANNEL).exists())
+        self.assertFalse(sc.actions_lock_path(self.home, CHANNEL).exists())
+        self.assertTrue(other.exists())
         self.assertEqual(len(self.sent), 1)
+        self.assertEqual(sc._HELD, {})
+
+    def test_watchdog_keeps_lock_with_other_pid(self):
+        act = sc.acquire_lock(sc.actions_lock_path(self.home, CHANNEL))
+        try:
+            os.lseek(act.fd, 0, os.SEEK_SET)
+            os.write(act.fd, b"999999")          # file khong con ghi PID nay
+            sc.watchdog_fire(self.sent.append, exit_fn=lambda code: None)
+            self.assertIsNone(act.fd)            # fd van duoc dong
+            self.assertTrue(sc.actions_lock_path(self.home, CHANNEL).exists())
+        finally:
+            sc.release_lock(act)
+
+    def test_watchdog_during_run_frees_both_locks(self):
+        exits = []
+
+        def actions_then_watchdog(drive, youtube, chan, done, tmpdir):
+            self.assertTrue(sc.lock_path(self.home, CHANNEL).exists())
+            self.assertTrue(sc.actions_lock_path(self.home, CHANNEL).exists())
+            sc.watchdog_fire(self.sent.append, exit_fn=exits.append)
+            self.assertFalse(sc.lock_path(self.home, CHANNEL).exists())
+            self.assertFalse(sc.actions_lock_path(self.home, CHANNEL).exists())
+            return 0, 0
+        self.assertEqual(self.run_it(run_actions=actions_then_watchdog), 0)
+        self.assertEqual(exits, [1])
+        self.assertEqual(sc._HELD, {})
 
     # -- token
 
@@ -823,6 +858,55 @@ class RunTest(unittest.TestCase):
         self.assertEqual(h["status"], "FAIL auth")
         self.assertEqual(h["detail"], "token: YouTube: refresh failed (invalid_grant)")
         self.assertEqual(self.sent, [sc.TOKEN_MSG])
+
+    def test_network_blip_is_api_not_token(self):
+        from google.auth.exceptions import TransportError
+        from google.oauth2.credentials import Credentials
+        expired = json.dumps({
+            "token": "x", "refresh_token": "r", "client_id": "c", "client_secret": "s",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "expiry": "2020-01-01T00:00:00Z", "scopes": yu.DRIVE_SCOPES})
+        dtok = self.write_token("token-drive.json", expired)
+        ytok = self.write_token("token-youtube.json", expired)
+        with mock.patch.object(Credentials, "refresh",
+                               side_effect=TransportError("connection reset")):
+            with self.assertRaises(TransportError):          # khong bi doi thanh TokenError
+                sc.load_creds(dtok, yu.DRIVE_SCOPES, "Drive")
+            with redirect_stdout(io.StringIO()):
+                rc = sc.run(self.token_args(dtok, ytok),
+                            self.deps(drive=None, youtube=None, connect=sc.connect))
+            self.assertEqual(rc, 1)
+            with redirect_stdout(io.StringIO()):
+                sc.run(self.token_args(dtok, ytok),
+                       self.deps(drive=None, youtube=None, connect=sc.connect))
+        self.assertEqual(len(self.sent), 1)                  # mot lan moi ngay
+        self.assertNotIn(sc.TOKEN_MSG, self.sent)
+        self.assertIn("ERROR", self.sent[0])
+        self.assertIn("TransportError", self.sent[0])
+        self.assertIn("api:TransportError", self.state()["notified"])
+        # Drive da ket noi, chi refresh YouTube loi mang -> FAIL api trong health
+
+        def connect(args):
+            e = TransportError("timeout")
+            e.drive = self.drive
+            raise e
+        self.clock.t += timedelta(days=1)
+        self.assertEqual(self.run_it(drive=None, youtube=None, connect=connect), 1)
+        self.assertEqual(self.health()["status"], "FAIL api")
+        self.assertIn("TransportError", self.health()["detail"])
+
+    def test_write_failure_keeps_failure_bookkeeping(self):
+        self.capture_plan = {"vidA0000001": [sp.ParseError("missing metric ctr")]}
+
+        def broken(drive, folders, day, cols, rows):
+            raise ConnectionResetError("drive reset")
+        with mock.patch.object(ss, "append_snapshot_rows", broken):
+            self.assertEqual(self.run_it(), 1)
+        st = self.state()
+        self.assertEqual(st["failed"], {"vidA0000001": 1})
+        self.assertIn("vidA0000001", st["last_attempt"])
+        self.assertEqual(st["last"], {})                      # dong cua B chua len Drive
+        self.assertEqual(self.health()["status"], "FAIL api")
 
     # -- backoff va gioi han Telegram
 

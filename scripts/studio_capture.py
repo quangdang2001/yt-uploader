@@ -152,6 +152,34 @@ def profile_stamp(profile_dir) -> float:
     return best
 
 
+# ---------------------------------------------------------------- lock dang giu
+#
+# Watchdog chay o thread khac va thoat bang os._exit, bo qua moi __exit__. Tren
+# Windows khong xoa duoc file con fd mo (WinError 32), nen watchdog can chinh cac
+# Lock dang giu de dong fd truoc khi xoa. run() va _run_actions dang ky o day.
+
+_HELD: dict = {}                   # Path -> yu.Lock dang giu
+_HELD_GUARD = threading.Lock()
+
+
+def acquire_lock(path: Path):
+    """yu.Lock da giu (va dang ky cho watchdog), hoac None neu tien trinh khac dang giu."""
+    lock = yu.Lock(Path(path))
+    try:
+        lock.__enter__()
+    except SystemExit:             # yu.Lock thoat 0 khi lock dang bi giu
+        return None
+    with _HELD_GUARD:
+        _HELD[Path(path)] = lock
+    return lock
+
+
+def release_lock(lock) -> None:
+    with _HELD_GUARD:
+        _HELD.pop(Path(lock.path), None)
+    lock.__exit__(None, None, None)
+
+
 def error_kind(exc: BaseException) -> str:
     if yu.is_quota_error(exc):
         return "quota"
@@ -218,7 +246,10 @@ def load_creds(token: Path, scopes: list, label: str):
     """Doc token cua uploader; het han thi refresh TRONG BO NHO.
 
     Khong bao gio ghi lai file token (uploader ghi no moi 5 phut) va khong bao gio
-    mo InstalledAppFlow (khong ai o VPS de dang nhap). Loi -> TokenError."""
+    mo InstalledAppFlow (khong ai o VPS de dang nhap). Token hong / bi thu hoi
+    (RefreshError) -> TokenError. Loi mang khi refresh (TransportError) thi de nguyen:
+    do la loi API tam thoi, khong phai token can dang nhap lai."""
+    from google.auth.exceptions import RefreshError
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
     token = Path(token)
@@ -234,7 +265,7 @@ def load_creds(token: Path, scopes: list, label: str):
         raise TokenError(f"{label}: token not valid and no refresh token")
     try:
         creds.refresh(Request())
-    except Exception as e:
+    except RefreshError as e:
         raise TokenError(f"{label}: refresh failed ({type(e).__name__}: {e})") from e
     return creds
 
@@ -245,8 +276,8 @@ def connect(args):
     drive = build("drive", "v3", credentials=dc, cache_discovery=False)
     try:
         yc = load_creds(Path(args.token_youtube), yu.YOUTUBE_SCOPES, "YouTube")
-    except TokenError as e:
-        e.drive = drive
+    except Exception as e:
+        e.drive = drive            # de noi goi van ghi duoc health
         raise
     return drive, build("youtube", "v3", credentials=yc, cache_discovery=False)
 
@@ -404,17 +435,14 @@ class Deps:
 def run(args, deps: Deps) -> int:
     if deps.launched_at is None:
         deps.launched_at = deps.now()
-    lock = yu.Lock(lock_path(deps.home, args.channel))
-    try:
-        lock.__enter__()
-    except SystemExit:
-        # yu.Lock thoat 0 khi lock dang bi giu; o day la exit 2, khong ghi gi
+    lock = acquire_lock(lock_path(deps.home, args.channel))
+    if lock is None:
         log.info("studio_capture dang chay o tien trinh khac, thoat (exit 2).")
         return 2
     try:
         return _run_locked(args, deps)
     finally:
-        lock.__exit__(None, None, None)
+        release_lock(lock)
 
 
 def _run_locked(args, deps: Deps) -> int:
@@ -448,6 +476,8 @@ def _run_locked(args, deps: Deps) -> int:
             deps.drive, deps.youtube = deps.connect(args)
         except TokenError as e:
             return _token_failed(args, deps, state, persist, e)
+        except Exception as e:     # vd TransportError khi refresh: loi mang, khong phai token
+            return _api_failed(args, deps, state, persist, getattr(e, "drive", None), None, e)
     drive, youtube = deps.drive, deps.youtube
 
     sf = None
@@ -465,20 +495,30 @@ def _run_locked(args, deps: Deps) -> int:
             return 3
         return _capture_phase(args, deps, state, persist, drive, youtube, folders, sf)
     except Exception as e:
-        kind = error_kind(e)
-        detail = f"{kind}: {type(e).__name__}: {e}"
-        log.exception("Loi API/Drive (%s)", kind)
-        if args.dry_run:
-            print(f"FAIL api: {detail}")
-            return 1
-        if sf is not None:
-            try:
-                ss.write_health(drive, sf, "FAIL api", detail[:2000], 0, 0)
-            except Exception as e2:
-                log.warning("Khong ghi duoc health: %s", e2)
-        notify_daily(deps, state, f"api:{kind}", f"[{ch}] Studio capture ERROR: {detail}"[:1000])
-        persist()
+        return _api_failed(args, deps, state, persist, drive, sf, e)
+
+
+def _api_failed(args, deps, state, persist, drive, sf, e: BaseException) -> int:
+    """Loi Data API / Drive / mang: FAIL api (neu co Drive), Telegram mot lan moi loai
+    moi ngay UTC, exit 1."""
+    kind = error_kind(e)
+    detail = f"{kind}: {type(e).__name__}: {e}"
+    log.error("Loi API/Drive (%s)", kind, exc_info=e)
+    if args.dry_run:
+        print(f"FAIL api: {detail}")
         return 1
+    if drive is not None:
+        try:
+            if sf is None:
+                folders = yu.resolve_folders(drive, args.drive_root, args.channel)
+                sf = ss.studio_folders(drive, folders["channel"])
+            ss.write_health(drive, sf, "FAIL api", detail[:2000], 0, 0)
+        except Exception as e2:
+            log.warning("Khong ghi duoc health: %s", e2)
+    notify_daily(deps, state, f"api:{kind}",
+                 f"[{args.channel}] Studio capture ERROR: {detail}"[:1000])
+    persist()
+    return 1
 
 
 def _token_failed(args, deps, state, persist, e: TokenError) -> int:
@@ -544,10 +584,8 @@ def _capture_phase(args, deps, state, persist, drive, youtube, folders, sf) -> i
             print(browser_error)
         return 4 if browser_error or any(nav for _, nav in failures.values()) else 0
 
-    # Ghi tung file ngay; moi file ghi xong moi cap nhat "last" cua cac dong trong do.
-    # Loi giua chung -> raise ra _run_locked (FAIL api), state da luu phan da ghi.
-    _write_rows(drive, sf, rows, state)
-
+    # So sach video loi TRUOC khi ghi dong: neu ghi Drive loi (raise ra _run_locked ->
+    # FAIL api, state van duoc luu) thi lan thu va dem loi cua lan nay khong bi mat.
     reached = []
     for vid, (reason, _) in failures.items():
         n = int(state["failed"].get(vid, 0)) + 1
@@ -558,6 +596,9 @@ def _capture_phase(args, deps, state, persist, drive, youtube, folders, sf) -> i
     if reached:
         deps.notify(f"[{ch}] Studio read failed twice in a row for {len(reached)} video(s): "
                     + "; ".join(reached))
+
+    # Ghi tung file ngay; moi file ghi xong moi cap nhat "last" cua cac dong trong do.
+    _write_rows(drive, sf, rows, state)
     if browser_error:
         n = int(state.get("browser_failed", 0)) + 1
         state["browser_failed"] = n
@@ -697,10 +738,8 @@ def copy_history(drive, chan_folder: str, sf: dict) -> None:
 
 def _run_actions(deps, drive, youtube, folders, ch) -> None:
     """Bo thuc thi doi thumbnail. Loi o day khong doi exit code cua lan doc."""
-    alock = yu.Lock(actions_lock_path(deps.home, ch))
-    try:
-        alock.__enter__()
-    except SystemExit:
+    alock = acquire_lock(actions_lock_path(deps.home, ch))
+    if alock is None:
         log.info("studio_actions dang chay rieng, bo qua lan nay.")
         return
     try:
@@ -712,7 +751,7 @@ def _run_actions(deps, drive, youtube, folders, ch) -> None:
         log.exception("Bo thuc thi doi thumbnail loi")
         deps.notify(f"[{ch}] Swap executor error: {type(e).__name__}: {e}")
     finally:
-        alock.__exit__(None, None, None)
+        release_lock(alock)
 
 
 # ---------------------------------------------------------------- CLI
@@ -766,25 +805,43 @@ def parse_args(argv=None) -> argparse.Namespace:
     return a
 
 
-def watchdog_fire(lock_files, notify, seconds: int = WATCHDOG_S, exit_fn=os._exit) -> None:
-    """Bao, go cac lock ma tien trinh nay dang giu (os._exit bo qua finally), thoat 1."""
+def watchdog_fire(notify, seconds: int = WATCHDOG_S, exit_fn=os._exit) -> None:
+    """Bao, go cac lock ma tien trinh nay dang giu (os._exit bo qua finally), thoat 1.
+
+    Dong fd cua tung Lock truoc khi xoa file: Windows khong xoa duoc file con mo.
+    Chi xoa file con ghi PID cua tien trinh nay."""
     log.error("WATCHDOG: qua %d phut, thoat.", seconds // 60)
     try:
         notify(f"Studio capture: watchdog after {seconds // 60} min, run killed")
     except Exception:
         pass
     me = str(os.getpid())
-    for lock_file in lock_files:
+    with _HELD_GUARD:
+        held = list(_HELD.items())
+        _HELD.clear()
+    for path, lock in held:
         try:
-            if Path(lock_file).read_text().strip() == me:
-                Path(lock_file).unlink()
+            mine = path.read_text().strip() == me
         except OSError:
-            pass
+            mine = False
+        fd, lock.fd = lock.fd, None
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        if not mine:
+            log.warning("WATCHDOG: %s khong con ghi PID %s, khong xoa.", path.name, me)
+            continue
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as e:
+            log.error("WATCHDOG: khong xoa duoc %s: %s", path.name, e)
     exit_fn(1)
 
 
-def start_watchdog(lock_files, notify, seconds: int = WATCHDOG_S) -> threading.Timer:
-    t = threading.Timer(seconds, watchdog_fire, args=(list(lock_files), notify, seconds))
+def start_watchdog(notify, seconds: int = WATCHDOG_S) -> threading.Timer:
+    t = threading.Timer(seconds, watchdog_fire, args=(notify, seconds))
     t.daemon = True
     t.start()
     return t
@@ -803,8 +860,7 @@ def main(argv=None) -> int:
     for h in yu.log.handlers:
         alog.addHandler(h)
     deps = Deps(launched_at=launched)
-    wd = start_watchdog([lock_path(deps.home, args.channel),
-                         actions_lock_path(deps.home, args.channel)], deps.notify)
+    wd = start_watchdog(deps.notify)
     try:
         return run(args, deps)
     except Exception as e:
