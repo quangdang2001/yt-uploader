@@ -97,6 +97,14 @@ class RulesTest(unittest.TestCase):
         v, _ = run(snap(ctr=0.055, impr=5000, ret=0.60), state(), med_ret=0.50)
         self.assertEqual(v, Verdict.WATCH)
 
+    def test_opening_margin(self):
+        v, _ = run(snap(ctr=0.055, impr=5000, ret=0.58), state(), med_ret=0.60)
+        self.assertNotEqual(v, Verdict.OPENING)     # 0.58 >= 0.85 x 0.60 = 0.51
+        v, reason = run(snap(ctr=0.055, impr=5000, ret=0.50), state(), med_ret=0.60)
+        self.assertEqual(v, Verdict.OPENING)
+        self.assertIn("50.0%", reason)
+        self.assertIn("60.0%", reason)
+
     def test_opening_on_good_ctr(self):
         v, _ = run(snap(ctr=0.060, impr=5000, ret=0.40), state(), typical=5000, med_ret=0.50)
         self.assertEqual(v, Verdict.OPENING)

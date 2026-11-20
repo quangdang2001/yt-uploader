@@ -120,6 +120,21 @@ class StudioStoreTest(unittest.TestCase):
         self.assertEqual(self.drive.items[actions]["name"], "actions")
         self.assertEqual(self.drive.items[self.folders["actions_done"]]["parents"], [actions])
 
+    def test_folders_by_id_stay_inside_studio(self):
+        drive = FakeDrive()
+        studio = drive._add("studio", ["SHARED"], FOLDER_MIME)
+        got = ss.studio_folders_by_id(drive, studio)
+        self.assertEqual(got["studio"], studio)
+        self.assertEqual(set(got), set(self.folders))
+        self.assertEqual(len(drive.items), 8)  # studio co san + 7 folder con
+        top = [f for f in drive.items.values() if f["id"] != studio and studio not in f["parents"]
+               and f["name"] != "pending" and f["name"] != "done" and f["name"] != "failed"]
+        self.assertEqual(top, [])
+        self.assertEqual([f["name"] for f in drive.items.values() if "SHARED" in f["parents"]], ["studio"])
+        again = ss.studio_folders_by_id(drive, studio)
+        self.assertEqual(again, got)
+        self.assertEqual(len(drive.items), 8)
+
     def test_snapshot_header_once(self):
         cols = ("video_id", "views")
         ss.append_snapshot_rows(self.drive, self.folders, "2026-11-19", cols,

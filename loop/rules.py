@@ -8,6 +8,7 @@ from statistics import median
 KEEP_CTR = 0.057
 BASE_BAR = 0.053
 MEDIAN_FACTOR = 0.8
+OPENING_FACTOR = 0.85   # OPENING chi khi ret_30s < 0.85 x trung vi (chu kenh/controller 2026-11-20)
 MIN_VIDEOS_FOR_MEDIAN = 10
 MIN_IMPR = 2000
 MIN_AGE_H = 6
@@ -134,7 +135,7 @@ def decide(snap: dict, state: VideoState, bar: float, now: datetime,
         if typical_impr is not None and impr < 0.5 * typical_impr:
             return Verdict.NOT_PACKAGING, "%s, typical %s impr" % (_fmt_ok(snap, bar), format(round(typical_impr), ","))
         ret = snap.get("ret_30s")
-        if median_ret_30s is not None and ret is not None and ret < median_ret_30s:
+        if median_ret_30s is not None and ret is not None and ret < OPENING_FACTOR * median_ret_30s:
             return Verdict.OPENING, "%s, 30s retention %.1f%% < median %.1f%%" % (
                 _fmt_ok(snap, bar), ret * 100, median_ret_30s * 100)
     if ctr >= KEEP_CTR:

@@ -34,7 +34,7 @@ HISTORY_NAME = "upload-history.csv"
 
 INT_COLS = {"impressions", "views", "unique_viewers"}
 FLOAT_COLS = {"age_hours", "ctr", "avd_s", "apv_pct", "ret_30s", "ret_60s"}
-BOOL_COLS = {"test_running"}
+BOOL_COLS = {"test_running", "impr_rounded"}
 
 
 def _write(path: Path, text: str) -> None:
@@ -60,10 +60,14 @@ def _load_state(cache: Path) -> dict:
         return {}
 
 
-def fetch(drive, chan_folder: str, cache: Path) -> dict:
+def fetch(drive, chan_folder: str | None, cache: Path, studio_id: str | None = None) -> dict:
+    """studio_id co: mo studio/ theo ID, khong dong vao folder kenh. Khong co: di tu folder kenh."""
     cache = Path(cache)
     cache.mkdir(parents=True, exist_ok=True)
-    folders = ss.studio_folders(drive, chan_folder)
+    if studio_id:
+        folders = ss.studio_folders_by_id(drive, studio_id)
+    else:
+        folders = ss.studio_folders(drive, chan_folder)
     state = _load_state(cache)
 
     snaps = 0
@@ -117,13 +121,15 @@ def fetch(drive, chan_folder: str, cache: Path) -> dict:
         except (ValueError, OSError):
             health_status = "corrupt"
 
-    for f in ss.list_files(drive, chan_folder):
-        if f["name"] == HISTORY_NAME:
-            dest = cache / HISTORY_NAME
-            if not dest.exists() or state.get(HISTORY_NAME) != f["modifiedTime"]:
-                _write(dest, ss.read_text(drive, f["id"]))
-                state[HISTORY_NAME] = f["modifiedTime"]
-            break
+    # lich su upload: VPS chep vao studio/; chi che do theo ten moi quay ve folder kenh
+    hist = root_files.get(HISTORY_NAME)
+    if hist is None and not studio_id and chan_folder:
+        hist = next((f for f in ss.list_files(drive, chan_folder) if f["name"] == HISTORY_NAME), None)
+    if hist is not None:
+        dest = cache / HISTORY_NAME
+        if not dest.exists() or state.get(HISTORY_NAME) != hist["modifiedTime"]:
+            _write(dest, ss.read_text(drive, hist["id"]))
+            state[HISTORY_NAME] = hist["modifiedTime"]
 
     _write(cache / ".state.json", json.dumps(state, indent=2))
     return {"snapshots_downloaded": snaps, "actions_downloaded": acts,
@@ -186,9 +192,16 @@ def load_actions(cache: Path) -> list:
     return out
 
 
+def health_ok(status: str) -> bool:
+    """VPS ghi PASS, ban cu ghi ok; moi gia tri khac (missing, corrupt, FAIL ...) la canh bao."""
+    return str(status).strip().lower() in ("ok", "pass")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Keo du lieu studio tu Drive ve cache.")
-    ap.add_argument("--channel", required=True)
+    ap.add_argument("--channel", default=None)
+    ap.add_argument("--config", default=str(REPO / "loop" / "config.json"))
+    ap.add_argument("--studio-folder-id", default=None)
     ap.add_argument("--cache", default=str(DEFAULT_CACHE))
     ap.add_argument("--drive-root", default="YouTube-Upload")
     ap.add_argument("--client-secret", default=str(SCRIPTS / "client_secret.json"))
@@ -201,10 +214,24 @@ def main(argv=None) -> int:
     creds = yu.get_credentials(Path(args.client_secret), Path(args.token_drive),
                                yu.DRIVE_SCOPES, "Drive")
     drive = build("drive", "v3", credentials=creds, cache_discovery=False)
-    chan = yu.resolve_folders(drive, args.drive_root, args.channel)["channel"]
-    res = fetch(drive, chan, Path(args.cache))
+    try:
+        cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        cfg = {}
+    if not isinstance(cfg, dict):
+        cfg = {}
+    studio_id = args.studio_folder_id or cfg.get("studio_folder_id")
+    if studio_id:
+        res = fetch(drive, None, Path(args.cache), studio_id=studio_id)
+    else:
+        channel = args.channel or cfg.get("channel")
+        if not channel:
+            print("thieu --channel hoac --studio-folder-id", file=sys.stderr)
+            return 2
+        chan = yu.resolve_folders(drive, args.drive_root, channel)["channel"]
+        res = fetch(drive, chan, Path(args.cache))
     print(json.dumps(res, indent=2))
-    if res["health_status"] != "ok":
+    if not health_ok(res["health_status"]):
         print(f"CANH BAO: health = {res['health_status']}", file=sys.stderr)
     return 0
 

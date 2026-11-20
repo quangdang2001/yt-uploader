@@ -231,6 +231,35 @@ class AnalyseTest(unittest.TestCase):
         self.assertEqual(self.pending_files(), [])
         self.assertIn("would swap", self.report())
 
+    def test_swap_without_alt_feature_row_writes_no_request(self):
+        self.low_video()
+        real = an.build_states
+
+        def forged(*a, **kw):       # alts_left claims alt1, but thumbnail-features.csv has no such row
+            out = real(*a, **kw)
+            out["v1"].alts_left = ["alt1"]
+            return out
+        self.feats = [feat("gunA", "main")]
+        self.write()
+        with mock.patch.object(an, "build_states", forged):
+            rows = self.run_an()
+        self.assertEqual(rows[0]["verdict"], "SWAP")
+        self.assertTrue(rows[0]["reason"].endswith("(no alt available)"), rows[0]["reason"])
+        self.assertEqual(self.pending_files(), [])
+
+    def test_main_by_id_never_resolves_channel_folder(self):
+        cfg = Path(self.tmp.name) / "c.json"
+        cfg.write_text(json.dumps({"studio_folder_id": "STUDIO1"}), encoding="utf-8")
+        seen = {}
+        with mock.patch.object(an.yu, "get_credentials"), \
+                mock.patch("googleapiclient.discovery.build", return_value="DRIVE"), \
+                mock.patch.object(an.yu, "resolve_folders", side_effect=AssertionError("no")), \
+                mock.patch.object(an.ss, "studio_folders_by_id", return_value={"studio": "STUDIO1"}) as by_id, \
+                mock.patch.object(an, "analyse", lambda *a, **k: seen.update(folders=a[4])):
+            self.assertEqual(an.main(["--config", str(cfg), "--cache", str(self.cache)]), 0)
+        by_id.assert_called_once_with("DRIVE", "STUDIO1")
+        self.assertEqual(seen["folders"], {"studio": "STUDIO1"})
+
     def test_missing_go_live_is_alert_only(self):
         del self.cfg["go_live"]
         self.low_video()

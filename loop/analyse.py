@@ -219,6 +219,7 @@ def analyse(cache: Path, cfg: dict, now: datetime, drive=None, folders: dict | N
     alert = alert_only(cfg, now)
     live = drive is not None and folders is not None and not dry_run and not alert
 
+    fmap_all = {(f.get("base"), f.get("variant")) for f in features}
     rows, bars, requests = [], {}, []
     for vid in sorted(latest):
         snap, st = latest[vid], states[vid]
@@ -231,7 +232,9 @@ def analyse(cache: Path, cfg: dict, now: datetime, drive=None, folders: dict | N
             target = st.alts_left[0]
         elif verdict is Verdict.REVERT:
             target = _revert_target(st)
-        if target:
+        if target and verdict is Verdict.SWAP and (bases.get(vid), target) not in fmap_all:
+            reason += " (no alt available)"     # khong co dong dac trung cho alt: khong ghi yeu cau
+        elif target:
             word = "swap" if verdict is Verdict.SWAP else "revert"
             if alert:
                 reason = "would %s to %s: %s" % (word, target, reason)
@@ -297,6 +300,7 @@ def main(argv=None) -> int:
     ap.add_argument("--config", default=str(DEFAULT_CONFIG))
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--why", action="store_true")
+    ap.add_argument("--studio-folder-id", default=None)
     ap.add_argument("--drive-root", default="YouTube-Upload")
     ap.add_argument("--client-secret", default=str(lf.SCRIPTS / "client_secret.json"))
     ap.add_argument("--token-drive", default=str(lf.SCRIPTS / "token-drive-link.json"))
@@ -304,8 +308,9 @@ def main(argv=None) -> int:
 
     cfg = _read_json(Path(args.config), {})
     channel = args.channel or cfg.get("channel")
-    if not channel:
-        print("thieu --channel", file=sys.stderr)
+    studio_id = args.studio_folder_id or cfg.get("studio_folder_id")
+    if not channel and not studio_id:
+        print("thieu --channel hoac --studio-folder-id", file=sys.stderr)
         return 2
     cfg["why"] = args.why
     drive = folders = None
@@ -314,8 +319,11 @@ def main(argv=None) -> int:
         creds = yu.get_credentials(Path(args.client_secret), Path(args.token_drive),
                                    yu.DRIVE_SCOPES, "Drive")
         drive = build("drive", "v3", credentials=creds, cache_discovery=False)
-        chan = yu.resolve_folders(drive, args.drive_root, channel)["channel"]
-        folders = ss.studio_folders(drive, chan)
+        if studio_id:       # may chu kenh chi thay studio/: khong bao gio resolve_folders
+            folders = ss.studio_folders_by_id(drive, studio_id)
+        else:
+            chan = yu.resolve_folders(drive, args.drive_root, channel)["channel"]
+            folders = ss.studio_folders(drive, chan)
     analyse(Path(args.cache), cfg, datetime.now(timezone.utc), drive, folders, args.dry_run)
     return 0
 

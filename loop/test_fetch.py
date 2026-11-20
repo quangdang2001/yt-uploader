@@ -152,6 +152,48 @@ class FetchTest(unittest.TestCase):
         lf.fetch(self.drive, "CHAN", self.cache)
         self.assertEqual(lf.load_history(self.cache), {})
 
+    def test_by_id_reads_history_from_studio_and_never_touches_channel(self):
+        drive = FakeDrive()
+        studio = drive._add("studio", ["SHARED"], "application/vnd.google-apps.folder")
+        drive._add("upload-history.csv", [studio], "text/csv",
+                   b"ten_goc,video_id\ngunA,v1\n")
+        drive._add("upload-history.csv", ["CHAN"], "text/csv", b"ten_goc,video_id\nOLD,v9\n")
+        n = len(drive.items)
+        with mock.patch.object(ss, "studio_folders", side_effect=AssertionError("no name mode")):
+            lf.fetch(drive, None, self.cache, studio_id=studio)
+        self.assertEqual(lf.load_history(self.cache), {"v1": "gunA"})
+        self.assertEqual([f["name"] for f in drive.items.values() if "SHARED" in f["parents"]], ["studio"])
+        self.assertEqual(len(drive.items), n + 7)
+
+    def test_by_id_without_history_does_not_fall_back(self):
+        drive = FakeDrive()
+        studio = drive._add("studio", ["SHARED"], "application/vnd.google-apps.folder")
+        drive._add("upload-history.csv", ["CHAN"], "text/csv", b"ten_goc,video_id\nOLD,v9\n")
+        lf.fetch(drive, "CHAN", self.cache, studio_id=studio)
+        self.assertEqual(lf.load_history(self.cache), {})
+
+    def test_name_mode_falls_back_to_channel_history(self):
+        self.put("upload-history.csv", "CHAN", "ten_goc,video_id\ngunA,v1\n")
+        lf.fetch(self.drive, "CHAN", self.cache)
+        self.assertEqual(lf.load_history(self.cache), {"v1": "gunA"})
+
+    def test_name_mode_prefers_studio_history(self):
+        self.put("upload-history.csv", "CHAN", "ten_goc,video_id\nOLD,v1\n")
+        self.put("upload-history.csv", self.f["studio"], "ten_goc,video_id\nNEW,v1\n")
+        lf.fetch(self.drive, "CHAN", self.cache)
+        self.assertEqual(lf.load_history(self.cache), {"v1": "NEW"})
+
+    def test_health_ok_values(self):
+        for s in ("PASS", "pass", "ok", "OK"):
+            self.assertTrue(lf.health_ok(s), s)
+        for s in ("missing", "corrupt", "FAIL auth", "fail"):
+            self.assertFalse(lf.health_ok(s), s)
+
+    def test_impr_rounded_is_bool(self):
+        self.assertIs(lf._typed("impr_rounded", "True"), True)
+        self.assertIs(lf._typed("impr_rounded", "False"), False)
+        self.assertIs(lf._typed("impr_rounded", "0"), False)
+
     def test_health_missing(self):
         self.assertEqual(lf.fetch(self.drive, "CHAN", self.cache)["health_status"], "missing")
 

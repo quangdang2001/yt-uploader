@@ -32,7 +32,12 @@ def _media(data: bytes, mimetype: str):
 
 def studio_folders(drive, chan_folder: str) -> dict:
     """Tao (neu thieu) cay studio/ duoi folder kenh, tra ve id tung folder."""
-    studio = yu.ensure_folder(drive, STUDIO_DIR, chan_folder)
+    return studio_folders_by_id(drive, yu.ensure_folder(drive, STUDIO_DIR, chan_folder))
+
+
+def studio_folders_by_id(drive, studio_id: str) -> dict:
+    """Mo studio/ theo ID (may chu kenh chi duoc chia se folder nay). Chi tao thu muc con ben trong."""
+    studio = studio_id
     actions = yu.ensure_folder(drive, "actions", studio)
     return {
         "studio": studio,
