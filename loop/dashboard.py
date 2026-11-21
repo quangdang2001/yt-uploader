@@ -377,6 +377,19 @@ def _tn_arms(directive: dict, cfg: dict) -> list:
         for v, a in (m.get("gia_tri") or {}).items():
             using.setdefault(v, set()).add(a)
     rows = []
+    full = directive.get("thong_ke_nhanh")
+    if isinstance(full, dict):
+        for var, by_arm in full.items():
+            spec = cfg.get("bien", {}).get(var)
+            for arm, s in by_arm.items():
+                do = s.get("do") or (spec or {}).get("do", "views_7d")
+                rows.append({
+                    "bien": VAR_VI.get(var, var), "nhanh": arm, "n": s.get("n") or 0,
+                    "trung_vi": _tn_value(do, s.get("trung_vi")),
+                    "trang_thai": STATE_VI.get(s.get("trang_thai"), "Chưa đủ số"),
+                    "dang_dung": arm in using.get(var, ()),
+                })
+        return rows
     for var, w in wins.items():
         spec = cfg.get("bien", {}).get(var)
         if not spec:

@@ -90,6 +90,23 @@ def test_kill_rule_rank_based(cfg):
     assert stats["thumb_sang"]["toi"]["trang_thai"] == "dang-thu"
 
 
+def test_directive_carries_full_arm_stats(cfg):
+    win, mw = scored_rows("thumb_sang", "sang", [1000, 2000, 3000, 4000, 5000])
+    lose, ml = scored_rows("thumb_sang", "toi", [10] * 6)
+    stats = h.arm_stats(*combine((win, mw), (lose, ml)), cfg)
+    d = h.build_directive(["a"], stats, cfg, TODAY, {}, "v")
+    tk = d["thong_ke_nhanh"]
+    assert set(tk) == set(d["bien_bat"])
+    for v in d["bien_bat"]:
+        assert set(tk[v]) == set(hc.arms(cfg, v))
+    assert tk["thumb_sang"]["toi"]["trang_thai"] == "loai"
+    assert tk["thumb_sang"]["sang"]["trang_thai"] == "thang"
+    assert tk["thumb_sang"]["toi"]["n"] == 6 and tk["thumb_sang"]["toi"]["do"] == "views_7d"
+    assert tk["hook"][hc.arms(cfg, "hook")[0]] == {"n": 0, "trung_vi": None, "p25": None, "p75": None,
+                                                   "trang_thai": "chua-du", "do": "apv_pct"}
+    json.dumps(d)
+
+
 def _stats_with(cfg, spec):
     """spec: {var: {arm: [values]}}"""
     parts = []

@@ -103,6 +103,20 @@ class ExperimentDataTest(unittest.TestCase):
         nxt = out["tn_ke_tiep"][0]
         self.assertEqual((nxt["bien_thu"], nxt["kieu"]), ("Thumbnail sáng hay tối", "Thử cái mới"))
 
+    def test_tn_nhanh_reads_full_arm_stats(self):
+        directive = {
+            "nhanh_thang": {"thumb_sang": {"nhanh": "sang", "n": 5, "trung_vi": math.log(3000), "du_so": True}},
+            "thong_ke_nhanh": {"thumb_sang": {
+                "sang": {"n": 5, "trung_vi": math.log(3000), "p25": 0, "p75": 0, "trang_thai": "thang", "do": "views_7d"},
+                "toi": {"n": 6, "trung_vi": math.log(10), "p25": 0, "p75": 0, "trang_thai": "loai", "do": "views_7d"},
+            }},
+            "muc": [],
+        }
+        rows = db.build_experiment(self._tim(directive))["tn_nhanh"]
+        toi = [r for r in rows if r["nhanh"] == "toi"][0]
+        self.assertEqual((toi["trang_thai"], toi["n"], toi["trung_vi"]), ("Đã loại", 6, "10 lượt xem"))
+        self.assertEqual(len(rows), 2)
+
     def test_tn_so_latest_14_with_results(self):
         book_head = "id,thoi_diem,tac_vu,slug,bien_thu,nhanh_thu,du_doan_7d\n"
         lines = "".join(f"{i},2026-11-{i:02d}T06:00:00,dung,s{i},hook,x,3000-6000\n" for i in range(1, 17))

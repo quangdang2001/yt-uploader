@@ -296,6 +296,9 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
         "nhanh_thang": {v: {"nhanh": win[v], "n": stats[v][win[v]]["n"],
                             "trung_vi": stats[v][win[v]]["trung_vi"],
                             "du_so": stats[v][win[v]]["trang_thai"] == "thang"} for v in on},
+        "thong_ke_nhanh": {v: {a: {"n": s["n"], "trung_vi": s["trung_vi"], "p25": s["p25"], "p75": s["p75"],
+                                   "trang_thai": s["trang_thai"], "do": cfg["bien"][v]["do"]}
+                               for a, s in stats[v].items()} for v in on},
         "bien_bat": on, "muc": muc,
         "co_cau_tuan": {v: _week_mix(v, stats, cfg) for v in ("dong", "ten_quen") if v in on},
         "goc": {"gia_tri": goc[0], "nguon": goc[1]},
