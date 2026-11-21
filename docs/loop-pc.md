@@ -151,3 +151,26 @@ rồi REVERT về main, nó đặt lại file gốc đó, không phải thumbnai
   đặt: đây là rào chắn, không phải cổng.
 - Khi dữ liệu cũ (health > 3 giờ hoặc snapshot > 26 giờ), phân tích không ghi yêu cầu nào; phán quyết và
   báo cáo vẫn ra, kèm "(stale data - no request)".
+
+---
+
+## 6. Trái tim
+
+Sau bước sổ cái và trước bảng điều khiển, `run.ps1` chạy `python -m loop.heart --config loop/config.json`.
+Trái tim đọc sổ quyết định và dữ liệu Studio, rồi ghi bốn file vào `van-hanh/tim/` của vault:
+
+- `chi-thi.md`: chỉ thị bằng chữ cho tác vụ dựng và quản lý kênh đọc;
+- `chi-thi.json`: cùng chỉ thị ở dạng máy đọc;
+- `ket-qua.csv`: kết quả từng video đã chấm;
+- `so-quyet-dinh.csv`: sổ quyết định, chỉ thêm dòng, mỗi tác vụ ghi theo từng video. Sổ cái (`ledger`) lấy số
+  đo phim (footage, nhịp cắt, render, độ sáng thumbnail, số chữ, thời lượng) từ dòng `so-do` của sổ này
+  trước khi đoán ngược từ file dự án.
+
+Trái tim **không chặn vòng**: thoát khác 0 thì `run.ps1` chỉ cảnh báo, thêm một dòng
+`- <giờ> heart exit <mã>` vào `alerts.md` trong thư mục báo cáo, rồi chạy tiếp và vẫn thoát 0.
+
+Chạy tay:
+
+```
+python -m loop.heart --config loop/config.json
+```

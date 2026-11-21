@@ -57,6 +57,18 @@ class NotifyFailTest(unittest.TestCase):
             self.assertLess(block.index("notify_fail"), block.index("exit $code"))
 
 
+class HeartStepTest(unittest.TestCase):
+    def test_run_ps1_calls_heart_non_fatal(self):
+        text = (REPO / "loop" / "run.ps1").read_text(encoding="utf-8")
+        self.assertIn("loop.heart", text)
+        after = text[text.index("loop.heart"):]
+        before_dash = after[:after.index("loop.dashboard")]
+        self.assertIsNone(re.search(r"(?m)^\s*exit\b", before_dash))
+        self.assertIn("Write-Warning", before_dash)
+        self.assertIn("alerts.md", before_dash)
+        self.assertLess(text.index("loop.ledger"), text.index("loop.heart"))
+
+
 class RunbookTest(unittest.TestCase):
     def test_runbook_covers_setup_messages_and_release(self):
         text = (REPO / "docs" / "loop-pc.md").read_text(encoding="utf-8")

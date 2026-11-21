@@ -305,6 +305,31 @@ class MadeSideTest(Env):
         self.assertEqual((row["footage_pct"], row["render_pct"], row["stills_pct"]), (15.5, 41.6, 43.0))
         self.assertEqual((row["lane"], row["packaging"], row["title_has_number"]), ("1", "xep-hang", 1))
 
+    def _write_book(self, rows):
+        from loop import book as bk
+        self.cfg["report_dir"] = str(self.root / "van-hanh" / "bao-cao" / "studio")
+        tim = self.root / "van-hanh" / "tim"
+        tim.mkdir(parents=True, exist_ok=True)
+        with (tim / bk.BOOK_NAME).open("w", encoding="utf-8", newline="") as fh:
+            w = csv.DictWriter(fh, bk.BOOK_COLUMNS)
+            w.writeheader()
+            for r in rows:
+                w.writerow({c: r.get(c, "") for c in bk.BOOK_COLUMNS})
+
+    def test_ledger_prefers_book_measures(self):
+        self._write_book([{"id": "1", "tac_vu": "so-do", "slug": "lever_ranked", "footage_pct": "55",
+                           "sec_per_cut": "2.5", "runtime_s": "700", "script_words": "9"}])
+        row = self.build_rows({VID1: "10 Lever Guns Ranked"}, probe=lambda p: 860.0)[0]
+        self.assertEqual((row["footage_pct"], row["sec_per_cut"], row["runtime_s"], row["script_words"]),
+                         (55, 2.5, 700, 9))
+        # empty book columns keep the inferred value
+        self.assertEqual((row["render_pct"], row["stills_pct"]), (41.6, 43.0))
+
+    def test_ledger_book_without_slug_row_changes_nothing(self):
+        self._write_book([{"id": "1", "tac_vu": "so-do", "slug": "other_film", "footage_pct": "55"}])
+        row = self.build_rows({VID1: "10 Lever Guns Ranked"})[0]
+        self.assertEqual(row["footage_pct"], 15.5)
+
     def test_thumb_from_features_csv_main(self):
         with (self.cache / "thumbnail-features.csv").open("w", encoding="utf-8", newline="") as fh:
             w = csv.writer(fh)

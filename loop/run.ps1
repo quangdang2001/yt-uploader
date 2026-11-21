@@ -32,6 +32,20 @@ if ($code -ne 0) {
     exit $code
 }
 
+# Trai tim feedback (van-hanh/tim/chi-thi.md). Khong chan vong: loi chi canh bao va ghi alerts.md.
+python -m loop.heart --config $config
+$heartCode = $LASTEXITCODE
+if ($heartCode -ne 0) {
+    Write-Warning "loop.heart exit $heartCode (chi-thi not refreshed)"
+    try {
+        $reportDir = (Get-Content $config -Raw -Encoding UTF8 | ConvertFrom-Json).report_dir
+        if ($reportDir) {
+            $line = "- {0} heart exit {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm"), $heartCode
+            Add-Content -LiteralPath (Join-Path $reportDir "alerts.md") -Value $line -Encoding UTF8
+        }
+    } catch { Write-Warning "could not write alerts.md: $_" }
+}
+
 # Du lieu cho bang dieu khien (loop/cache/dashboard.json). Khong chan vong: loi chi in ra.
 python -m loop.dashboard --config $config
 if ($LASTEXITCODE -ne 0) { Write-Warning "loop.dashboard exit $LASTEXITCODE (dashboard.json not refreshed)" }

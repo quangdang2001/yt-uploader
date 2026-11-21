@@ -29,6 +29,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from loop import analyse as an
+from loop import book
 from loop import fetch as lf
 from loop.rules import Verdict, decide, swap_bar
 from loop.state import aware, build_states, since_published
@@ -341,6 +342,9 @@ def compute_verdicts(cache: Path, cfg: dict, now: datetime) -> dict:
     return out
 
 
+BOOK_MEASURES = ("footage_pct", "sec_per_cut", "render_pct", "thumb_brightness", "script_words", "runtime_s")
+
+
 def build_ledger(cache: Path, cfg: dict, now: datetime, live_titles: dict, probe=None, scan=None) -> list:
     """Mot dong moi video cong khai. `scan` None = bo qua quet cat (sec_per_cut de trong)."""
     cache, now = Path(cache), aware(now)
@@ -377,6 +381,13 @@ def build_ledger(cache: Path, cfg: dict, now: datetime, live_titles: dict, probe
         for t in cands:
             if t:
                 titles_of.setdefault(norm_title(t), set()).add(s)
+
+    measured: dict = {}
+    if cfg.get("report_dir"):
+        try:
+            measured = book.merged(book.read(Path(cfg["report_dir"]).parents[1] / "tim" / book.BOOK_NAME))
+        except Exception as exc:        # so hong khong lam hong ca so cai
+            print("ledger: decision book unreadable (%s)" % exc, file=sys.stderr)
 
     vcache = _video_cache(cache)
     dirty = False
@@ -456,6 +467,12 @@ def build_ledger(cache: Path, cfg: dict, now: datetime, live_titles: dict, probe
                 r["runtime_s"] = _blank(round(ent["runtime_s"], 2) if ent.get("runtime_s") else None)
                 if ent.get("cuts") is not None and ent.get("runtime_s"):
                     r["sec_per_cut"] = round(ent["runtime_s"] / (ent["cuts"] + 1), 2)
+            for k, raw in measured.get(slug, {}).items():     # so quyet dinh thang file du an
+                if k in BOOK_MEASURES and raw not in ("", None):
+                    try:
+                        r[k] = float(raw)
+                    except ValueError:
+                        pass
 
         for tag, target, lo, hi in (("24h", 24, 12, 48), ("7d", 168, 120, 240)):
             s = pick_snapshot(srows, target, lo, hi)
