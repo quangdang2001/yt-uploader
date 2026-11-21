@@ -313,3 +313,47 @@ def test_directive_substitutes_forbidden_winner(cfg):
     for e in d["muc"]:
         assert e["gia_tri"]["khuon_tieu_de"] != "price-sacrifice"
         assert e["gia_tri"]["khuon_tieu_de"] in hc.arms(cfg, "khuon_tieu_de")
+
+
+def _only_overdue(cfg, var):
+    last = {v: TODAY for v in cfg["bien"]}
+    last[var] = TODAY - timedelta(days=30)
+    return last
+
+
+def test_plan_sets_topic_decided_variable(cfg):
+    d = h.build_directive(["a"], empty_stats(cfg), cfg, TODAY, {}, "v", last_tested=_only_overdue(cfg, "thumb_sang"),
+                          planned={"a": {"dong": "xep-hang", "khuon_tieu_de": "price-copy", "thumb_chu": "4-tu"}})
+    e = d["muc"][0]
+    assert e["bien_thu"] == "thumb_sang"
+    assert e["gia_tri"]["dong"] == "xep-hang" and e["gia_tri"]["khuon_tieu_de"] == "price-copy"
+    assert e["gia_tri"]["thumb_chu"] == hc.default(cfg, "thumb_chu")   # ai_quyet=dung: khong theo ke hoach
+    d = h.build_directive(["b"], empty_stats(cfg), cfg, TODAY, {}, "v", last_tested=_only_overdue(cfg, "thumb_sang"),
+                          planned={"a": {"dong": "xep-hang"}})
+    assert d["muc"][0]["gia_tri"]["dong"] == hc.default(cfg, "dong")
+
+
+def test_plan_ignores_non_arm_with_warning(cfg, capsys):
+    d = h.build_directive(["a"], empty_stats(cfg), cfg, TODAY, {}, "v", last_tested=_only_overdue(cfg, "thumb_sang"),
+                          planned={"a": {"dong": "khong-co-nhanh"}})
+    assert d["muc"][0]["gia_tri"]["dong"] == hc.default(cfg, "dong")
+    assert "heart: kế hoạch a: dong=khong-co-nhanh không phải nhánh (bỏ qua)" in capsys.readouterr().out
+
+
+def test_test_arm_beats_plan(cfg):
+    last = _only_overdue(cfg, "dong")
+    for i in range(200):
+        slug = f"t{i}"
+        d = h.build_directive([slug], empty_stats(cfg), cfg, TODAY, {}, "v", last_tested=last,
+                              planned={slug: {"dong": "lineup"}})
+        e = d["muc"][0]
+        if e["kieu"] == "thu":
+            assert e["bien_thu"] == "dong" and e["gia_tri"]["dong"] == e["nhanh_thu"]
+            return
+    pytest.fail("khong co lan thu nao")
+
+
+def test_planned_values_from_book_rows(cfg):
+    rows = [{"tac_vu": "ke-hoach", "slug": "a", "dong": "lineup"}, {"tac_vu": "ke-hoach", "slug": "a", "dong": "xep-hang"},
+            {"tac_vu": "dung", "slug": "a", "dong": "gia-chuyen-hang", "hook": "gia-truoc"}]
+    assert h.planned_values(rows, cfg) == {"a": {"dong": "xep-hang"}}

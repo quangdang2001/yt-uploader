@@ -251,7 +251,7 @@ def _week_mix(var: str, stats: dict, cfg: dict) -> dict:
 
 def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signals: dict, phien_ban: str,
                     last_tested: dict | None = None, cam: dict | None = None, goc=(None, "khong-co"),
-                    plan: dict | None = None) -> dict:
+                    plan: dict | None = None, planned: dict | None = None) -> dict:
     win = winners(stats, cfg)
     cam = cam or {}
     for v in win:   # nhanh thang bi cam thi thay bang nhanh hop le dau tien
@@ -266,6 +266,15 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
     for slug in slugs:
         t = choose_test(slug, stats, cfg, last, today, cam or {})
         gia_tri = {v: win[v] for v in on}
+        for v, val in ((planned or {}).get(slug) or {}).items():
+            if v not in gia_tri or v == t["bien"]:
+                continue
+            if cfg["bien"][v]["ai_quyet"] != "chu-de" and v != "khuon_tieu_de":
+                continue
+            if val in hc.arms(cfg, v):
+                gia_tri[v] = val
+            else:
+                print(f"heart: kế hoạch {slug}: {v}={val} không phải nhánh (bỏ qua)")
         if t["kieu"] == "thu":
             gia_tri[t["bien"]] = t["nhanh"]
         track = t["bien"] if t["bien"] in gia_tri else ("dong" if "dong" in gia_tri else None)
@@ -388,6 +397,18 @@ def read_queue_plan(path: Path) -> dict:
     return out
 
 
+def planned_values(rows: list[dict], cfg: dict) -> dict:
+    """slug -> {bien: nhanh} tu cac dong `ke-hoach` cua so (dong sau de dong truoc, bo o rong)."""
+    out: dict = {}
+    for r in rows:
+        if r.get("tac_vu") != "ke-hoach" or not r.get("slug"):
+            continue
+        for v in cfg["bien"]:
+            if r.get(v):
+                out.setdefault(r["slug"], {})[v] = r[v]
+    return out
+
+
 def forbidden_arms(rows: list[dict], today: date) -> dict:
     """Khuon toi da 2 lan/56 ngay; `moi` toi da 2 lan/7 ngay (moi video tinh mot lan); `moi` chi theo gioi han 7 ngay."""
     seen: dict = {}
@@ -504,7 +525,8 @@ def main(argv=None) -> int:
         directive = build_directive(queue, stats, cfg, today, signals,
                                     datetime.now().strftime("%Y-%m-%d-%H%M"), last_tested=last,
                                     goc=goc_view(graded, ledger, today),
-                                    cam=forbidden_arms(rows, today), plan=read_queue_plan(qpath))
+                                    cam=forbidden_arms(rows, today), plan=read_queue_plan(qpath),
+                                    planned=planned_values(rows, cfg))
         write_directive(tim, directive, cfg)
     except Exception as e:  # noqa: BLE001 - khong bao gio dung phim, chi bao loi
         print(f"heart: lỗi {type(e).__name__}: {e}")
