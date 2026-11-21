@@ -1,0 +1,82 @@
+{
+  "giai_doan": 1,
+  "ti_le_thu": 0.3,
+  "san_thu": 0.1,
+  "n_thang": 3,
+  "n_loai": 6,
+  "thu_lai_ngay": 30,
+  "bo_qua_toi_da_ngay": 7,
+  "cua_so_ctr_gio": [18, 36],
+  "cua_so_view_gio": [144, 216],
+  "chi_thi_han_ngay": 3,
+  "thumb_tu_doi_gio_toi_da": 168,
+  "gio_hen_sau_nhan_gio": 2,
+  "gio_nhan_vps": [9, 21],
+  "bien": {
+    "dong": {
+      "nhanh": ["gia-chuyen-hang", "lineup", "xep-hang"],
+      "mac_dinh": "gia-chuyen-hang",
+      "can_cu": "26/36 phim la phim giá, trung vị 6.350 lượt xem; 4/4 phim xếp hạng chỉ 222-1.500 lượt (ledger 2026-11-21).",
+      "ai_quyet": "chu-de",
+      "do": "views_7d",
+      "bat": true,
+      "cot_ledger": "packaging"
+    },
+    "khuon_tieu_de": {
+      "nhanh": ["price-plea", "price-maker-fact", "price-killed", "price-sacrifice", "price-withheld",
+                "price-resold", "price-copy", "price-spec", "every-x", "why-hard", "amazon-list", "moi"],
+      "mac_dinh": "price-sacrifice",
+      "can_cu": "price-sacrifice có CTR đã đo cao nhất, 8,8% (1 phim; ctr.json 2026-11-08); price-plea trung bình 5,98% trên 9 phim.",
+      "ai_quyet": "chu-de",
+      "do": "views_7d",
+      "bat": true,
+      "cot_ledger": "title_shape"
+    },
+    "ten_quen": {
+      "nhanh": ["hang-lon", "hang-vua"],
+      "mac_dinh": "hang-lon",
+      "can_cu": "Tên quen kéo lượt bấm (cổng CTR 11-18); nhánh 'không' bị cấm nên không có; ledger chưa có cột riêng cho biến này.",
+      "ai_quyet": "chu-de",
+      "do": "views_7d",
+      "bat": true,
+      "cot_ledger": null
+    },
+    "thumb_sang": {
+      "nhanh": ["sang", "toi"],
+      "mac_dinh": "sang",
+      "can_cu": "12 phim có thumb_brightness: 5 phim sáng (>=0,5) trung vị 16.500 lượt, 7 phim tối trung vị 701 lượt (ledger 2026-11-21, lẫn với dòng phim).",
+      "ai_quyet": "dung",
+      "do": "views_7d",
+      "bat": true,
+      "cot_ledger": "thumb_brightness"
+    },
+    "thumb_chu": {
+      "nhanh": ["2-3-tu", "4-tu"],
+      "mac_dinh": "2-3-tu",
+      "can_cu": "Chữ ngắn dễ đọc ở cỡ nhỏ; ledger chưa có cột số chữ thumbnail (0/36 phim), nên đây là giả thuyết khởi đầu.",
+      "ai_quyet": "dung",
+      "do": "views_7d",
+      "bat": true,
+      "cot_ledger": null
+    },
+    "hook": {
+      "nhanh": ["su-viec-hang", "cu-soc-xep-hang", "gia-truoc"],
+      "mac_dinh": "su-viec-hang",
+      "can_cu": "apv_pct của 35 phim đo được dao động 0,14-0,36; 7 phim kiểu sự việc hãng (price-maker-fact) 0,14-0,23 (ledger 2026-11-21).",
+      "ai_quyet": "dang",
+      "do": "apv_pct",
+      "bat": true,
+      "cot_ledger": null
+    },
+    "gio_dang": {
+      "nhanh": ["19-22h", "02-05h"],
+      "mac_dinh": "19-22h",
+      "can_cu": "29/36 phim đăng 18-22h giờ VN (ledger 2026-11-21); chưa bật vì publishAt chưa được chấp nhận (bật ở Task 10).",
+      "ai_quyet": "dang",
+      "do": "views_7d",
+      "bat": false,
+      "khong_kha_dung": true,
+      "cot_ledger": "hour"
+    }
+  }
+}
