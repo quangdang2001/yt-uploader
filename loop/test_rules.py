@@ -144,6 +144,15 @@ class RulesTest(unittest.TestCase):
                    impr_at_last_swap=2000, alts_left=["alt2"])
         self.assertEqual(run(snap(), st)[0], Verdict.CHANGE_TITLE)
 
+    def test_no_swap_after_7_days(self):
+        v, reason = run(snap(ctr=0.040, impr=4000, age=169), state())
+        self.assertEqual(v, Verdict.CHANGE_TITLE)
+        self.assertTrue(reason.endswith(", over 7 days: left as is"), reason)
+
+    def test_swap_still_allowed_at_100h(self):
+        self.assertEqual(run(snap(ctr=0.040, impr=4000, age=100), state())[0], Verdict.SWAP)
+        self.assertEqual(run(snap(ctr=0.040, impr=4000, age=168), state())[0], Verdict.SWAP)
+
     def test_change_title_after_alts(self):
         v, reason = run(snap(), state(swaps=2, alts_left=[]))
         self.assertEqual(v, Verdict.CHANGE_TITLE)

@@ -14,6 +14,7 @@ MIN_IMPR = 2000
 MIN_AGE_H = 6
 MIN_GAP_H = 24
 MAX_SWAPS = 2
+MAX_SWAP_AGE_H = 168  # thumbnail swaps only in a video's first 7 days; older failed videos are left alone
 MAX_REVERTS = 1
 MANUAL_PAUSE_D = 7
 Z90 = 1.645
@@ -141,6 +142,8 @@ def _swap_allowed(snap: dict, state: VideoState, now: datetime) -> bool:
     # After the one revert no more swaps: main -> alt1 -> (revert) -> stop, or main -> alt1 -> alt2 -> (revert) -> stop
     if state.swaps >= MAX_SWAPS or state.reverts > 0 or not state.alts_left or state.pending_action:
         return False
+    if snap["age_hours"] > MAX_SWAP_AGE_H:
+        return False
     if state.last_swap_utc is None:
         return True
     old_enough = now - state.last_swap_utc >= timedelta(hours=MIN_GAP_H)
@@ -185,4 +188,6 @@ def _decide(snap: dict, state: VideoState, bar: float, now: datetime,
             return Verdict.SWAP, _fmt(snap, bar)
         if state.swaps >= MAX_SWAPS or state.reverts > 0 or not state.alts_left:
             return Verdict.CHANGE_TITLE, _fmt(snap, bar) + ", no swap left"
+        if snap["age_hours"] > MAX_SWAP_AGE_H:
+            return Verdict.CHANGE_TITLE, _fmt(snap, bar) + ", over 7 days: left as is"
     return Verdict.WATCH, "CTR %.1f%% at %s impr, bar %.1f%%" % (ctr * 100, format(impr, ","), bar * 100)

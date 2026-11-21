@@ -61,8 +61,10 @@ def reason_plain(code: str, raw: str) -> str:
     if code == "WATCH" and ctr and bar:
         return f"Cứ 100 người thấy thì {ctr} người bấm, sát mức cần có {bar}%. Chờ thêm số rồi mới kết luận."
     if code == "CHANGE_TITLE" and ctr and bar:
+        end = ("Video đã quá 7 ngày: để nguyên, không sửa." if ", over 7 days: left as is" in raw
+               else "Nên thử tiêu đề hoặc thumbnail khác.")
         return (f"Cứ 100 người thấy chỉ {ctr} người bấm, dưới mức cần có {bar}% (đã đủ {impr} lượt hiển thị để "
-                f"chắc chắn). Nên thử tiêu đề hoặc thumbnail khác.")
+                f"chắc chắn). {end}")
     if code == "NOT_PACKAGING" and ctr and typical:
         return (f"Người thấy vẫn bấm nhiều ({ctr}%), nhưng YouTube mới hiện video {impr} lần, chưa tới một nửa "
                 f"mức thường của kênh ({typical}). Vấn đề nằm ở chủ đề hoặc độ giữ chân, không phải tiêu đề.")

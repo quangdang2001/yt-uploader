@@ -592,9 +592,11 @@ class AnalyseTest(unittest.TestCase):
         self.assertEqual(set(st.variant_stats), {"main"})
         self.assertEqual(st.variant_stats["main"][0], 4000)
         self.assertAlmostEqual(st.variant_stats["main"][1], 0.03)
-        self.assertEqual(rows[0]["verdict"], "SWAP")
+        # the video is 436 h old here (past MAX_SWAP_AGE_H = 168): no swap, the title is changed instead
+        self.assertEqual(rows[0]["verdict"], "CHANGE_TITLE")
+        self.assertTrue(rows[0]["reason"].endswith(", over 7 days: left as is"), rows[0]["reason"])
         self.assertNotIn("manual", rows[0]["reason"])
-        self.assertEqual(len(self.pending_files()), 1)
+        self.assertEqual(self.pending_files(), [])     # no swap request for a video past 7 days
         # the release time is kept across runs, and dropping the id forgets it
         saved = json.loads((self.cache / an.LAST_VERDICTS).read_text(encoding="utf-8"))
         self.assertEqual(saved["released"], {"v1": "2026-11-14T08:00:00Z"})

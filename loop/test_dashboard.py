@@ -20,6 +20,11 @@ class PlainReasonTest(unittest.TestCase):
         self.assertIn("5,3%", s)
         self.assertIn("3.097", s)
 
+    def test_change_title_over_7_days(self):
+        s = db.reason_plain("CHANGE_TITLE", "CTR 4.0% < bar 5.3% at 3,097 impr, over 7 days: left as is")
+        self.assertTrue(s.endswith("Video đã quá 7 ngày: để nguyên, không sửa."), s)
+        self.assertNotIn("Nên thử", s)
+
     def test_not_packaging(self):
         s = db.reason_plain("NOT_PACKAGING", "CTR 6.1% >= bar 4.8% at 14,403 impr, typical 39,677 impr")
         self.assertIn("14.403", s)
