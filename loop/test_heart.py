@@ -304,6 +304,7 @@ def test_forbidden_arms_from_book():
     cam = h.forbidden_arms(rows, TODAY)
     assert cam == {"khuon_tieu_de": {"price-copy", "moi"}}
     assert h.forbidden_arms([row("f", "moi", 3)], TODAY) == {}
+    assert h.forbidden_arms([row("f", "moi", 3), row("g", "moi", 23)], TODAY) == {}   # 20 ngay cach nhau
 
 
 def test_directive_substitutes_forbidden_winner(cfg):

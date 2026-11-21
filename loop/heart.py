@@ -389,7 +389,7 @@ def read_queue_plan(path: Path) -> dict:
 
 
 def forbidden_arms(rows: list[dict], today: date) -> dict:
-    """Khuon toi da 2 lan/56 ngay; `moi` toi da 2 lan/7 ngay (moi video tinh mot lan, ke ca ke-hoach lan dung)."""
+    """Khuon toi da 2 lan/56 ngay; `moi` toi da 2 lan/7 ngay (moi video tinh mot lan); `moi` chi theo gioi han 7 ngay."""
     seen: dict = {}
     for r in rows:
         arm = r.get("khuon_tieu_de") or ""
@@ -400,7 +400,7 @@ def forbidden_arms(rows: list[dict], today: date) -> dict:
         except ValueError:
             continue
         seen.setdefault(arm, {})[r["slug"]] = min(age, seen.get(arm, {}).get(r["slug"], age))
-    bad = {a for a, by in seen.items() if sum(1 for g in by.values() if g <= 56) >= 2}
+    bad = {a for a, by in seen.items() if a != "moi" and sum(1 for g in by.values() if g <= 56) >= 2}
     if sum(1 for g in seen.get("moi", {}).values() if g <= 7) >= 2:
         bad.add("moi")
     return {"khuon_tieu_de": bad} if bad else {}
