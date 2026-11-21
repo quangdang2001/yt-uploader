@@ -34,7 +34,7 @@ import ssl
 import sys
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 try:
@@ -121,6 +121,25 @@ def is_publish_at_rejection(exc: BaseException) -> bool:
         return False
     text = _error_text(exc).lower()
     return "publishat" in text or "invalidpublishat" in text
+
+
+PUBLISH_AT_MIN_LEAD = timedelta(minutes=15)
+
+
+def publish_at_passed(body: dict, now: datetime | None = None) -> str:
+    """Gio hen da qua (hoac con < 15 phut) luc upload: tra ve gio hen (ISO) de tai len private, "" neu con hop le.
+    Day KHONG phai YouTube tu choi."""
+    value = (body.get("status") or {}).get("publishAt")
+    if not value:
+        return ""
+    try:
+        when = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    now = now or datetime.now(timezone.utc)
+    return str(value) if when < now + PUBLISH_AT_MIN_LEAD else ""
 
 
 # ------------------------------------------------------------------- tien ich
@@ -626,6 +645,7 @@ def process_one(drive, youtube, folders: dict, item: dict, state: State,
             moved.append({"id": thumb["id"], "name": thumb["name"]})
 
         if video_id:
+            publish_note = saved.get("publishNote") or ""
             log.warning("  %s da upload tu lan chay truoc (id %s), bo qua buoc upload.",
                         base, video_id)
         else:
@@ -637,6 +657,12 @@ def process_one(drive, youtube, folders: dict, item: dict, state: State,
                 raise IOError(f"Tai thieu: {actual:,}/{expected:,} bytes")
 
             notify_subs = meta.get("notifySubscribers") is not False
+            passed = publish_at_passed(body)
+            if passed:
+                log.warning("  publishAt %s da qua (hoac con < 15 phut): dang o che do private.", passed)
+                publish_note = f"publishAt passed: {passed}; "
+                body["status"].pop("publishAt")
+                body["status"]["privacyStatus"] = "private"
             try:
                 video_id = upload_video(youtube, local_video, body, notify=notify_subs)
             except HttpError as exc:
@@ -649,7 +675,8 @@ def process_one(drive, youtube, folders: dict, item: dict, state: State,
                 body["status"].pop("publishAt")
                 body["status"]["privacyStatus"] = "private"
                 video_id = upload_video(youtube, local_video, body, notify=notify_subs)
-            state.set(base, videoId=video_id, at=datetime.now(timezone.utc).isoformat())
+            state.set(base, videoId=video_id, at=datetime.now(timezone.utc).isoformat(),
+                      publishNote=publish_note)
             log.info("  DA LEN YOUTUBE: https://youtu.be/%s", video_id)
 
         if thumb and not saved.get("thumbDone"):

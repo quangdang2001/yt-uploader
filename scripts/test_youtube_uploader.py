@@ -23,6 +23,7 @@ import logging
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -190,7 +191,7 @@ class Base(unittest.TestCase):
 
 
 class TestPublishAtFallback(Base):
-    PUBLISH = "2026-12-01T09:00:00Z"
+    PUBLISH = (datetime.now(timezone.utc) + timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     def test_publish_at_rejection_retries_private(self):
         h = Harness(self.tmp, meta=meta_json(publishAt=self.PUBLISH))
@@ -206,6 +207,42 @@ class TestPublishAtFallback(Base):
         self.assertEqual(row["trang_thai"], "OK")
         self.assertTrue(row["ghi_chu"].startswith("publishAt rejected: "), row["ghi_chu"])
         self.assertIn("; ", row["ghi_chu"])
+
+    def test_publish_at_already_past_uploads_private_with_passed_note(self):
+        past = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        h = Harness(self.tmp, meta=meta_json(publishAt=past))
+        self.assertTrue(self.run_one(h))
+        self.assertEqual(h.uploads, 1)                      # no failed attempt: the time is dropped before upload
+        self.assertNotIn("publishAt", h.bodies[0]["status"])
+        self.assertEqual(h.bodies[0]["status"]["privacyStatus"], "private")
+        note = h.history[0]["ghi_chu"]
+        self.assertTrue(note.startswith("publishAt passed: " + past), note)
+        self.assertNotIn("rejected", note)
+
+    def test_publish_at_within_15_minutes_counts_as_passed(self):
+        soon = (datetime.now(timezone.utc) + timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        h = Harness(self.tmp, meta=meta_json(publishAt=soon))
+        self.assertTrue(self.run_one(h))
+        self.assertNotIn("publishAt", h.bodies[0]["status"])
+        self.assertTrue(h.history[0]["ghi_chu"].startswith("publishAt passed: "))
+        later = (datetime.now(timezone.utc) + timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        h2 = Harness(self.tmp, meta=meta_json(publishAt=later))
+        self.assertTrue(self.run_one(h2, item=self.item("v002.json", "json-2")))
+        self.assertIn("publishAt", h2.bodies[0]["status"])
+
+    def test_publish_note_saved_in_state_right_after_fallback_upload(self):
+        h = Harness(self.tmp, meta=meta_json(publishAt=self.PUBLISH))
+        h.upload_script = [http_error(403, "invalidPublishAt: nope"), "YTID999"]
+        h.move_fails_for = {"vid-file"}                     # a later step fails, state is kept
+        self.assertFalse(self.run_one(h))
+        saved = self.state.get("v001")
+        self.assertEqual(saved["videoId"], "YTID999")
+        self.assertTrue(saved["publishNote"].startswith("publishAt rejected: "), saved)
+        # the rerun skips the upload but still reports the note
+        h2 = Harness(self.tmp, meta=meta_json(publishAt=self.PUBLISH))
+        self.assertTrue(self.run_one(h2))
+        self.assertEqual(h2.uploads, 0)
+        self.assertTrue(h2.history[0]["ghi_chu"].startswith("publishAt rejected: "), h2.history[0]["ghi_chu"])
 
     def test_other_403_not_retried(self):
         h = Harness(self.tmp, meta=meta_json(publishAt=self.PUBLISH))
