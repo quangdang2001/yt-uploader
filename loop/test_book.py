@@ -152,3 +152,61 @@ def test_cli_exit_codes(tmp_path):
     assert bad.returncode == 2
     assert "dong" in bad.stderr and "lineup" in bad.stderr
     assert len(bk.read(tmp_path / bk.BOOK_NAME)) == 1
+
+
+def _stale(book: Path) -> Path:
+    lock = Path(str(book) + ".lock")
+    lock.write_text("999 old", encoding="utf-8")
+    old = time.time() - 400
+    os.utime(lock, (old, old))
+    return lock
+
+
+def test_two_waiters_on_stale_lock_never_overlap(tmp_path):
+    import threading
+    book = tmp_path / bk.BOOK_NAME
+    _stale(book)
+    state = {"in": 0, "max": 0}
+    guard = threading.Lock()
+
+    def waiter():
+        for _ in range(15):
+            with bk._Lock(book):
+                with guard:
+                    state["in"] += 1
+                    state["max"] = max(state["max"], state["in"])
+                time.sleep(0.005)
+                with guard:
+                    state["in"] -= 1
+
+    ts = [threading.Thread(target=waiter) for _ in range(4)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join(60)
+    assert state["max"] == 1
+    assert not Path(str(book) + ".lock").exists()
+    assert not list(tmp_path.glob("*.stale.*"))
+
+
+def test_unbreakable_lock_raises_after_deadline(tmp_path, cfg, monkeypatch):
+    book = tmp_path / bk.BOOK_NAME
+    _stale(book)
+
+    def boom(*a, **k):
+        raise PermissionError("no")
+    monkeypatch.setattr(bk.os, "replace", boom)
+    monkeypatch.setattr(bk, "LOCK_WAIT_S", 0.3)
+    t0 = time.time()
+    with pytest.raises(bk.BookError):
+        bk.append(book, {"tac_vu": "dung", "slug": "x"}, cfg, NOW)
+    assert 0.25 < time.time() - t0 < 5
+
+
+def test_live_lock_times_out(tmp_path, cfg, monkeypatch):
+    book = tmp_path / bk.BOOK_NAME
+    Path(str(book) + ".lock").write_text("1 now", encoding="utf-8")
+    monkeypatch.setattr(bk, "LOCK_WAIT_S", 0.2)
+    with pytest.raises(bk.BookError):
+        bk.append(book, {"tac_vu": "dung", "slug": "x"}, cfg, NOW)
+    assert Path(str(book) + ".lock").exists()

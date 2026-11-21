@@ -68,30 +68,58 @@ def _validate(row: dict, cfg: dict) -> None:
 
 
 class _Lock:
-    def __init__(self, book: Path):
+    def __init__(self, book: Path, wait_s: float | None = None):
         self.path = Path(str(book) + ".lock")
+        self.wait_s = LOCK_WAIT_S if wait_s is None else wait_s
+
+    def _break_if_stale(self) -> None:
+        """Pha khoa cu bang rename (chi mot nguoi thang), khong unlink truc tiep."""
+        try:
+            if time.time() - self.path.stat().st_mtime <= LOCK_STALE_S:
+                return
+        except OSError:
+            return
+        grave = Path(f"{self.path}.stale.{os.getpid()}")
+        try:
+            os.replace(self.path, grave)
+        except OSError:
+            return  # nguoi khac da pha, hoac Windows tu choi: thu lai o vong sau
+        try:
+            if time.time() - grave.stat().st_mtime <= LOCK_STALE_S:
+                # vua rename nham khoa moi cua nguoi khac: tra lai neu cho con trong
+                try:
+                    os.link(grave, self.path)
+                except OSError:
+                    pass
+        except OSError:
+            pass
+        finally:
+            try:
+                grave.unlink()
+            except OSError:
+                pass
 
     def __enter__(self):
-        deadline = time.monotonic() + LOCK_WAIT_S
+        deadline = time.monotonic() + self.wait_s
         while True:
             try:
                 fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            except FileExistsError:
-                try:
-                    age = time.time() - self.path.stat().st_mtime
-                    if age > LOCK_STALE_S:
-                        self.path.unlink()
-                        continue
-                except OSError:
-                    continue  # khoa vua bi go, thu lai ngay
+            except (FileExistsError, PermissionError):  # Windows: PermissionError khi file cho xoa
+                self._break_if_stale()
                 if time.monotonic() > deadline:
-                    raise BookError(f"cho khoa {self.path} qua {int(LOCK_WAIT_S)} giay")
+                    raise BookError(f"cho khoa {self.path} qua {int(self.wait_s)} giay") from None
                 time.sleep(0.02)
                 continue
             try:
                 os.write(fd, f"{os.getpid()} {datetime.now().isoformat(timespec='seconds')}\n".encode())
-            finally:
+            except BaseException:
                 os.close(fd)
+                try:
+                    self.path.unlink()
+                except OSError:
+                    pass
+                raise
+            os.close(fd)
             return self
 
     def __exit__(self, *exc):
