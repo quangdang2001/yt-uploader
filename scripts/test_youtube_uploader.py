@@ -91,6 +91,8 @@ class Harness:
         self.uploads = 0
         self.notify_flags: list[bool] = []   # notifySubscribers gui cho videos.insert
         self.notices: list[str] = []
+        self.upload_script: list = []        # moi lan goi: exception thi nem, khac thi tra ve
+        self.bodies: list[dict] = []         # ban sao body o moi lan goi
 
     # --- cac ham duoc patch ---
     def download_text(self, drive, file_id):
@@ -114,6 +116,12 @@ class Harness:
     def upload_video(self, youtube, path, body, notify=True):
         self.uploads += 1
         self.notify_flags.append(notify)
+        self.bodies.append(json.loads(json.dumps(body)))
+        if self.upload_script:
+            step = self.upload_script.pop(0)
+            if isinstance(step, BaseException):
+                raise step
+            return step
         if self.upload_raises:
             raise self.upload_raises
         return "YTID123"
@@ -179,6 +187,39 @@ class Base(unittest.TestCase):
             return yu.process_one(mock.Mock(), mock.Mock(), FOLDERS,
                                   item or self.item(), self.state, self.tmp, "kenh",
                                   on_success=on_success)
+
+
+class TestPublishAtFallback(Base):
+    PUBLISH = "2026-12-01T09:00:00Z"
+
+    def test_publish_at_rejection_retries_private(self):
+        h = Harness(self.tmp, meta=meta_json(publishAt=self.PUBLISH))
+        h.upload_script = [http_error(403, "invalidPublishAt: publishAt is bad"), "YTID999"]
+        self.assertTrue(self.run_one(h))
+        self.assertEqual(h.uploads, 2)
+        self.assertIn("publishAt", h.bodies[0]["status"])
+        self.assertNotIn("publishAt", h.bodies[1]["status"])
+        self.assertEqual(h.bodies[1]["status"]["privacyStatus"], "private")
+        self.assertEqual(len(h.history), 1)
+        row = h.history[0]
+        self.assertEqual(row["video_id"], "YTID999")
+        self.assertEqual(row["trang_thai"], "OK")
+        self.assertTrue(row["ghi_chu"].startswith("publishAt rejected: "), row["ghi_chu"])
+        self.assertIn("; ", row["ghi_chu"])
+
+    def test_other_403_not_retried(self):
+        h = Harness(self.tmp, meta=meta_json(publishAt=self.PUBLISH))
+        h.upload_script = [http_error(403, "forbidden"), "YTID999"]
+        self.assertFalse(self.run_one(h))
+        self.assertEqual(h.uploads, 1)
+        self.assertNotIn("publishAt rejected", h.history[0]["ghi_chu"])
+
+    def test_is_publish_at_rejection(self):
+        self.assertTrue(yu.is_publish_at_rejection(http_error(400, "invalidPublishAt")))
+        self.assertTrue(yu.is_publish_at_rejection(http_error(400, "badPUBLISHAT")))
+        self.assertFalse(yu.is_publish_at_rejection(http_error(500, "publishAt")))
+        self.assertFalse(yu.is_publish_at_rejection(http_error(403, "quotaExceeded")))
+        self.assertFalse(yu.is_publish_at_rejection(RuntimeError("publishAt")))
 
 
 # ------------------------------------------------------- loi 1: het quota

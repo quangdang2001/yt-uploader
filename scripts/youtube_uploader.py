@@ -104,6 +104,25 @@ def is_quota_error(exc: BaseException) -> bool:
     return any(reason in content for reason in QUOTA_REASONS)
 
 
+def _error_text(exc: HttpError) -> str:
+    content = exc.content or b""
+    if isinstance(content, bytes):
+        content = content.decode("utf-8", "replace")
+    try:
+        reason = exc._get_reason() or ""
+    except Exception:
+        reason = ""
+    return f"{reason} {content}".strip()
+
+
+def is_publish_at_rejection(exc: BaseException) -> bool:
+    """YouTube tu choi gio hen (publishAt): 400/403 nhac toi publishAt."""
+    if not isinstance(exc, HttpError) or exc.resp.status not in (400, 403):
+        return False
+    text = _error_text(exc).lower()
+    return "publishat" in text or "invalidpublishat" in text
+
+
 # ------------------------------------------------------------------- tien ich
 
 
@@ -583,6 +602,7 @@ def process_one(drive, youtube, folders: dict, item: dict, state: State,
     video_id = None
     local_video = local_thumb = None
     title = ""
+    publish_note = ""
     chan = folders.get("channel")
 
     try:
@@ -616,8 +636,19 @@ def process_one(drive, youtube, folders: dict, item: dict, state: State,
             if expected and actual != expected:
                 raise IOError(f"Tai thieu: {actual:,}/{expected:,} bytes")
 
-            video_id = upload_video(youtube, local_video, body,
-                                    notify=meta.get("notifySubscribers") is not False)
+            notify_subs = meta.get("notifySubscribers") is not False
+            try:
+                video_id = upload_video(youtube, local_video, body, notify=notify_subs)
+            except HttpError as exc:
+                if "publishAt" not in body["status"] or not is_publish_at_rejection(exc):
+                    raise
+                reason = " ".join(_error_text(exc).split())[:120]
+                log.warning("  YouTube tu choi publishAt (%s): dang lai o che do private.",
+                            reason)
+                publish_note = f"publishAt rejected: {reason}; "
+                body["status"].pop("publishAt")
+                body["status"]["privacyStatus"] = "private"
+                video_id = upload_video(youtube, local_video, body, notify=notify_subs)
             state.set(base, videoId=video_id, at=datetime.now(timezone.utc).isoformat())
             log.info("  DA LEN YOUTUBE: https://youtu.be/%s", video_id)
 
@@ -643,7 +674,7 @@ def process_one(drive, youtube, folders: dict, item: dict, state: State,
         log_history(drive, chan, thoi_gian=now_str(), kenh=channel, ten_goc=base,
                     title=title, video_id=video_id,
                     url=f"https://youtu.be/{video_id}",
-                    trang_thai="OK", ghi_chu=where_ok)
+                    trang_thai="OK", ghi_chu=publish_note + where_ok)
         notify(f"[{channel}] {base}\nDa len YouTube: https://youtu.be/{video_id}")
         return True
 
