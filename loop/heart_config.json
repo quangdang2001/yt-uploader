@@ -27,7 +27,7 @@
                 "price-resold", "price-copy", "price-spec", "every-x", "why-hard", "amazon-list", "moi"],
       "mac_dinh": "price-sacrifice",
       "can_cu": "price-sacrifice có CTR đã đo cao nhất, 8,8% (1 phim; ctr.json 2026-11-08); price-plea trung bình 5,98% trên 9 phim.",
-      "ai_quyet": "chu-de",
+      "ai_quyet": "dung",
       "do": "views_7d",
       "bat": true,
       "cot_ledger": "title_shape"
@@ -63,7 +63,7 @@
       "nhanh": ["su-viec-hang", "cu-soc-xep-hang", "gia-truoc"],
       "mac_dinh": "su-viec-hang",
       "can_cu": "apv_pct của 35 phim đo được dao động 0,14-0,36; 7 phim kiểu sự việc hãng (price-maker-fact) 0,14-0,23 (ledger 2026-11-21).",
-      "ai_quyet": "dang",
+      "ai_quyet": "dung",
       "do": "apv_pct",
       "bat": true,
       "cot_ledger": null

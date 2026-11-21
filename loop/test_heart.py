@@ -201,24 +201,74 @@ def test_directive_has_tu_chon_when_queue_empty(cfg):
         assert sum(d["co_cau_tuan"][v].values()) == 7
 
 
-def test_gio_dang_off_when_publish_rejected(cfg, tmp_path):
+HIST_HEAD = "thoi_gian,kenh,ten_goc,title,video_id,url,trang_thai,ghi_chu\n"
+
+
+def write_history(cache, *rows):
+    """rows: (thoi_gian, video_id, ghi_chu)"""
+    lines = [f"{t},k,a,t,{vid},u,OK,{note}\n" for t, vid, note in rows]
+    (cache / "upload-history.csv").write_text(HIST_HEAD + "".join(lines), encoding="utf-8")
+
+
+def _enabled_gio_dang(cfg):
     on = copy.deepcopy(cfg)
     on["bien"]["gio_dang"]["bat"] = True
     on["bien"]["gio_dang"]["khong_kha_dung"] = False
+    return on
+
+
+def test_gio_dang_off_when_publish_rejected(cfg, tmp_path):
+    on = _enabled_gio_dang(cfg)
     assert "gio_dang" in hc.enabled_vars(on)
-    hist = tmp_path / "upload-history.csv"
-    hist.write_text("thoi_gian,kenh,ten_goc,title,video_id,url,trang_thai,ghi_chu\n"
-                    "2026-11-20,k,a,t,v,u,ok,publishAt rejected by YouTube\n", encoding="utf-8")
-    assert h.publish_rejected(tmp_path) is True
+    write_history(tmp_path, ("2026-11-20 10:00:00", "vid1", "publishAt rejected: invalidPublishAt; done/"))
+    assert h.publish_rejected(tmp_path, TODAY) is True
     off = h.apply_publish_rejected(on)
     assert "gio_dang" not in hc.enabled_vars(off)
     assert "gio_dang" in hc.enabled_vars(on)   # ban goc khong bi sua
     d = h.build_directive(["a"], empty_stats(off), off, TODAY, {}, "v")
     assert "gio_dang" not in d["muc"][0]["gia_tri"]
     assert all(draw(off, f"g{i}")["bien"] != "gio_dang" for i in range(100))
-    hist.write_text("thoi_gian,kenh,ten_goc,title,video_id,url,trang_thai,ghi_chu\n", encoding="utf-8")
-    assert h.publish_rejected(tmp_path) is False
-    assert h.publish_rejected(tmp_path / "khong-co") is False
+    write_history(tmp_path)
+    assert h.publish_rejected(tmp_path, TODAY) is False
+    assert h.publish_rejected(tmp_path / "khong-co", TODAY) is False
+
+
+def test_refusal_lasts_seven_days_then_gio_dang_returns(cfg, tmp_path):
+    write_history(tmp_path, ("2026-11-20 10:00:00", "vid1", "publishAt rejected: x; done/"))
+    assert h.publish_rejected(tmp_path, date(2026, 11, 26)) is True       # day 6
+    assert h.publish_rejected(tmp_path, date(2026, 11, 27)) is False      # day 7: back on
+    assert h.publish_rejected(tmp_path, TODAY + timedelta(days=8)) is False
+
+
+def test_publish_at_passed_is_not_a_refusal(tmp_path):
+    write_history(tmp_path, ("2026-11-21 10:00:00", "vid1", "publishAt passed: 2026-11-21T01:00:00Z; done/"),
+                  ("2026-11-21 11:00:00", "vid2", "done/ and mentions publishAt rejected later"))
+    assert h.publish_rejected(tmp_path, TODAY) is False
+    assert h.publish_refusals(tmp_path) == []
+
+
+def test_refusal_alert_written_once_per_refusal(tmp_path):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    write_history(cache, ("2026-11-20 10:00:00", "vid1", "publishAt rejected: x; done/"))
+    alerts = tmp_path / "alerts.md"
+    h.alert_refusals(cache, TODAY, alerts)
+    h.alert_refusals(cache, TODAY, alerts)                                  # next night: no repeat
+    assert alerts.read_text(encoding="utf-8").splitlines() == [
+        "- 2026-11-20 heart: gio_dang tắt 7 ngày vì YouTube từ chối publishAt (vid1)"]
+    write_history(cache, ("2026-11-20 10:00:00", "vid1", "publishAt rejected: x; done/"),
+                  ("2026-11-22 09:00:00", "vid2", "publishAt rejected: y; done/"))
+    h.alert_refusals(cache, TODAY, alerts)
+    lines = alerts.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2 and lines[1].endswith("(vid2)")
+
+
+def test_no_alert_for_expired_refusal_or_missing_history(tmp_path):
+    alerts = tmp_path / "alerts.md"
+    h.alert_refusals(tmp_path / "none", TODAY, alerts)
+    write_history(tmp_path, ("2026-11-01 10:00:00", "vid1", "publishAt rejected: x; done/"))
+    h.alert_refusals(tmp_path, TODAY, alerts)
+    assert not alerts.exists()
 
 
 def test_directive_md_mentions_every_enabled_var(cfg, tmp_path):
@@ -358,16 +408,98 @@ def test_plan_ignores_non_arm_with_warning(cfg, capsys):
 
 
 def test_test_arm_beats_plan(cfg):
-    last = _only_overdue(cfg, "dong")
+    last = _only_overdue(cfg, "khuon_tieu_de")
     for i in range(200):
         slug = f"t{i}"
         d = h.build_directive([slug], empty_stats(cfg), cfg, TODAY, {}, "v", last_tested=last,
-                              planned={slug: {"dong": "lineup"}})
+                              planned={slug: {"khuon_tieu_de": "price-copy"}})
         e = d["muc"][0]
         if e["kieu"] == "thu":
-            assert e["bien_thu"] == "dong" and e["gia_tri"]["dong"] == e["nhanh_thu"]
+            assert e["bien_thu"] == "khuon_tieu_de" and e["gia_tri"]["khuon_tieu_de"] == e["nhanh_thu"]
             return
     pytest.fail("khong co lan thu nao")
+
+
+def test_config_marks_topic_and_build_variables(cfg):
+    ai = {v: b["ai_quyet"] for v, b in cfg["bien"].items()}
+    assert ai["dong"] == "chu-de" and ai["ten_quen"] == "chu-de"
+    assert ai["khuon_tieu_de"] == "dung" and ai["hook"] == "dung" and ai["gio_dang"] == "dang"
+
+
+def test_planned_slug_never_tests_topic_variable(cfg):
+    plan = {"dong": "lineup", "ten_quen": "hang-vua"}
+    for i in range(300):
+        slug = f"p{i}"
+        for last in (None, {}, {v: TODAY - timedelta(days=30) for v in cfg["bien"]}):
+            d = h.build_directive([slug], empty_stats(cfg), cfg, TODAY, {}, "v", last_tested=last,
+                                  planned={slug: dict(plan)})
+            e = d["muc"][0]
+            assert e["bien_thu"] not in ("dong", "ten_quen"), (slug, e)
+            assert e["gia_tri"]["dong"] == "lineup" and e["gia_tri"]["ten_quen"] == "hang-vua"
+
+
+def test_book_row_without_values_still_counts_as_plan(cfg):
+    for i in range(100):
+        d = h.build_directive([f"q{i}"], empty_stats(cfg), cfg, TODAY, {}, "v", last_tested={}, book_rows=[
+            {"tac_vu": "ke-hoach", "slug": f"q{i}", "thoi_diem": TODAY.isoformat()}])
+        assert d["muc"][0]["bien_thu"] not in ("dong", "ten_quen")
+
+
+def test_exploit_mode_keeps_plan_dong(cfg):
+    # winner of dong is gia-chuyen-hang; the plan says lineup; dong is never the test variable of a plan slug
+    stats = _stats_with(cfg, {"dong": {"gia-chuyen-hang": [8.0] * 3, "lineup": [5.0] * 3, "xep-hang": [4.0] * 3}})
+    for i in range(100):
+        slug = f"x{i}"
+        d = h.build_directive([slug], stats, cfg, TODAY, {}, "v", last_tested=_only_overdue(cfg, "dong"),
+                              planned={slug: {"dong": "lineup"}})
+        e = d["muc"][0]
+        assert e["bien_thu"] != "dong" and e["gia_tri"]["dong"] == "lineup"
+
+
+def test_forced_variable_only_among_eligible(cfg):
+    last = {v: TODAY - timedelta(days=30) for v in cfg["bien"]}     # every variable overdue
+    d = h.build_directive(["a"], empty_stats(cfg), cfg, TODAY, {}, "v", last_tested=last,
+                          planned={"a": {"dong": "lineup"}})
+    assert d["muc"][0]["bien_thu"] not in ("dong", "ten_quen")
+
+
+def test_tu_chon_without_plan_can_test_dong(cfg):
+    last = _only_overdue(cfg, "dong")
+    assert h.choose_test("_tu-chon", empty_stats(cfg), cfg, last, TODAY, {})["bien"] == "dong"
+    d = h.build_directive([], empty_stats(cfg), cfg, TODAY, {}, "v", last_tested=last)
+    assert d["muc"][0]["slug"] == "_tu-chon" and d["muc"][0]["bien_thu"] == "dong"
+
+
+def test_forbidden_plan_still_falls_back_for_planned_khuon(cfg, capsys):
+    rows = [row("a", "price-copy", 5, "ke-hoach"), row("b", "price-copy", 6), row("c", "price-copy", 7)]
+    d = h.build_directive(["a"], empty_stats(cfg), cfg, TODAY, {}, "v", last_tested=_only_overdue(cfg, "thumb_sang"),
+                          planned={"a": {"khuon_tieu_de": "price-copy", "dong": "lineup"}}, book_rows=rows)
+    assert d["muc"][0]["gia_tri"]["khuon_tieu_de"] == hc.default(cfg, "khuon_tieu_de")
+    assert d["muc"][0]["gia_tri"]["dong"] == "lineup"
+
+
+# --- item 4: _tu-chon seeds by date
+
+def test_tu_chon_draw_changes_with_the_date(cfg):
+    draws = set()
+    kinds = set()
+    for k in range(10):
+        day = TODAY + timedelta(days=k)
+        d = h.build_directive([], empty_stats(cfg), cfg, day, {}, "v", last_tested={v: day for v in cfg["bien"]})
+        e = d["muc"][0]
+        kinds.add(e["kieu"])
+        draws.add((e["kieu"], e["bien_thu"], e["nhanh_thu"]))
+    assert kinds == {"thu", "khai-thac"}
+    assert len(draws) > 2
+
+
+def test_tu_chon_same_day_is_stable_and_slug_seed_unchanged(cfg):
+    a = h.build_directive([], empty_stats(cfg), cfg, TODAY, {}, "v")["muc"][0]
+    b = h.build_directive([], empty_stats(cfg), cfg, TODAY, {}, "v")["muc"][0]
+    assert a == b
+    assert h.seed("henry_h015") == int(__import__("hashlib").sha256(b"henry_h015").hexdigest()[:12], 16)
+    assert h.seed("_tu-chon", TODAY) != h.seed("_tu-chon", TODAY + timedelta(days=1))
+    assert h.seed("henry_h015", TODAY) == h.seed("henry_h015", TODAY + timedelta(days=1))
 
 
 def test_planned_values_from_book_rows(cfg):
@@ -390,3 +522,9 @@ def test_plan_rejected_when_held_by_two_others(cfg, capsys):
                           planned={"a": {"khuon_tieu_de": "price-copy"}}, book_rows=rows)
     assert d["muc"][0]["gia_tri"]["khuon_tieu_de"] == hc.default(cfg, "khuon_tieu_de")
     assert "heart: kế hoạch a: khuon_tieu_de=price-copy đã có 2 video khác dùng" in capsys.readouterr().out
+
+
+def test_queued_slug_without_book_row_never_tests_topic_variable(cfg):
+    for i in range(100):
+        d = h.build_directive([f"n{i}"], empty_stats(cfg), cfg, TODAY, {}, "v", last_tested={})
+        assert d["muc"][0]["bien_thu"] not in ("dong", "ten_quen")

@@ -140,8 +140,13 @@ def winners(stats: dict, cfg: dict) -> dict[str, str]:
 
 # ---------- chon bien thu ----------
 
-def seed(slug: str) -> int:
-    return int(hashlib.sha256(slug.encode()).hexdigest()[:12], 16)
+TU_CHON = "_tu-chon"
+
+
+def seed(slug: str, today: date | None = None) -> int:
+    """sha256 cua slug; rieng `_tu-chon` (khong co ke hoach) them ngay chi thi de moi ngay boc mot lan khac."""
+    key = f"{slug}:{today.isoformat()}" if slug == TU_CHON and today is not None else slug
+    return int(hashlib.sha256(key.encode()).hexdigest()[:12], 16)
 
 
 def _gap(var_stats: dict, valid: list[str]) -> float:
@@ -150,9 +155,13 @@ def _gap(var_stats: dict, valid: list[str]) -> float:
     return meds[0] - meds[1] if len(meds) >= 2 else math.inf
 
 
-def choose_test(slug: str, stats: dict, cfg: dict, last_tested: dict, today: date, cam: dict) -> dict:
-    rng = random.Random(seed(slug))
-    valid = {v: [a for a in hc.arms(cfg, v) if a not in cam.get(v, ())] for v in hc.enabled_vars(cfg)}
+def choose_test(slug: str, stats: dict, cfg: dict, last_tested: dict, today: date, cam: dict,
+                has_plan: bool = False) -> dict:
+    """Biet slug da co dong `ke-hoach` (has_plan) thi chi boc trong cac bien build quyet: bien `chu-de`
+    (dong, ten_quen) da chot o buoc chu de, khong lam bien thu."""
+    rng = random.Random(seed(slug, today))
+    valid = {v: [a for a in hc.arms(cfg, v) if a not in cam.get(v, ())] for v in hc.enabled_vars(cfg)
+             if not (has_plan and cfg["bien"][v].get("ai_quyet") == "chu-de")}
     cands = [v for v, a in valid.items() if len(a) >= 2]
     if not cands:
         return {"bien": "", "nhanh": "", "kieu": "khai-thac"}
@@ -265,7 +274,10 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
     slugs = list(queue[:QUEUE_ENTRIES]) or ["_tu-chon"]
     muc = []
     for slug in slugs:
-        t = choose_test(slug, stats, cfg, last, today, cam or {})
+        # moi slug trong hang cho da qua buoc chu de (dong, ten_quen da chot, co hay chua co dong ke-hoach);
+        # chi `_tu-chon` (hang cho trong) chua co chu de
+        has_plan = slug != TU_CHON
+        t = choose_test(slug, stats, cfg, last, today, cam or {}, has_plan=has_plan)
         gia_tri = {v: win[v] for v in on}
         for v, val in ((planned or {}).get(slug) or {}).items():
             if v not in gia_tri or v == t["bien"]:
@@ -434,12 +446,59 @@ def forbidden_arms(rows: list[dict], today: date, exclude: str = "") -> dict:
     return {"khuon_tieu_de": bad} if bad else {}
 
 
-def publish_rejected(cache: Path) -> bool:
+REFUSAL_NOTE = "publishAt rejected:"
+REFUSAL_DAYS = 7
+
+
+def publish_refusals(cache: Path) -> list[tuple[date, str]]:
+    """(ngay, video_id) cua cac dong lich su co ghi chu BAT DAU bang `publishAt rejected:`. `publishAt passed` khong tinh."""
+    out = []
     try:
         with open(Path(cache) / fetch.HISTORY_NAME, encoding="utf-8", newline="") as f:
-            return any("publishAt rejected" in (r.get("ghi_chu") or "") for r in csv.DictReader(f))
+            for r in csv.DictReader(f):
+                if not (r.get("ghi_chu") or "").startswith(REFUSAL_NOTE):
+                    continue
+                try:
+                    d = date.fromisoformat(str(r.get("thoi_gian", ""))[:10])
+                except ValueError:
+                    continue
+                out.append((d, (r.get("video_id") or "").strip()))
     except OSError:
-        return False
+        return []
+    return out
+
+
+def _active_refusals(cache: Path, today: date) -> list[tuple[date, str]]:
+    return [(d, v) for d, v in publish_refusals(cache) if 0 <= (today - d).days < REFUSAL_DAYS]
+
+
+def publish_rejected(cache: Path, today: date | None = None) -> bool:
+    """gio_dang tat 7 ngay ke tu ngay YouTube tu choi publishAt (khong tat vinh vien)."""
+    return bool(_active_refusals(cache, today or datetime.now().date()))
+
+
+def alert_refusals(cache: Path, today: date, alerts_path: Path) -> None:
+    """Moi lan tu choi dang con hieu luc ghi dung mot dong vao alerts.md (khoa theo video_id, khong lap moi dem)."""
+    active = _active_refusals(cache, today)
+    if not active:
+        return
+    alerts_path = Path(alerts_path)
+    try:
+        have = alerts_path.read_text(encoding="utf-8") if alerts_path.is_file() else ""
+    except OSError:
+        have = ""
+    done = {ln for ln in have.splitlines() if "heart: gio_dang tắt 7 ngày" in ln}
+    new = []
+    for d, vid in active:
+        line = f"- {d.isoformat()} heart: gio_dang tắt 7 ngày vì YouTube từ chối publishAt ({vid})"
+        if line not in done and line not in new:
+            new.append(line)
+    if not new:
+        return
+    alerts_path.parent.mkdir(parents=True, exist_ok=True)
+    with alerts_path.open("a", encoding="utf-8", newline="\n") as f:
+        lead = "" if not have or have.endswith("\n") else "\n"
+        f.write(lead + "\n".join(new) + "\n")
 
 
 def apply_publish_rejected(cfg: dict) -> dict:
@@ -505,10 +564,14 @@ def main(argv=None) -> int:
         vault = report_dir.parents[2]
         cache = HERE / "cache"
         cfg = hc.load_config(Path(a.heart_config))
-        if publish_rejected(cache):
-            print("heart: cảnh báo, publishAt bị YouTube từ chối; gio_dang tạm không dùng")
-            cfg = apply_publish_rejected(cfg)
         today = datetime.now().date()
+        if publish_rejected(cache, today):
+            print("heart: cảnh báo, publishAt bị YouTube từ chối; gio_dang tắt 7 ngày")
+            cfg = apply_publish_rejected(cfg)
+            try:
+                alert_refusals(cache, today, report_dir / "alerts.md")
+            except OSError as e:
+                print(f"heart: không ghi được alerts.md ({e})")
         rows = bk.read(tim / bk.BOOK_NAME)
         merged = bk.merged(rows)
         dung = {r["slug"] for r in rows if r["tac_vu"] == "dung"}
