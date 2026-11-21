@@ -13,6 +13,7 @@ import argparse
 import csv
 import glob
 import json
+import math
 import os
 import re
 from datetime import datetime, timezone, timedelta
@@ -338,6 +339,136 @@ def build_changes(improve_dir):
     return rows
 
 
+VAR_VI = {
+    "dong": "Kiểu video", "khuon_tieu_de": "Khuôn tiêu đề", "ten_quen": "Tên quen trong tiêu đề",
+    "thumb_sang": "Thumbnail sáng hay tối", "thumb_chu": "Số chữ trên thumbnail",
+    "hook": "Kiểu mở đầu", "gio_dang": "Giờ đăng",
+}
+STATE_VI = {"thang": "Đang thắng", "dang-thu": "Đang thử", "loai": "Đã loại", "chua-du": "Chưa đủ số"}
+KIND_VI = {"khai-thac": "Theo cái đang thắng", "thu": "Thử cái mới"}
+RESULT_VI = {"trong": "Đúng dự đoán", "tren": "Hơn dự đoán", "duoi": "Thấp hơn dự đoán", "": "Chưa có số"}
+TN_ROWS = 14
+_EMPTY_TN = {"tn_nhanh": [], "tn_so": [], "tn_ke_tiep": []}
+
+
+def _tn_value(do: str, med) -> str:
+    if med is None:
+        return ""
+    if do == "apv_pct":
+        return f"{med * 100:.1f}".replace(".", ",") + "% thời lượng xem"
+    return f"{round(math.exp(med)):,} lượt xem".replace(",", ".")
+
+
+def _tn_read_json(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            d = json.load(fh)
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _tn_arms(directive: dict, cfg: dict) -> list:
+    """Mot dong cho moi (bien, nhanh) cua cau hinh. chi-thi.json chi giu nhanh thang cua moi bien,
+    nen n / trung vi chi co o nhanh thang; cac nhanh khac de trong."""
+    wins = directive.get("nhanh_thang") or {}
+    using = {}
+    for m in directive.get("muc") or []:
+        for v, a in (m.get("gia_tri") or {}).items():
+            using.setdefault(v, set()).add(a)
+    rows = []
+    for var, w in wins.items():
+        spec = cfg.get("bien", {}).get(var)
+        if not spec:
+            continue
+        for arm in spec["nhanh"]:
+            is_win = arm == w.get("nhanh")
+            n = w.get("n") if is_win else ""
+            state = ("thang" if w.get("du_so") else ("dang-thu" if n else "chua-du")) if is_win else "chua-du"
+            rows.append({
+                "bien": VAR_VI.get(var, var), "nhanh": arm, "n": n,
+                "trung_vi": _tn_value(spec["do"], w.get("trung_vi")) if is_win else "",
+                "trang_thai": STATE_VI[state], "dang_dung": arm in using.get(var, ()),
+            })
+    return rows
+
+
+def _tn_next(directive: dict) -> list:
+    out = []
+    for m in directive.get("muc") or []:
+        out.append({
+            "slug": m.get("slug", ""),
+            "bien_thu": VAR_VI.get(m.get("bien_thu"), m.get("bien_thu") or ""),
+            "nhanh_thu": m.get("nhanh_thu", ""),
+            "kieu": KIND_VI.get(m.get("kieu"), m.get("kieu") or ""),
+            "du_doan_7d": m.get("du_doan_7d", ""),
+            "con_han_toi": m.get("con_han_toi", ""),
+            "gia_tri": {VAR_VI.get(v, v): a for v, a in (m.get("gia_tri") or {}).items()},
+        })
+    return out
+
+
+def _tn_latest(tim) -> list:
+    from pathlib import Path
+    try:
+        from loop import book as bk
+    except ImportError:
+        import book as bk
+    rows = bk.read(Path(tim) / bk.BOOK_NAME)
+    merged = bk.merged(rows)
+    when = {}
+    for r in rows:
+        if r["tac_vu"] == "dung" and r["slug"]:
+            when[r["slug"]] = max(r["thoi_diem"], when.get(r["slug"], ""))
+    results = {}
+    try:
+        with open(Path(tim) / "ket-qua.csv", encoding="utf-8", newline="") as fh:
+            results = {r["slug"]: r for r in csv.DictReader(fh)}
+    except OSError:
+        pass
+    out = []
+    for slug in sorted(when, key=lambda s: when[s], reverse=True)[:TN_ROWS]:
+        m, res = merged.get(slug, {}), results.get(slug, {})
+        try:
+            views = int(float(res.get("views_7d") or ""))
+        except ValueError:
+            views = None
+        warn = (res.get("canh_bao") or "")
+        out.append({
+            "slug": slug, "ngay": when[slug][:10],
+            "bien_thu": VAR_VI.get(m.get("bien_thu"), m.get("bien_thu", "")),
+            "nhanh_thu": m.get("nhanh_thu", ""),
+            "kieu": KIND_VI["thu" if m.get("nhanh_thu") else "khai-thac"],
+            "du_doan_7d": m.get("du_doan_7d", ""), "views_7d": views,
+            "ket_qua": RESULT_VI.get(res.get("ket_qua", ""), "Chưa có số"),
+            "canh_bao": [w for w in warn.split(";") if w],
+        })
+    return out
+
+
+def build_experiment(tim) -> dict:
+    """Ba danh sach 'Thu nghiem' cua bang dieu khien. Thieu file hay hong thi danh sach rong, khong bao gio nem loi."""
+    from pathlib import Path
+    out = {k: [] for k in _EMPTY_TN}
+    try:
+        directive = _tn_read_json(Path(tim) / "chi-thi.json")
+        if directive:
+            try:
+                from loop import heart_config as hc
+            except ImportError:
+                import heart_config as hc
+            cfg = hc.load_config(Path(HERE) / "heart_config.json")
+            out["tn_nhanh"] = _tn_arms(directive, cfg)
+            out["tn_ke_tiep"] = _tn_next(directive)
+    except Exception as e:  # noqa: BLE001 - bang dieu khien khong duoc lam hong vong lap
+        print(f"experiment directive skipped: {type(e).__name__}: {e}")
+    try:
+        out["tn_so"] = _tn_latest(tim)
+    except Exception as e:  # noqa: BLE001
+        print(f"experiment book skipped: {type(e).__name__}: {e}")
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=os.path.join(HERE, "config.json"))
@@ -365,6 +496,8 @@ def main(argv=None):
     }
     view = channel_view.build(cache_dir)
     data.update(view)
+    from pathlib import Path
+    data.update(build_experiment(Path(report_dir).parents[1] / "tim"))
     try:
         with open(os.path.join(report_dir, "kenh.md"), "w", encoding="utf-8") as fh:
             fh.write(channel_view.markdown(view))

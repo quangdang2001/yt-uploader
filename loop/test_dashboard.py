@@ -1,3 +1,5 @@
+import json
+import math
 import unittest
 
 from loop import dashboard as db
@@ -52,6 +54,66 @@ class DailyTest(unittest.TestCase):
         self.assertEqual((rows[1]["so_video"], rows[1]["so_video_doc_moi"]), (2, 1))
         self.assertEqual(rows[1]["tong_view"], 35)
         self.assertEqual(rows[1]["tong_hien_thi"], 400)
+
+
+class ExperimentDataTest(unittest.TestCase):
+    def _tim(self, directive=None, results=None, book=None):
+        import tempfile
+        from pathlib import Path
+        d = Path(tempfile.mkdtemp()) / "tim"
+        d.mkdir()
+        if directive is not None:
+            (d / "chi-thi.json").write_text(json.dumps(directive), encoding="utf-8")
+        if results is not None:
+            (d / "ket-qua.csv").write_text(results, encoding="utf-8")
+        if book is not None:
+            (d / "so-quyet-dinh.csv").write_text(book, encoding="utf-8")
+        return d
+
+    def test_dashboard_has_experiment_keys_when_heart_files_missing(self):
+        import tempfile
+        from pathlib import Path
+        out = db.build_experiment(Path(tempfile.mkdtemp()) / "khong-co")
+        self.assertEqual(out, {"tn_nhanh": [], "tn_so": [], "tn_ke_tiep": []})
+        out = db.build_experiment(self._tim())
+        self.assertEqual(out, {"tn_nhanh": [], "tn_so": [], "tn_ke_tiep": []})
+
+    def test_tn_nhanh_labels_vietnamese(self):
+        directive = {
+            "nhanh_thang": {
+                "dong": {"nhanh": "lineup", "n": 4, "trung_vi": math.log(6350), "du_so": True},
+                "hook": {"nhanh": "su-viec-hang", "n": 3, "trung_vi": 0.42, "du_so": True},
+                "thumb_sang": {"nhanh": "sang", "n": 0, "trung_vi": None, "du_so": False},
+            },
+            "muc": [{"slug": "a", "gia_tri": {"dong": "lineup", "hook": "su-viec-hang", "thumb_sang": "sang"},
+                     "bien_thu": "thumb_sang", "nhanh_thu": "toi", "kieu": "thu",
+                     "du_doan_7d": "3000-6000", "con_han_toi": "2026-11-25"}],
+        }
+        out = db.build_experiment(self._tim(directive))
+        rows = out["tn_nhanh"]
+        self.assertEqual({r["bien"] for r in rows}, {"Kiểu video", "Kiểu mở đầu", "Thumbnail sáng hay tối"})
+        win = [r for r in rows if r["bien"] == "Kiểu video" and r["nhanh"] == "lineup"][0]
+        self.assertEqual((win["n"], win["trung_vi"], win["trang_thai"], win["dang_dung"]),
+                         (4, "6.350 lượt xem", "Đang thắng", True))
+        hook = [r for r in rows if r["bien"] == "Kiểu mở đầu" and r["nhanh"] == "su-viec-hang"][0]
+        self.assertEqual(hook["trung_vi"], "42,0% thời lượng xem")
+        other = [r for r in rows if r["bien"] == "Kiểu video" and r["nhanh"] != "lineup"][0]
+        self.assertEqual(other["trang_thai"], "Chưa đủ số")
+        self.assertFalse(other["dang_dung"])
+        nxt = out["tn_ke_tiep"][0]
+        self.assertEqual((nxt["bien_thu"], nxt["kieu"]), ("Thumbnail sáng hay tối", "Thử cái mới"))
+
+    def test_tn_so_latest_14_with_results(self):
+        book_head = "id,thoi_diem,tac_vu,slug,bien_thu,nhanh_thu,du_doan_7d\n"
+        lines = "".join(f"{i},2026-11-{i:02d}T06:00:00,dung,s{i},hook,x,3000-6000\n" for i in range(1, 17))
+        res = ("slug,video_id,ctr_24h,impr_24h,views_7d,apv_pct,ret_30s,verdict,ket_qua,canh_bao\n"
+               "s16,v,,,4500,,,,trong,lech-tieu-de\n")
+        out = db.build_experiment(self._tim(book=book_head + lines, results=res))
+        self.assertEqual(len(out["tn_so"]), 14)
+        self.assertEqual(out["tn_so"][0]["slug"], "s16")
+        self.assertEqual(out["tn_so"][0]["ket_qua"], "Đúng dự đoán")
+        self.assertEqual(out["tn_so"][0]["views_7d"], 4500)
+        self.assertEqual(out["tn_so"][1]["ket_qua"], "Chưa có số")
 
 
 if __name__ == "__main__":
