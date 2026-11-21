@@ -357,3 +357,19 @@ def test_planned_values_from_book_rows(cfg):
     rows = [{"tac_vu": "ke-hoach", "slug": "a", "dong": "lineup"}, {"tac_vu": "ke-hoach", "slug": "a", "dong": "xep-hang"},
             {"tac_vu": "dung", "slug": "a", "dong": "gia-chuyen-hang", "hook": "gia-truoc"}]
     assert h.planned_values(rows, cfg) == {"a": {"dong": "xep-hang"}}
+
+
+def test_plan_kept_when_held_by_self_and_one_other(cfg, capsys):
+    rows = [row("a", "price-copy", 5, "ke-hoach"), row("b", "price-copy", 6)]
+    d = h.build_directive(["a"], empty_stats(cfg), cfg, TODAY, {}, "v", last_tested=_only_overdue(cfg, "thumb_sang"),
+                          planned={"a": {"khuon_tieu_de": "price-copy"}}, book_rows=rows)
+    assert d["muc"][0]["gia_tri"]["khuon_tieu_de"] == "price-copy"
+    assert "đã có 2 video khác" not in capsys.readouterr().out
+
+
+def test_plan_rejected_when_held_by_two_others(cfg, capsys):
+    rows = [row("a", "price-copy", 5, "ke-hoach"), row("b", "price-copy", 6), row("c", "price-copy", 7)]
+    d = h.build_directive(["a"], empty_stats(cfg), cfg, TODAY, {}, "v", last_tested=_only_overdue(cfg, "thumb_sang"),
+                          planned={"a": {"khuon_tieu_de": "price-copy"}}, book_rows=rows)
+    assert d["muc"][0]["gia_tri"]["khuon_tieu_de"] == hc.default(cfg, "khuon_tieu_de")
+    assert "heart: kế hoạch a: khuon_tieu_de=price-copy đã có 2 video khác dùng" in capsys.readouterr().out

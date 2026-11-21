@@ -251,7 +251,8 @@ def _week_mix(var: str, stats: dict, cfg: dict) -> dict:
 
 def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signals: dict, phien_ban: str,
                     last_tested: dict | None = None, cam: dict | None = None, goc=(None, "khong-co"),
-                    plan: dict | None = None, planned: dict | None = None) -> dict:
+                    plan: dict | None = None, planned: dict | None = None,
+                    book_rows: list | None = None) -> dict:
     win = winners(stats, cfg)
     cam = cam or {}
     for v in win:   # nhanh thang bi cam thi thay bang nhanh hop le dau tien
@@ -269,9 +270,12 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
         for v, val in ((planned or {}).get(slug) or {}).items():
             if v not in gia_tri or v == t["bien"]:
                 continue
-            if cfg["bien"][v]["ai_quyet"] != "chu-de" and v != "khuon_tieu_de":
+            if cfg["bien"][v].get("ai_quyet") != "chu-de" and v != "khuon_tieu_de":
                 continue
-            if val in hc.arms(cfg, v):
+            others = forbidden_arms(book_rows or [], today, exclude=slug)
+            if val in hc.arms(cfg, v) and val in others.get(v, ()):
+                print(f"heart: kế hoạch {slug}: {v}={val} đã có 2 video khác dùng, giữ nhánh thắng")
+            elif val in hc.arms(cfg, v):
                 gia_tri[v] = val
             else:
                 print(f"heart: kế hoạch {slug}: {v}={val} không phải nhánh (bỏ qua)")
@@ -409,12 +413,12 @@ def planned_values(rows: list[dict], cfg: dict) -> dict:
     return out
 
 
-def forbidden_arms(rows: list[dict], today: date) -> dict:
+def forbidden_arms(rows: list[dict], today: date, exclude: str = "") -> dict:
     """Khuon toi da 2 lan/56 ngay; `moi` toi da 2 lan/7 ngay (moi video tinh mot lan); `moi` chi theo gioi han 7 ngay."""
     seen: dict = {}
     for r in rows:
         arm = r.get("khuon_tieu_de") or ""
-        if r.get("tac_vu") not in ("ke-hoach", "dung") or not arm or not r.get("slug"):
+        if r.get("tac_vu") not in ("ke-hoach", "dung") or not arm or not r.get("slug") or r["slug"] == exclude:
             continue
         try:
             age = (today - date.fromisoformat(str(r.get("thoi_diem", ""))[:10])).days
@@ -526,7 +530,7 @@ def main(argv=None) -> int:
                                     datetime.now().strftime("%Y-%m-%d-%H%M"), last_tested=last,
                                     goc=goc_view(graded, ledger, today),
                                     cam=forbidden_arms(rows, today), plan=read_queue_plan(qpath),
-                                    planned=planned_values(rows, cfg))
+                                    planned=planned_values(rows, cfg), book_rows=rows)
         write_directive(tim, directive, cfg)
     except Exception as e:  # noqa: BLE001 - khong bao gio dung phim, chi bao loi
         print(f"heart: lỗi {type(e).__name__}: {e}")
