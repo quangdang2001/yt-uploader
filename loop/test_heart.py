@@ -26,6 +26,8 @@ def scored_rows(var, arm, values, start=0, metric="views_7d"):
         slug = f"{var}-{arm}-{start + i}"
         row = {"slug": slug, "video_id": slug, "views_7d": "", "apv_pct": ""}
         row[metric] = v
+        if metric == "apv_pct" and v != "":
+            row["views_7d"] = 500   # da toi moc 7 ngay
         scored.append(row)
         merged[slug] = {var: arm}
     return scored, merged
@@ -250,3 +252,63 @@ def test_queue_parse(tmp_path):
                  encoding="utf-8")
     assert h.read_queue(q) == ["henry_h015", "colt"]
     assert h.read_queue(tmp_path / "none.md") == []
+
+
+def test_predict_uses_queue_plan_then_goc_band(cfg):
+    st = empty_stats(cfg)
+    assert h.predict(st, cfg, "thumb_sang", "sang", 4000.0, "4000-12000") == "4000-12000"
+    assert h.predict(st, cfg, "thumb_sang", "sang", 4000.0, "") == "2000-6000"
+    assert h.predict(st, cfg, "thumb_sang", "sang", 4000.0, "abc") == "2000-6000"
+    d = h.build_directive(["a", "_tu-chon"], st, cfg, TODAY, {}, "v", goc=(4000.0, "tam"),
+                          plan={"a": "4000-12000"})
+    assert d["muc"][0]["du_doan_7d"] == "4000-12000"
+    assert d["muc"][1]["du_doan_7d"] == "2000-6000"
+
+
+def test_read_queue_plan(tmp_path):
+    q = tmp_path / "hang-cho.md"
+    q.write_text("| slug | cach | du_doan_7d |\n|---|---|---|\n| a | 2 | 4000-12000 |\n| b | 1 | x |\n",
+                 encoding="utf-8")
+    assert h.read_queue_plan(q) == {"a": "4000-12000"}
+
+
+def test_hook_not_counted_before_7_day_mark(cfg):
+    scored, merged = scored_rows("hook", "su-viec-hang", [0.3, 0.3, 0.3], metric="apv_pct")
+    for r in scored:
+        r["views_7d"] = ""
+    assert h.arm_stats(scored, merged, cfg)["hook"]["su-viec-hang"]["n"] == 0
+    for r in scored:
+        r["views_7d"] = 500
+    assert h.arm_stats(scored, merged, cfg)["hook"]["su-viec-hang"]["n"] == 3
+
+
+def test_md_shows_apv_as_percent(cfg, tmp_path):
+    scored, merged = scored_rows("hook", "su-viec-hang", [0.34, 0.34, 0.34], metric="apv_pct")
+    for r in scored:
+        r["views_7d"] = 500
+    stats = h.arm_stats(scored, merged, cfg)
+    d = h.build_directive(["a"], stats, cfg, TODAY, {}, "v")
+    assert "34,0% thời lượng xem" in h.render_md(d, cfg)
+
+
+def row(slug, khuon, days_ago, tac_vu="dung"):
+    return {"tac_vu": tac_vu, "slug": slug, "khuon_tieu_de": khuon,
+            "thoi_diem": (TODAY - timedelta(days=days_ago)).isoformat() + "T06:10:00"}
+
+
+def test_forbidden_arms_from_book():
+    rows = [row("a", "price-plea", 10), row("a", "price-plea", 10, "ke-hoach"),   # cung video: 1 lan
+            row("b", "price-copy", 5), row("c", "price-copy", 40),               # 2 lan/56 ngay
+            row("d", "price-spec", 5), row("e", "price-spec", 60),               # mot lan trong 56 ngay
+            row("f", "moi", 3), row("g", "moi", 6)]                              # moi 2 lan/7 ngay
+    cam = h.forbidden_arms(rows, TODAY)
+    assert cam == {"khuon_tieu_de": {"price-copy", "moi"}}
+    assert h.forbidden_arms([row("f", "moi", 3)], TODAY) == {}
+
+
+def test_directive_substitutes_forbidden_winner(cfg):
+    cam = {"khuon_tieu_de": {"price-sacrifice"}}
+    d = h.build_directive(["a", "b", "c"], empty_stats(cfg), cfg, TODAY, {}, "v", cam=cam)
+    for e in d["muc"]:
+        assert e["gia_tri"]["khuon_tieu_de"] != "price-sacrifice"
+        assert e["gia_tri"]["khuon_tieu_de"] in hc.arms(cfg, "khuon_tieu_de")

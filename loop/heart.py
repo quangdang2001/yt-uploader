@@ -34,6 +34,7 @@ QUEUE_ENTRIES = 3
 WEEK_VIDEOS = 7
 WEEK_SPLIT = 0.7
 GOC_MIN_ROWS = 3
+_RANGE = re.compile(r"^\d+-\d+$")
 GOC_AGE_H = (7 * 24, 8 * 7 * 24)
 # spec 5.1, doan duoi bang cac bien
 CONSTRAINTS = (
@@ -87,6 +88,8 @@ def arm_stats(scored: list[dict], merged: dict, cfg: dict, rows: list[dict] | No
                     print(f"heart: nhánh lạ {var}={arm} (bỏ qua)")
                 continue
             x = _metric(cfg, var, r)
+            if cfg["bien"][var]["do"] == "apv_pct" and _num(r.get("views_7d")) is None:
+                x = None   # chua toi moc 7 ngay thi chua cham
             if x is not None:
                 vals[var][arm].append(x)
     used: dict = {}
@@ -197,16 +200,19 @@ def choose_test(slug: str, stats: dict, cfg: dict, last_tested: dict, today: dat
 # ---------- du doan va goc ----------
 
 def _round_views(x: float) -> int:
-    step = 100 if x >= 1000 else 10
+    step = 100
     return max(int(round(x / step)) * step, 0)
 
 
-def predict(stats: dict, cfg: dict, bien: str, nhanh: str, goc) -> str:
+def predict(stats: dict, cfg: dict, bien: str, nhanh: str, goc, plan: str = "") -> str:
+    """Du doan 7 ngay. Du mau: p25-p75 cua nhanh. Chua du: du doan cua hang-cho.md (`plan`), roi goc x 0,5-1,5."""
     st = (stats.get(bien) or {}).get(nhanh)
     if st and st["n"] >= cfg["n_thang"] and cfg["bien"][bien]["do"] == "views_7d":
         lo, hi = math.exp(st["p25"]), math.exp(st["p75"])
+    elif plan and _RANGE.match(plan):
+        return plan
     elif goc:
-        lo, hi = goc * 0.5, goc * 2.0
+        lo, hi = goc * 0.5, goc * 1.5
     else:
         return ""
     lo, hi = _round_views(lo), _round_views(hi)
@@ -244,8 +250,15 @@ def _week_mix(var: str, stats: dict, cfg: dict) -> dict:
 
 
 def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signals: dict, phien_ban: str,
-                    last_tested: dict | None = None, cam: dict | None = None, goc=(None, "khong-co")) -> dict:
+                    last_tested: dict | None = None, cam: dict | None = None, goc=(None, "khong-co"),
+                    plan: dict | None = None) -> dict:
     win = winners(stats, cfg)
+    cam = cam or {}
+    for v in win:   # nhanh thang bi cam thi thay bang nhanh hop le dau tien
+        if win[v] in cam.get(v, ()):
+            ok = [a for a in hc.arms(cfg, v) if a not in cam[v]]
+            if ok:
+                win[v] = ok[0]
     on = hc.enabled_vars(cfg)
     last = dict(last_tested or {})
     slugs = list(queue[:QUEUE_ENTRIES]) or ["_tu-chon"]
@@ -261,7 +274,8 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
         muc.append({
             "slug": slug, "gia_tri": gia_tri, "bien_thu": t["bien"],
             "nhanh_thu": t["nhanh"] if t["kieu"] == "thu" else "", "kieu": t["kieu"],
-            "du_doan_7d": predict(stats, cfg, track, gia_tri[track], goc[0]) if track else "",
+            "du_doan_7d": predict(stats, cfg, track, gia_tri[track], goc[0],
+                                  (plan or {}).get(slug, "")) if track else "",
             "con_han_toi": (today + timedelta(days=cfg["chi_thi_han_ngay"])).isoformat(),
         })
     return {
@@ -279,7 +293,7 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
 
 def _show(cfg: dict, var: str, med: float) -> str:
     if cfg["bien"][var]["do"] == "apv_pct":
-        return f"{med:.2f} % thời lượng xem"
+        return f"{med * 100:.1f}".replace(".", ",") + "% thời lượng xem"
     return f"{round(math.exp(med)):,} lượt xem".replace(",", ".")
 
 
@@ -353,6 +367,43 @@ def read_queue(path: Path) -> list[str]:
         if cell and cell.lower() != "slug" and not set(cell) <= set("-: "):
             out.append(cell)
     return out
+
+
+def read_queue_plan(path: Path) -> dict:
+    """slug -> du_doan_7d cua hang-cho.md (cot `du_doan_7d`), chi lay gia tri dang lo-hi."""
+    try:
+        lines = Path(path).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return {}
+    out, col = {}, None
+    for ln in lines:
+        ln = ln.strip()
+        if not ln.startswith("|"):
+            continue
+        cells = [c.strip() for c in ln.strip("|").split("|")]
+        if cells[0].lower() == "slug":
+            col = cells.index("du_doan_7d") if "du_doan_7d" in cells else None
+        elif col is not None and col < len(cells) and _RANGE.match(cells[col]):
+            out[cells[0]] = cells[col]
+    return out
+
+
+def forbidden_arms(rows: list[dict], today: date) -> dict:
+    """Khuon toi da 2 lan/56 ngay; `moi` toi da 2 lan/7 ngay (moi video tinh mot lan, ke ca ke-hoach lan dung)."""
+    seen: dict = {}
+    for r in rows:
+        arm = r.get("khuon_tieu_de") or ""
+        if r.get("tac_vu") not in ("ke-hoach", "dung") or not arm or not r.get("slug"):
+            continue
+        try:
+            age = (today - date.fromisoformat(str(r.get("thoi_diem", ""))[:10])).days
+        except ValueError:
+            continue
+        seen.setdefault(arm, {})[r["slug"]] = min(age, seen.get(arm, {}).get(r["slug"], age))
+    bad = {a for a, by in seen.items() if sum(1 for g in by.values() if g <= 56) >= 2}
+    if sum(1 for g in seen.get("moi", {}).values() if g <= 7) >= 2:
+        bad.add("moi")
+    return {"khuon_tieu_de": bad} if bad else {}
 
 
 def publish_rejected(cache: Path) -> bool:
@@ -448,10 +499,12 @@ def main(argv=None) -> int:
                     continue
                 last[r["bien_thu"]] = max(d, last.get(r["bien_thu"], d))
         signals = {"cum": hot_clusters(report_dir), "tu_khoa": search_terms(cache)}
-        queue = read_queue(vault / "van-hanh" / "ke-hoach" / "hang-cho.md")
+        qpath = vault / "van-hanh" / "ke-hoach" / "hang-cho.md"
+        queue = read_queue(qpath)
         directive = build_directive(queue, stats, cfg, today, signals,
                                     datetime.now().strftime("%Y-%m-%d-%H%M"), last_tested=last,
-                                    goc=goc_view(graded, ledger, today))
+                                    goc=goc_view(graded, ledger, today),
+                                    cam=forbidden_arms(rows, today), plan=read_queue_plan(qpath))
         write_directive(tim, directive, cfg)
     except Exception as e:  # noqa: BLE001 - khong bao gio dung phim, chi bao loi
         print(f"heart: lỗi {type(e).__name__}: {e}")
