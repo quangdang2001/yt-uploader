@@ -38,6 +38,8 @@ def _find_video(slug: str, tieu_de: str, ledger_rows: list[dict]):
     nt = norm_title(tieu_de)
     if nt:
         for r in ledger_rows:
+            if r.get("slug") and r["slug"] != slug:      # video cua slug khac: khong dem hai lan
+                continue
             if r.get("video_id") and norm_title(r.get("live_title", "")) == nt:
                 return r
     return None
@@ -76,7 +78,9 @@ def score(merged: dict, ledger_rows: list[dict], snaps_by_vid: dict) -> list[dic
             row["views_7d"] = s7.get("views", "")
         elif oldest is not None and oldest > VIEW_WINDOW[1]:
             warns.append("lo-moc-7d")
-        row.update(video_id=vid, apv_pct=led.get("apv_pct", ""), ret_30s=led.get("ret_30s", ""),
+        # hook cham o moc 7 ngay: apv_pct cua anh chup dung cho cua so 7 ngay, khong phai anh moi nhat cua ledger
+        apv = s7.get("apv_pct", "") if s7 else led.get("apv_pct", "")
+        row.update(video_id=vid, apv_pct="" if apv is None else apv, ret_30s=led.get("ret_30s", ""),
                    verdict=led.get("verdict", ""))
         row["ket_qua"] = _band(_f(row["views_7d"]), m.get("du_doan_7d", ""))
         if m.get("tieu_de") and norm_title(led.get("live_title", "")) != norm_title(m["tieu_de"]):

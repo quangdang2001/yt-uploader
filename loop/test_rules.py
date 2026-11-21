@@ -67,6 +67,13 @@ class RulesTest(unittest.TestCase):
         self.assertEqual(v, Verdict.CHANGE_TITLE)
         self.assertIn("no swap left", reason)
 
+    def test_revert_still_fires_after_168_hours(self):
+        st = state(variant="alt1", swaps=1, last_swap_utc=NOW - timedelta(hours=30),
+                   impr_at_last_swap=5000, alts_left=["alt2"],
+                   variant_stats={"main": (5000, 0.052), "alt1": (2500, 0.030)},
+                   main_baseline=(5000, 0.052))
+        self.assertEqual(run(snap(ctr=0.030, impr=7500, age=200.0), st)[0], Verdict.REVERT)
+
     # -- C1: the owner's Test & Compare wins
 
     def test_test_running_blocks_revert(self):

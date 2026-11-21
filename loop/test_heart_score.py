@@ -97,3 +97,24 @@ def test_write_results(tmp_path):
     hs.write_results(p, rows)
     got = list(csv.DictReader(p.open(encoding="utf-8", newline="")))
     assert list(got[0]) == list(hs.RESULT_COLUMNS) and got[0]["slug"] == "s1"
+
+
+def test_hook_apv_comes_from_the_7_day_snapshot_not_the_latest():
+    ledger = [led(apv_pct="0.99")]                                  # the ledger holds the LATEST snapshot's apv
+    snaps = {"v1": [snap(170, views=900) | {"apv_pct": 0.21}, snap(290, views=1500) | {"apv_pct": 0.33}]}
+    r = one(book(), ledger, snaps)
+    assert r["views_7d"] == 900
+    assert r["apv_pct"] == 0.21
+
+
+def test_hook_apv_blank_when_7_day_snapshot_has_none():
+    r = one(book(), [led(apv_pct="0.99")], {"v1": [snap(170, views=900)]})
+    assert r["apv_pct"] == ""
+
+
+def test_title_fallback_skips_ledger_row_of_another_slug():
+    other = led(vid="v9", slug="other-slug", title="Top Ten Guns")
+    out = hs.score(book(), [other], {"v9": [snap(170)]})
+    assert out[0]["canh_bao"] == "chua-co-video"
+    unset = led(vid="v8", slug="", title="Top Ten Guns")
+    assert one(book(), [unset], {"v8": [snap(170)]})["video_id"] == "v8"
