@@ -210,3 +210,17 @@ def test_live_lock_times_out(tmp_path, cfg, monkeypatch):
     with pytest.raises(bk.BookError):
         bk.append(book, {"tac_vu": "dung", "slug": "x"}, cfg, NOW)
     assert Path(str(book) + ".lock").exists()
+
+
+def test_cli_several_pairs_per_flag_and_repeated_flags(tmp_path):
+    a = _cli(tmp_path, "--tac-vu", "dung", "--slug", "multi", "--gia-tri", "dong=gia-chuyen-hang",
+             "ten_quen=hang-lon", "--so-do", "footage_pct=55", "runtime_s=800")
+    assert a.returncode == 0, a.stderr
+    b = _cli(tmp_path, "--tac-vu", "so-do", "--slug", "rep", "--gia-tri", "dong=lineup",
+             "--gia-tri", "ten_quen=hang-vua", "--so-do", "footage_pct=1", "--so-do", "sec_per_cut=2")
+    assert b.returncode == 0, b.stderr
+    r1, r2 = bk.read(tmp_path / bk.BOOK_NAME)
+    assert (r1["dong"], r1["ten_quen"], r1["footage_pct"], r1["runtime_s"]) == (
+        "gia-chuyen-hang", "hang-lon", "55", "800")
+    assert (r2["dong"], r2["ten_quen"], r2["footage_pct"], r2["sec_per_cut"]) == (
+        "lineup", "hang-vua", "1", "2")
