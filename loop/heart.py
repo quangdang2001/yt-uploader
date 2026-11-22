@@ -528,11 +528,19 @@ def planned_values(rows: list[dict], cfg: dict) -> dict:
 
 
 def forbidden_arms(rows: list[dict], today: date, exclude: str = "") -> dict:
-    """Khuon toi da 2 lan/56 ngay; `moi` toi da 2 lan/7 ngay (moi video tinh mot lan); `moi` chi theo gioi han 7 ngay."""
+    """Khuon toi da 2 lan/56 ngay; `moi` toi da 2 lan/7 ngay (moi video tinh mot lan); `moi` chi theo gioi han 7 ngay.
+    Chu de da bo (dong `bo`) tra lai suat; chu de doi khuon trong hang cho chi tinh dong `ke-hoach` moi nhat."""
+    gone = bk.dropped(rows)
+    last_plan = {}
+    for i, r in enumerate(rows):
+        if r.get("tac_vu") == "ke-hoach" and r.get("khuon_tieu_de") and r.get("slug"):
+            last_plan[r["slug"]] = i
     seen: dict = {}
-    for r in rows:
+    for i, r in enumerate(rows):
         arm = r.get("khuon_tieu_de") or ""
         if r.get("tac_vu") not in ("ke-hoach", "dung") or not arm or not r.get("slug") or r["slug"] == exclude:
+            continue
+        if r["tac_vu"] == "ke-hoach" and (r["slug"] in gone or last_plan.get(r["slug"]) != i):
             continue
         try:
             age = (today - date.fromisoformat(str(r.get("thoi_diem", ""))[:10])).days

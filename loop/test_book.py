@@ -224,3 +224,15 @@ def test_cli_several_pairs_per_flag_and_repeated_flags(tmp_path):
         "gia-chuyen-hang", "hang-lon", "55", "800")
     assert (r2["dong"], r2["ten_quen"], r2["footage_pct"], r2["sec_per_cut"]) == (
         "lineup", "hang-vua", "1", "2")
+
+
+def test_drop_needs_a_reason_and_is_tracked(tmp_path, cfg):
+    book = tmp_path / bk.BOOK_NAME
+    with pytest.raises(bk.BookError):
+        bk.append(book, {"tac_vu": "bo", "slug": "x"}, cfg, NOW)
+    bk.append(book, {"tac_vu": "ke-hoach", "slug": "x", "dong": "lineup"}, cfg, NOW)
+    bk.append(book, {"tac_vu": "bo", "slug": "x", "ly_do": "CTR khuon 2,3%"}, cfg, NOW)
+    bk.append(book, {"tac_vu": "ke-hoach", "slug": "y", "dong": "lineup"}, cfg, NOW)
+    rows = bk.read(book)
+    assert bk.dropped(rows) == {"x"}
+    assert "x" not in bk.merged(rows) or bk.merged(rows)["x"]["dong"] == "lineup"

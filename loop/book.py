@@ -25,7 +25,7 @@ BOOK_COLUMNS = (
     "du_doan_7d", "tieu_de", "gio_hen", "footage_pct", "sec_per_cut", "render_pct", "thumb_brightness",
     "script_words", "runtime_s", "ghi_chu",
 )
-TAC_VU = ("ke-hoach", "dung", "so-do", "doi-luat", "nhan-ban")
+TAC_VU = ("ke-hoach", "dung", "so-do", "doi-luat", "nhan-ban", "bo")
 _PRIORITY = {"ke-hoach": 0, "dung": 1, "so-do": 2}
 _NO_MERGE = {"id", "thoi_diem", "tac_vu"}
 
@@ -65,6 +65,21 @@ def _validate(row: dict, cfg: dict) -> None:
         raise BookError(f"du_doan_7d {dd!r} phai co dang lo-hi, vi du 1000-5000")
     if str(row.get("lech", "") or "") and not str(row.get("ly_do", "") or "").strip():
         raise BookError("lech co ma ly_do rong: ghi ly do khi lech khoi chi thi")
+    if row.get("tac_vu") == "bo" and not str(row.get("ly_do", "") or "").strip():
+        raise BookError("bo co ma ly_do rong: ghi so lieu nao lam chu de het phu hop")
+
+
+def dropped(rows: list[dict]) -> set[str]:
+    """Slug bi bo khoi hang cho: dong `bo` dung sau dong `ke-hoach` cuoi cung va chua co dong `dung`."""
+    last: dict[str, str] = {}
+    built = set()
+    for r in rows:
+        tv, slug = r.get("tac_vu"), r.get("slug")
+        if tv in ("ke-hoach", "bo") and slug:
+            last[slug] = tv
+        elif tv == "dung" and slug:
+            built.add(slug)
+    return {s for s, tv in last.items() if tv == "bo" and s not in built}
 
 
 class _Lock:

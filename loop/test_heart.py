@@ -528,3 +528,15 @@ def test_queued_slug_without_book_row_never_tests_topic_variable(cfg):
     for i in range(100):
         d = h.build_directive([f"n{i}"], empty_stats(cfg), cfg, TODAY, {}, "v", last_tested={})
         assert d["muc"][0]["bien_thu"] not in ("dong", "ten_quen")
+
+
+def test_forbidden_arms_dropped_and_changed_topics():
+    rows = [row("f", "moi", 3, "ke-hoach"), row("g", "moi", 2, "ke-hoach")]
+    assert h.forbidden_arms(rows, TODAY) == {"khuon_tieu_de": {"moi"}}
+    bo = {"tac_vu": "bo", "slug": "g", "thoi_diem": TODAY.isoformat() + "T19:00:00", "ly_do": "CTR 3%"}
+    assert h.forbidden_arms(rows + [bo], TODAY) == {}                          # dropped topic frees its slot
+    assert h.forbidden_arms(rows + [bo, row("g", "moi", 0, "ke-hoach")], TODAY) == {"khuon_tieu_de": {"moi"}}
+    changed = rows + [row("g", "price-spec", 0, "ke-hoach")]                   # g re-planned on another shape
+    assert h.forbidden_arms(changed, TODAY) == {}
+    built = rows + [row("g", "moi", 1), bo]                                    # built films always count
+    assert h.forbidden_arms(built, TODAY) == {"khuon_tieu_de": {"moi"}}
