@@ -482,6 +482,21 @@ def build_experiment(tim) -> dict:
     return out
 
 
+def build_goal(tim) -> dict:
+    """Khoi `muc_tieu` cua bang dieu khien, doc tu chi-thi.json. Thieu file / khong co khoi goal -> {}."""
+    from pathlib import Path
+    try:
+        d = _tn_read_json(Path(tim) / "chi-thi.json")
+        g = d.get("muc_tieu")
+        if not isinstance(g, dict) or not g:
+            return {}
+        return {"thang": g.get("thang"), "trang_thai": g.get("trang_thai"), "che_do": d.get("che_do"),
+                "chi_so": g.get("chi_so") or [], "nhan_ban": d.get("nhan_ban") or []}
+    except Exception as e:  # noqa: BLE001 - bang dieu khien khong duoc lam hong vong lap
+        print(f"goal directive skipped: {type(e).__name__}: {e}")
+        return {}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=os.path.join(HERE, "config.json"))
@@ -511,6 +526,7 @@ def main(argv=None):
     data.update(view)
     from pathlib import Path
     data.update(build_experiment(Path(report_dir).parents[1] / "tim"))
+    data["muc_tieu"] = build_goal(Path(report_dir).parents[1] / "tim")
     try:
         with open(os.path.join(report_dir, "kenh.md"), "w", encoding="utf-8") as fh:
             fh.write(channel_view.markdown(view))
