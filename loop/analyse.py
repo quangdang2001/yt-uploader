@@ -7,7 +7,7 @@ actions/pending/<video>__<utc>.json (tru khi con alert-only), Telegram.
 
 Telegram (khong bao gio dong loat):
 - health: khi trang thai doi, cong mot lan nhac moi ngay khi chua PASS/ok;
-- du lieu cu (health.json > 3 h hoac snapshot moi nhat > 26 h): mot lan moi ngay;
+- du lieu cu (health.json > 26 h hoac snapshot moi nhat > 26 h; VPS doc 1 lan/ngay): mot lan moi ngay;
 - lan chay dau (chua co .last_verdicts.json): MOT tin tong hop, khong tin rieng tung video;
 - tung video: mot loai phan quyet bao toi da mot lan moi 24 h, va chi khi giu 2 lan chay lien tiep;
   rieng SWAP/REVERT o che do live thi bao ngay khi ghi yeu cau.
@@ -43,7 +43,7 @@ VERDICT_COLS = ("video_id", "base", "verdict", "reason", "ctr", "impressions", "
 CATEGORICAL = ("background", "gun_angle", "props", "accent_colour")
 NUMERIC = ("colourfulness", "warmth", "gun_width_share", "word_count")
 LAST_VERDICTS = ".last_verdicts.json"
-STALE_HEALTH_H = 3          # health.json cu hon -> VPS khong chay
+STALE_HEALTH_H = 26         # health.json cu hon -> VPS khong chay (VPS doc Studio 1 lan/ngay luc 18:00 VN tu 2026-11-20)
 STALE_SNAPSHOT_H = 26       # snapshot moi nhat cu hon -> VPS khong doc duoc gi (video cu doc moi ngay)
 ALERT_GAP_H = 24            # mot loai phan quyet cua mot video: toi da mot tin moi 24 h
 PEER_AGE_TOL = 0.25         # NOT_PACKAGING: snapshot cua video khac co tuoi trong +-25% tuoi video nay
@@ -213,7 +213,7 @@ def _num(x):
 
 
 def _stale_line(health_at: datetime | None, snaps_all: list, now: datetime) -> str | None:
-    """'Studio loop: no fresh data from the VPS since <time>' khi health.json > 3 h hoac snapshot moi nhat
+    """'Studio loop: no fresh data from the VPS since <time>' khi health.json > 26 h hoac snapshot moi nhat
     > 26 h; nguoc lai None. <time> = snapshot moi nhat neu no cu, khong thi luc ghi health."""
     newest = None
     for s in snaps_all:

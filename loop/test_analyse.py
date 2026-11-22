@@ -532,12 +532,14 @@ class AnalyseTest(unittest.TestCase):
     def test_stale_health_alert(self):
         self.not_first_run()
         self.low_video()
-        self.health = {"status": "PASS", "at_utc": "2026-11-19T08:30:00Z"}   # 3.5 h before NOW
+        # The VPS reads Studio once a day (18:00 VN), so a read hours old is normal and only a
+        # read older than a day plus margin means it stopped.
+        self.health = {"status": "PASS", "at_utc": "2026-11-18T09:30:00Z"}   # 26.5 h before NOW
         self.write()
         self.run_an()
         self.assertEqual(self.msgs("no fresh data"),
-                         ["Studio loop: no fresh data from the VPS since 2026-11-19T08:30:00Z"])
-        self.health = {"status": "PASS", "at_utc": "2026-11-19T09:30:00Z"}   # 2.5 h: fresh
+                         ["Studio loop: no fresh data from the VPS since 2026-11-18T09:30:00Z"])
+        self.health = {"status": "PASS", "at_utc": "2026-11-19T06:30:00Z"}   # 5.5 h: fresh (the 2026-11-22 false alarm)
         self.write()
         (self.cache / an.LAST_VERDICTS).write_text("{}", encoding="utf-8")
         self.run_an()

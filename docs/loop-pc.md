@@ -103,7 +103,7 @@ lỗi health báo khi trạng thái đổi, cộng một lần nhắc mỗi ngà
 | `Studio loop health: FAIL auth …` | VPS cần đăng nhập lại Studio. | Làm theo `docs/studio-capture.md`. |
 | `Studio loop health: FAIL read / FAIL api / missing / corrupt …` | VPS đọc lỗi hoặc chưa ghi health. `FAIL read` chỉ báo khi giữ 2 lần phân tích liên tiếp (một video đọc lỗi thoáng qua không báo); `PASS (was FAIL read)` chỉ gửi nếu đã gửi cảnh báo. | Xem chi tiết; nhắc lại mỗi ngày nếu còn. |
 | `Studio loop health: PASS (was …)` | Đã hết lỗi. | Không cần. |
-| `Studio loop: no fresh data from the VPS since <time>` | `health.json` cũ hơn 3 giờ hoặc snapshot mới nhất cũ hơn 26 giờ: VPS không chạy hoặc không đọc được gì. Cùng dòng này ở đầu báo cáo. | Kiểm tra VPS (RDP còn kết nối, Task Scheduler). |
+| `Studio loop: no fresh data from the VPS since <time>` | `health.json` hoặc snapshot mới nhất cũ hơn 26 giờ (VPS đọc Studio mỗi ngày một lần lúc 18:00): VPS không chạy hoặc không đọc được gì. Cùng dòng này ở đầu báo cáo. | Kiểm tra VPS (RDP còn kết nối, Task Scheduler). |
 | `Studio loop on this PC: step fetch failed with exit code N - …` | Một bước trên máy này lỗi (mã ở mục 2). | Theo gợi ý trong tin. |
 
 **Từ VPS** (cùng bot): `Swap <id> -> alt1: ok` (đã đặt), `… FAILED …` (không đặt được, yêu cầu
@@ -149,7 +149,7 @@ rồi REVERT về main, nó đặt lại file gốc đó, không phải thumbnai
   tích). Nếu lúc đặt thumbnail trên YouTube đã khác, VPS không đặt và chuyển yêu cầu sang `failed/` với
   "thumbnail changed since request" (anh vừa đổi tay thì swap không đè lên). Không lấy được hash thì vẫn
   đặt: đây là rào chắn, không phải cổng.
-- Khi dữ liệu cũ (health > 3 giờ hoặc snapshot > 26 giờ), phân tích không ghi yêu cầu nào; phán quyết và
+- Khi dữ liệu cũ (health hoặc snapshot > 26 giờ), phân tích không ghi yêu cầu nào; phán quyết và
   báo cáo vẫn ra, kèm "(stale data - no request)".
 
 ---
