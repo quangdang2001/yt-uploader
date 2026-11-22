@@ -24,7 +24,9 @@ from pathlib import Path
 from loop import book as bk
 from loop import fetch, heart_score
 from loop import heart_config as hc
+from loop import goals as goals_mod
 from loop.channel_view import latest_doc
+from loop.channel_view import totals as channel_totals
 from loop.state import since_published
 
 HERE = Path(__file__).resolve().parent
@@ -156,9 +158,10 @@ def _gap(var_stats: dict, valid: list[str]) -> float:
 
 
 def choose_test(slug: str, stats: dict, cfg: dict, last_tested: dict, today: date, cam: dict,
-                has_plan: bool = False) -> dict:
+                has_plan: bool = False, ti_le_thu: float | None = None) -> dict:
     """Biet slug da co dong `ke-hoach` (has_plan) thi chi boc trong cac bien build quyet: bien `chu-de`
-    (dong, ten_quen) da chot o buoc chu de, khong lam bien thu."""
+    (dong, ten_quen) da chot o buoc chu de, khong lam bien thu. `ti_le_thu` (neu co) thay cfg["ti_le_thu"]
+    cho lan chay nay."""
     rng = random.Random(seed(slug, today))
     valid = {v: [a for a in hc.arms(cfg, v) if a not in cam.get(v, ())] for v in hc.enabled_vars(cfg)
              if not (has_plan and cfg["bien"][v].get("ai_quyet") == "chu-de")}
@@ -180,7 +183,7 @@ def choose_test(slug: str, stats: dict, cfg: dict, last_tested: dict, today: dat
     win = winners(stats, cfg)[bien]
     if win not in valid[bien]:
         win = valid[bien][0]
-    if rng.random() < cfg["ti_le_thu"]:
+    if rng.random() < (cfg["ti_le_thu"] if ti_le_thu is None else ti_le_thu):
         weights = {}
         for a in valid[bien]:
             if a == win:
@@ -261,7 +264,12 @@ def _week_mix(var: str, stats: dict, cfg: dict) -> dict:
 def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signals: dict, phien_ban: str,
                     last_tested: dict | None = None, cam: dict | None = None, goc=(None, "khong-co"),
                     plan: dict | None = None, planned: dict | None = None,
-                    book_rows: list | None = None) -> dict:
+                    book_rows: list | None = None, goal: dict | None = None,
+                    goals_cfg: dict | None = None, now: datetime | None = None) -> dict:
+    """`goal` = tien do so voi goal (loop.goals.progress). Co goal: `che_do` va ti le thu theo goal,
+    them khoi `muc_tieu` va `nhan_ban`. Khong co: chi thi nhu cu."""
+    che_do = mode_for(goal)
+    rate = cfg["ti_le_thu_san"] if che_do == "san-video-troi" else None
     win = winners(stats, cfg)
     cam = cam or {}
     for v in win:   # nhanh thang bi cam thi thay bang nhanh hop le dau tien
@@ -277,7 +285,7 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
         # moi slug trong hang cho da qua buoc chu de (dong, ten_quen da chot, co hay chua co dong ke-hoach);
         # chi `_tu-chon` (hang cho trong) chua co chu de
         has_plan = slug != TU_CHON
-        t = choose_test(slug, stats, cfg, last, today, cam or {}, has_plan=has_plan)
+        t = choose_test(slug, stats, cfg, last, today, cam or {}, has_plan=has_plan, ti_le_thu=rate)
         gia_tri = {v: win[v] for v in on}
         for v, val in ((planned or {}).get(slug) or {}).items():
             if v not in gia_tri or v == t["bien"]:
@@ -303,7 +311,7 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
                                   (plan or {}).get(slug, "")) if track else "",
             "con_han_toi": (today + timedelta(days=cfg["chi_thi_han_ngay"])).isoformat(),
         })
-    return {
+    out = {
         "ngay": today.isoformat(), "phien_ban": phien_ban,
         "nhanh_thang": {v: {"nhanh": win[v], "n": stats[v][win[v]]["n"],
                             "trung_vi": stats[v][win[v]]["trung_vi"],
@@ -317,6 +325,77 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
         "tin_hieu": {"cum": signals.get("cum"), "tu_khoa": signals.get("tu_khoa")},
         "rang_buoc": list(CONSTRAINTS),
     }
+    if goal:
+        out["muc_tieu"] = goal
+        out["che_do"] = che_do
+        out["nhan_ban"] = replication_list(goal, goals_cfg or {}, book_rows or [], now or datetime.combine(
+            today, datetime.min.time()))
+    return out
+
+
+# ---------- goal ket qua ----------
+
+def mode_for(goal: dict | None) -> str | None:
+    """`thieu` -> san-video-troi (thu nhieu hon de tim video no); con lai theo-thang; khong co goal -> None."""
+    if not goal:
+        return None
+    return "san-video-troi" if goal.get("trang_thai") == "thieu" else "theo-thang"
+
+
+def replication_list(goal: dict, goals_cfg: dict, book_rows: list, now: datetime) -> list[dict]:
+    """Video troi chua co dong `nhan-ban` (slug `video:<id>`) trong so quyet dinh."""
+    vt = goals_cfg.get("video_troi") or {}
+    done = {r.get("slug") for r in book_rows if r.get("tac_vu") == "nhan-ban"}
+    han = (now + timedelta(hours=vt.get("han_gio", 48))).isoformat(timespec="minutes")
+    return [{"video_id": v["video_id"], "tieu_de": v["tieu_de"], "view": v["view"], "tuoi_ngay": v["tuoi_ngay"],
+             "so_chu_de": vt.get("so_chu_de_noi_tiep", 3), "han": han}
+            for v in goal.get("video_troi") or [] if f"video:{v['video_id']}" not in done]
+
+
+def _goal_md(d: dict) -> list[str]:
+    g = d.get("muc_tieu")
+    if not g:
+        return []
+
+    def n(v, nd=0):
+        if v is None:
+            return "—"
+        return f"{v:,.{nd}f}".replace(",", "\0").replace(".", ",").replace("\0", ".")
+    ym = g["thang"]
+    mm = f"{ym[5:7]}/{ym[:4]}"
+    tv = (g.get("muc_tieu") or {}).get("view_thang")
+    L = [f"## Goal tháng {mm}", ""]
+    if g.get("trang_thai") == "chua-co-so":
+        L += ["Chưa có số liệu kênh theo ngày để so với goal.", ""]
+    else:
+        if g["trang_thai"] == "dung-huong":
+            verdict = "đúng hướng"
+        else:
+            verdict = f"thiếu {n(max(0, (tv or 0) - g['du_bao_view_thang']))}"
+        L.append(f"- View tháng {n(g['view_thang'])} / mục tiêu {n(tv)} (dự báo {n(g['du_bao_view_thang'])}, {verdict}).")
+        L.append(f"- Cần {n(g['view_can_moi_ngay'])} view mỗi ngày còn lại của tháng.")
+        L.append(f"- Người đăng ký: {n(g['sub_hien_tai'])} (dự báo cuối tháng {n(g['du_bao_sub_cuoi_thang'])}); "
+                 f"doanh thu tháng {n(g['doanh_thu_thang'], 2)} US$ (dự báo {n(g['du_bao_doanh_thu_thang'], 2)}).")
+        for r in g.get("chi_so") or []:
+            if r["nhom"] != "video":
+                continue
+            mark = "chưa có số" if r["dat"] is None else ("đạt" if r["dat"] else "chưa đạt")
+            L.append(f"- {r['ten']}: {n(r['hien_tai'], 1 if isinstance(r['hien_tai'], float) else 0)} / "
+                     f"mục tiêu {n(r['muc_tieu'], 1 if isinstance(r['muc_tieu'], float) else 0)}: {mark}.")
+        L.append("")
+    che = d.get("che_do")
+    if che == "san-video-troi":
+        L.append("Chế độ: săn video trội (đang thiếu so với goal nên thử nhánh mới nhiều hơn).")
+    elif che:
+        L.append("Chế độ: theo tháng (đúng hướng, giữ nhịp thử thường lệ).")
+    nb = d.get("nhan_ban") or []
+    if nb:
+        L.append("")
+        L.append("Video trội cần nhân bản trong 48 giờ: " + "; ".join(
+            f"{x['tieu_de']} ({n(x['view'])} view, {x['tuoi_ngay']} ngày; {x['so_chu_de']} chủ đề nối tiếp, "
+            f"hạn {x['han']})" for x in nb) + ".")
+    L.append("")
+    return L
 
 
 def _show(cfg: dict, var: str, med: float) -> str:
@@ -326,7 +405,7 @@ def _show(cfg: dict, var: str, med: float) -> str:
 
 
 def render_md(d: dict, cfg: dict) -> str:
-    L = [f"# Chỉ thị ngày {d['ngay']}", "",
+    L = [f"# Chỉ thị ngày {d['ngay']}", ""] + _goal_md(d) + [
          f"Phiên bản `{d['phien_ban']}`. Dùng cho video kế tiếp của hàng chờ; còn hạn "
          f"{cfg['chi_thi_han_ngay']} ngày.", "", "## Các lựa chọn hiện tại", ""]
     for v in d["bien_bat"]:
@@ -547,6 +626,27 @@ def _read_ledger(report_dir: Path) -> list[dict]:
         return []
 
 
+GOALS_NAME = "muc-tieu.json"
+
+
+def goal_progress(tim: Path, cache: Path, ledger: list[dict], today: date):
+    """(tien do, goal) tu <tim>/muc-tieu.json; loi gi cung chi canh bao va tra (None, None): trai tim khong
+    bao gio hong vi goal."""
+    try:
+        goals = goals_mod.load_goals(Path(tim) / GOALS_NAME)
+        if goals is None:
+            print(f"heart: cảnh báo, không đọc được {GOALS_NAME}; chỉ thị không có khối goal")
+            return None, None
+        doc, _ = latest_doc(str(cache))
+        totals = channel_totals(doc) if doc else {}
+        prog = goals_mod.progress(goals, goals_mod.channel_daily(cache), totals, ledger, today)
+        json.dumps(prog)
+        return prog, goals
+    except Exception as e:  # noqa: BLE001
+        print(f"heart: cảnh báo, tính goal lỗi {type(e).__name__}: {e}; chỉ thị không có khối goal")
+        return None, None
+
+
 def main(argv=None) -> int:
     for s in (sys.stdout, sys.stderr):
         try:
@@ -592,11 +692,13 @@ def main(argv=None) -> int:
         signals = {"cum": hot_clusters(report_dir), "tu_khoa": search_terms(cache)}
         qpath = vault / "van-hanh" / "ke-hoach" / "hang-cho.md"
         queue = read_queue(qpath)
+        goal, goals = goal_progress(tim, cache, ledger, today)
         directive = build_directive(queue, stats, cfg, today, signals,
                                     datetime.now().strftime("%Y-%m-%d-%H%M"), last_tested=last,
                                     goc=goc_view(graded, ledger, today),
                                     cam=forbidden_arms(rows, today), plan=read_queue_plan(qpath),
-                                    planned=planned_values(rows, cfg), book_rows=rows)
+                                    planned=planned_values(rows, cfg), book_rows=rows,
+                                    goal=goal, goals_cfg=goals, now=datetime.now())
         write_directive(tim, directive, cfg)
     except Exception as e:  # noqa: BLE001 - khong bao gio dung phim, chi bao loi
         print(f"heart: lỗi {type(e).__name__}: {e}")

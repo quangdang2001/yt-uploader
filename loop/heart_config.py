@@ -15,7 +15,7 @@ class ConfigError(Exception):
 
 
 # hang so goc: ten -> kieu (list = danh sach 2 so nguyen)
-_ROOT_NUM = ("giai_doan", "ti_le_thu", "san_thu", "n_thang", "n_loai", "thu_lai_ngay",
+_ROOT_NUM = ("giai_doan", "ti_le_thu", "ti_le_thu_san", "san_thu", "n_thang", "n_loai", "thu_lai_ngay",
              "bo_qua_toi_da_ngay", "chi_thi_han_ngay", "thumb_tu_doi_gio_toi_da", "gio_hen_sau_nhan_gio")
 _ROOT_PAIR = ("cua_so_ctr_gio", "cua_so_view_gio", "gio_nhan_vps")
 _ROOT_KEYS = set(_ROOT_NUM) | set(_ROOT_PAIR) | {"bien"}

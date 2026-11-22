@@ -25,7 +25,7 @@ BOOK_COLUMNS = (
     "du_doan_7d", "tieu_de", "gio_hen", "footage_pct", "sec_per_cut", "render_pct", "thumb_brightness",
     "script_words", "runtime_s", "ghi_chu",
 )
-TAC_VU = ("ke-hoach", "dung", "so-do", "doi-luat")
+TAC_VU = ("ke-hoach", "dung", "so-do", "doi-luat", "nhan-ban")
 _PRIORITY = {"ke-hoach": 0, "dung": 1, "so-do": 2}
 _NO_MERGE = {"id", "thoi_diem", "tac_vu"}
 
