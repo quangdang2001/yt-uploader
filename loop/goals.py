@@ -70,7 +70,8 @@ def target_for_month(goals: dict | None, ym: str) -> dict:
             break
     if res is None:
         if cur < _mi(mocs[0]["thang"]):
-            res = {**json.loads(json.dumps(mocs[0])), "noi_suy": False, "sap_toi": True}
+            res = {**json.loads(json.dumps(mocs[0])), "noi_suy": False, "sap_toi": True,
+                   "thang_moc": mocs[0]["thang"]}
         elif cur > _mi(mocs[-1]["thang"]):
             res = {**json.loads(json.dumps(mocs[-1])), "noi_suy": False}
         else:

@@ -49,6 +49,28 @@ def test_shipped_config_has_san_rate(cfg):
     assert cfg["ti_le_thu_san"] == 0.4
 
 
+def test_older_config_without_san_rate_does_not_crash(cfg, tmp_path):
+    old = {k: v for k, v in cfg.items() if k != "ti_le_thu_san"}
+    p = tmp_path / "old.json"
+    p.write_text(json.dumps(old), encoding="utf-8")
+    loaded = hc.load_config(p)
+    assert "ti_le_thu_san" not in loaded
+    d = h.build_directive(["a"], h.arm_stats([], {}, loaded), loaded, TODAY, {}, "v", last_tested={},
+                          goal=prog("thieu"), goals_cfg=GOALS, now=NOW)
+    assert d["che_do"] == "san-video-troi"
+
+
+def test_md_says_plainly_when_month_has_no_own_goal(cfg):
+    g = prog("thieu")
+    g.update(thang="2026-11", muc_tieu={"view_thang": 1000000, "sap_toi": True, "thang": "2026-11",
+                                        "thang_moc": "2026-12"})
+    d = h.build_directive(["a"], h.arm_stats([], {}, cfg), cfg, TODAY, {}, "v", last_tested={},
+                          goal=g, goals_cfg=GOALS, now=NOW)
+    md = h.render_md(d, cfg)
+    assert "Tháng 11/2026 chưa có goal riêng; so với mục tiêu tháng 12/2026 (1.000.000)" in md
+    assert "chưa có goal riêng" not in h.render_md(directive(cfg, "thieu"), cfg)
+
+
 def test_mode_switches_on_thieu(cfg):
     assert directive(cfg, "thieu")["che_do"] == "san-video-troi"
     assert directive(cfg, "dung-huong")["che_do"] == "theo-thang"

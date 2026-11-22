@@ -491,7 +491,11 @@ def build_goal(tim) -> dict:
         if not isinstance(g, dict) or not g:
             return {}
         return {"thang": g.get("thang"), "trang_thai": g.get("trang_thai"), "che_do": d.get("che_do"),
-                "chi_so": g.get("chi_so") or [], "nhan_ban": d.get("nhan_ban") or []}
+                "chi_so": g.get("chi_so") or [], "nhan_ban": d.get("nhan_ban") or [],
+                "view_can_moi_ngay": g.get("view_can_moi_ngay"),
+                "sap_toi": bool((g.get("muc_tieu") or {}).get("sap_toi")),
+                "ngay_co_so": g.get("ngay_co_so"), "ngay_trong_thang": g.get("ngay_trong_thang"),
+                "thang_muc_tieu": (g.get("muc_tieu") or {}).get("thang_moc") or g.get("thang")}
     except Exception as e:  # noqa: BLE001 - bang dieu khien khong duoc lam hong vong lap
         print(f"goal directive skipped: {type(e).__name__}: {e}")
         return {}

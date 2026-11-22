@@ -269,7 +269,7 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
     """`goal` = tien do so voi goal (loop.goals.progress). Co goal: `che_do` va ti le thu theo goal,
     them khoi `muc_tieu` va `nhan_ban`. Khong co: chi thi nhu cu."""
     che_do = mode_for(goal)
-    rate = cfg["ti_le_thu_san"] if che_do == "san-video-troi" else None
+    rate = cfg.get("ti_le_thu_san", cfg["ti_le_thu"]) if che_do == "san-video-troi" else None
     win = winners(stats, cfg)
     cam = cam or {}
     for v in win:   # nhanh thang bi cam thi thay bang nhanh hop le dau tien
@@ -365,6 +365,10 @@ def _goal_md(d: dict) -> list[str]:
     mm = f"{ym[5:7]}/{ym[:4]}"
     tv = (g.get("muc_tieu") or {}).get("view_thang")
     L = [f"## Goal tháng {mm}", ""]
+    tgt = g.get("muc_tieu") or {}
+    if tgt.get("sap_toi"):
+        mo = tgt.get("thang_moc") or ym
+        L += [f"Tháng {mm} chưa có goal riêng; so với mục tiêu tháng {mo[5:7]}/{mo[:4]} ({n(tv)}).", ""]
     if g.get("trang_thai") == "chua-co-so":
         L += ["Chưa có số liệu kênh theo ngày để so với goal.", ""]
     else:
