@@ -175,3 +175,16 @@ def test_goal_progress_swallows_errors(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(h.goals_mod, "channel_daily", boom)
     assert h.goal_progress(tmp_path, tmp_path, [], TODAY) == (None, None)
     assert "RuntimeError" in capsys.readouterr().out
+
+
+def test_pushed_video_uses_its_own_count_and_deadline(cfg):
+    goals = {**GOALS, "video_noi": {"so_chu_de_noi_tiep": 2, "han_gio": 24}}
+    pushed = {"video_id": "rug", "tieu_de": "Ruger", "view": 21300, "tuoi_ngay": 1, "ly_do": "ctr",
+              "ctr_pct": 8.4, "hien_thi": 87015, "gio_doc": 31.6}
+    d = h.build_directive(["s0"], h.arm_stats([], {}, cfg), cfg, TODAY, {}, "v", last_tested={},
+                          goal=prog("thieu", (pushed, HOT)), goals_cfg=goals, now=NOW, book_rows=[])
+    by = {x["video_id"]: x for x in d["nhan_ban"]}
+    assert by["rug"]["so_chu_de"] == 2 and by["rug"]["han"] == "2026-12-12T06:10" and by["rug"]["ctr_pct"] == 8.4
+    assert by["abc123"]["so_chu_de"] == 3 and "ly_do" not in by["abc123"]
+    md = "\n".join(h._goal_md(d))
+    assert "CTR 8,4%" in md and "87.015 hiển thị" in md

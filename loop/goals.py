@@ -142,7 +142,35 @@ def _row(nhom, ma, ten, hien_tai, du_bao, muc_tieu):
             "muc_tieu": muc_tieu, "dat": dat}
 
 
-def progress(goals, daily, totals, ledger_rows, today: date) -> dict:
+def _pct(v):
+    """CTR ve phan so: 0,084 giu nguyen, 8,4 -> 0,084."""
+    x = _num(v)
+    return None if x is None else (x / 100 if x > 1 else x)
+
+
+def _pushed_reading(r: dict, snaps: dict | None, vn: dict):
+    """Luot doc dau tien trong `trong_gio` gio dau ma CTR >= nguong va hien thi >= nguong (chu kenh 2026-11-22:
+    "video dang de xuat"). Snapshot since_published truoc; khong co thi doc ledger (latest neu con trong cua so,
+    roi moc 24 gio). Tra (ctr, hien_thi, gio) hoac None."""
+    win, c_min, i_min = vn.get("trong_gio", 48), vn.get("ctr_toi_thieu", 0.07), vn.get("hien_thi_toi_thieu", 30000)
+    reads = []
+    for s in (snaps or {}).get(r.get("video_id", ""), []):
+        reads.append((_pct(s.get("ctr")), _num(s.get("impressions")), _num(s.get("age_hours"))))
+    if not reads:
+        age = _num(r.get("age_h_latest"))
+        if age is not None and age <= win:
+            reads.append((_pct(r.get("ctr_latest")), _num(r.get("impr_latest")), age))
+        reads.append((_pct(r.get("ctr_24h")), _num(r.get("impr_24h")), 24.0))
+    for c, i, h in reads:
+        if None in (c, i, h) or h > win:
+            continue
+        if c >= c_min and i >= i_min:
+            return round(c * 100, 1), round(i), round(h, 1)
+    return None
+
+
+def progress(goals, daily, totals, ledger_rows, today: date, snaps: dict | None = None) -> dict:
+    """`snaps` = video_id -> snapshot since_published (loop.state.since_published), cho nguong video dang de xuat."""
     with_data = [r for r in daily or [] if _num(r.get("luot_xem")) is not None and r.get("ngay")]
     with_data.sort(key=lambda r: r["ngay"])
     if not with_data:
@@ -182,6 +210,7 @@ def progress(goals, daily, totals, ledger_rows, today: date) -> dict:
     ref = today if (today.year, today.month) == (y, m) else date.fromisoformat(mine[-1]["ngay"])
     window, month_vids, vt = [], [], []
     vtg = target.get("video_troi") or (goals or {}).get("video_troi") or {}
+    vng = target.get("video_noi") or (goals or {}).get("video_noi") or {}
     for r in ledger_rows or []:
         d = _pub_date(r)
         if d is None:
@@ -192,10 +221,17 @@ def progress(goals, daily, totals, ledger_rows, today: date) -> dict:
         if (d.year, d.month) == (y, m):
             month_vids.append(r)
         v = _views(r)
-        if vtg and 0 <= (today - d).days <= vtg.get("trong_ngay", 7) and v is not None \
-                and v >= vtg.get("view_toi_thieu", math.inf):
-            vt.append({"video_id": r.get("video_id", ""), "tieu_de": r.get("live_title", ""),
-                       "view": round(v), "tuoi_ngay": (today - d).days})
+        age_d = (today - d).days
+        by_view = bool(vtg) and 0 <= age_d <= vtg.get("trong_ngay", 7) and v is not None \
+            and v >= vtg.get("view_toi_thieu", math.inf)
+        pushed = _pushed_reading(r, snaps, vng) if vng and 0 <= age_d <= vng.get("trong_ngay", 7) else None
+        if by_view or pushed:
+            e = {"video_id": r.get("video_id", ""), "tieu_de": r.get("live_title", ""),
+                 "view": round(v or 0), "tuoi_ngay": age_d}
+            if pushed:
+                e.update(ly_do="view+ctr" if by_view else "ctr", ctr_pct=pushed[0], hien_thi=pushed[1],
+                         gio_doc=pushed[2])
+            vt.append(e)
     vt.sort(key=lambda x: -x["view"])
     m7 = _median([x for x in (_num(r.get("views_7d")) for r in window) if x is not None])
     ctr = _median([x for x in (_num(r.get("ctr_24h")) for r in window) if x is not None])

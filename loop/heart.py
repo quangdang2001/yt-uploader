@@ -345,11 +345,21 @@ def mode_for(goal: dict | None) -> str | None:
 def replication_list(goal: dict, goals_cfg: dict, book_rows: list, now: datetime) -> list[dict]:
     """Video troi chua co dong `nhan-ban` (slug `video:<id>`) trong so quyet dinh."""
     vt = goals_cfg.get("video_troi") or {}
+    vn = goals_cfg.get("video_noi") or {}
     done = {r.get("slug") for r in book_rows if r.get("tac_vu") == "nhan-ban"}
-    han = (now + timedelta(hours=vt.get("han_gio", 48))).isoformat(timespec="minutes")
-    return [{"video_id": v["video_id"], "tieu_de": v["tieu_de"], "view": v["view"], "tuoi_ngay": v["tuoi_ngay"],
-             "so_chu_de": vt.get("so_chu_de_noi_tiep", 3), "han": han}
-            for v in goal.get("video_troi") or [] if f"video:{v['video_id']}" not in done]
+    out = []
+    for v in goal.get("video_troi") or []:
+        if f"video:{v['video_id']}" in done:
+            continue
+        cfg = vn if v.get("ly_do") == "ctr" else vt
+        e = {"video_id": v["video_id"], "tieu_de": v["tieu_de"], "view": v["view"], "tuoi_ngay": v["tuoi_ngay"],
+             "so_chu_de": cfg.get("so_chu_de_noi_tiep", 3),
+             "han": (now + timedelta(hours=cfg.get("han_gio", 48))).isoformat(timespec="minutes")}
+        for k in ("ly_do", "ctr_pct", "hien_thi", "gio_doc"):
+            if k in v:
+                e[k] = v[k]
+        out.append(e)
+    return out
 
 
 def _goal_md(d: dict) -> list[str]:
@@ -395,8 +405,14 @@ def _goal_md(d: dict) -> list[str]:
     nb = d.get("nhan_ban") or []
     if nb:
         L.append("")
+        def why(x):
+            if "ctr_pct" not in x:
+                return f"{n(x['view'])} view"
+            push = (f"đang được đề xuất: CTR {n(x['ctr_pct'], 1)}%, {n(x['hien_thi'])} hiển thị ở giờ "
+                    f"{n(x['gio_doc'], 1)}")
+            return push + (f", {n(x['view'])} view" if x.get("ly_do") == "view+ctr" else "")
         L.append("Video trội cần nhân bản trong 48 giờ: " + "; ".join(
-            f"{x['tieu_de']} ({n(x['view'])} view, {x['tuoi_ngay']} ngày; {x['so_chu_de']} chủ đề nối tiếp, "
+            f"{x['tieu_de']} ({why(x)}, {x['tuoi_ngay']} ngày; {x['so_chu_de']} chủ đề nối tiếp, "
             f"hạn {x['han']})" for x in nb) + ".")
     L.append("")
     return L
@@ -633,7 +649,7 @@ def _read_ledger(report_dir: Path) -> list[dict]:
 GOALS_NAME = "muc-tieu.json"
 
 
-def goal_progress(tim: Path, cache: Path, ledger: list[dict], today: date):
+def goal_progress(tim: Path, cache: Path, ledger: list[dict], today: date, snaps: dict | None = None):
     """(tien do, goal) tu <tim>/muc-tieu.json; loi gi cung chi canh bao va tra (None, None): trai tim khong
     bao gio hong vi goal."""
     try:
@@ -643,7 +659,7 @@ def goal_progress(tim: Path, cache: Path, ledger: list[dict], today: date):
             return None, None
         doc, _ = latest_doc(str(cache))
         totals = channel_totals(doc) if doc else {}
-        prog = goals_mod.progress(goals, goals_mod.channel_daily(cache), totals, ledger, today)
+        prog = goals_mod.progress(goals, goals_mod.channel_daily(cache), totals, ledger, today, snaps=snaps)
         json.dumps(prog)
         return prog, goals
     except Exception as e:  # noqa: BLE001
@@ -696,7 +712,7 @@ def main(argv=None) -> int:
         signals = {"cum": hot_clusters(report_dir), "tu_khoa": search_terms(cache)}
         qpath = vault / "van-hanh" / "ke-hoach" / "hang-cho.md"
         queue = read_queue(qpath)
-        goal, goals = goal_progress(tim, cache, ledger, today)
+        goal, goals = goal_progress(tim, cache, ledger, today, snaps)
         directive = build_directive(queue, stats, cfg, today, signals,
                                     datetime.now().strftime("%Y-%m-%d-%H%M"), last_tested=last,
                                     goc=goc_view(graded, ledger, today),

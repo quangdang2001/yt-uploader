@@ -165,3 +165,45 @@ def test_channel_daily_unions_docs_newest_wins(tmp_path):
     assert [(r["ngay"], r["luot_xem"]) for r in rows] == [("2026-11-18", 100), ("2026-11-19", 250),
                                                           ("2026-11-20", 300)]
     assert g.channel_daily(tmp_path / "nothing") == []
+
+
+VN = {**GOALS, "video_noi": {"ctr_toi_thieu": 0.07, "hien_thi_toi_thieu": 30000, "trong_gio": 48, "trong_ngay": 7,
+                             "so_chu_de_noi_tiep": 2, "han_gio": 24}}
+
+
+def snap(age, impr, ctr):
+    return {"age_hours": age, "impressions": impr, "ctr": ctr}
+
+
+def test_pushed_video_by_snapshot():
+    today = date(2026, 12, 20)
+    rows = [ledger_row("hot", "2026-12-19 10:00", 21300, title="Ruger"),
+            ledger_row("lowctr", "2026-12-19 10:00", 9000),
+            ledger_row("late", "2026-12-17 10:00", 9000),
+            ledger_row("old", "2026-12-10 10:00", 9000)]
+    snaps = {"hot": [snap(13.9, 43494, 0.078), snap(31.6, 87015, 0.084)],
+             "lowctr": [snap(40, 90000, 0.069)],
+             "late": [snap(40, 29999, 0.09), snap(60, 50000, 0.09)],     # crosses 30k only after 48 h
+             "old": [snap(20, 90000, 0.10)]}                              # 10 days old
+    p = g.progress(VN, _daily(1, [30000] * 19), {}, rows, today, snaps=snaps)
+    assert [x["video_id"] for x in p["video_troi"]] == ["hot"]
+    assert p["video_troi"][0] == {"video_id": "hot", "tieu_de": "Ruger", "view": 21300, "tuoi_ngay": 1,
+                                  "ly_do": "ctr", "ctr_pct": 7.8, "hien_thi": 43494, "gio_doc": 13.9}
+
+
+def test_pushed_video_ledger_fallback_and_both_reasons():
+    today = date(2026, 12, 20)
+    hot = {**ledger_row("hot", "2026-12-19 10:00", 21300), "age_h_latest": "31.63", "ctr_latest": "0.084",
+           "impr_latest": "87015", "ctr_24h": "", "impr_24h": ""}
+    big = {**ledger_row("big", "2026-12-16 10:00", 80000), "ctr_24h": "0.08", "impr_24h": "40000"}
+    p = g.progress(VN, _daily(1, [30000] * 19), {}, [hot, big], today)
+    by = {x["video_id"]: x for x in p["video_troi"]}
+    assert by["hot"]["ly_do"] == "ctr" and by["hot"]["hien_thi"] == 87015
+    assert by["big"]["ly_do"] == "view+ctr" and by["big"]["gio_doc"] == 24.0
+
+
+def test_no_video_noi_config_keeps_old_behaviour():
+    today = date(2026, 12, 20)
+    rows = [ledger_row("hot", "2026-12-19 10:00", 21300)]
+    p = g.progress(GOALS, _daily(1, [30000] * 19), {}, rows, today, snaps={"hot": [snap(30, 90000, 0.09)]})
+    assert p["video_troi"] == []
