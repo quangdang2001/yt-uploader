@@ -70,6 +70,18 @@ def latest_doc(cache_dir: str):
     return None, None
 
 
+def iter_docs(cache_dir: str) -> list:
+    """Moi tai lieu kenh doc duoc, cu truoc moi sau: [(ten file, doc)]."""
+    out = []
+    for path in sorted(glob.glob(os.path.join(cache_dir, "channel", "*.json"))):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                out.append((os.path.basename(path), json.load(fh)))
+        except (OSError, ValueError):
+            continue
+    return out
+
+
 def _card(doc, tab, cid):
     for c in (doc.get("tabs") or {}).get(tab) or []:
         if c.get("id") == cid:
