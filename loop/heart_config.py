@@ -22,7 +22,7 @@ _ROOT_PAIR = ("cua_so_ctr_gio", "cua_so_view_gio", "gio_nhan_vps")
 _ROOT_KEYS = set(_ROOT_NUM) | set(_ROOT_PAIR) | {"bien"}
 
 _VAR_REQUIRED = {"nhanh", "mac_dinh", "can_cu", "ai_quyet", "do", "bat"}
-_VAR_OPTIONAL = {"khong_kha_dung", "cot_ledger"}
+_VAR_OPTIONAL = {"khong_kha_dung", "cot_ledger", "thu"}
 _AI_QUYET = {"chu-de", "dung", "dang"}
 _DO = {"views_7d", "apv_pct"}
 
@@ -52,6 +52,8 @@ def _check_var(name: str, v) -> None:
         raise ConfigError(f"bien {name}: bat phai la true/false")
     if "khong_kha_dung" in v and not isinstance(v["khong_kha_dung"], bool):
         raise ConfigError(f"bien {name}: khong_kha_dung phai la true/false")
+    if "thu" in v and not isinstance(v["thu"], bool):
+        raise ConfigError(f"bien {name}: thu phai la true/false")
     cl = v.get("cot_ledger")
     if cl is not None and not isinstance(cl, str):
         raise ConfigError(f"bien {name}: cot_ledger phai la chuoi hoac null")
@@ -106,3 +108,9 @@ def default(cfg: dict, var: str) -> str:
 
 def enabled_vars(cfg: dict) -> list[str]:
     return [n for n, v in cfg["bien"].items() if v["bat"] and not v.get("khong_kha_dung", False)]
+
+
+def testable_vars(cfg: dict) -> list[str]:
+    """Bien bat VA duoc lam bien thu. `thu: false` = bien van nam trong chi thi (nhanh thang / mac dinh) nhung
+    khong bao gio duoc boc de thu: moi tuan chi co ~7 phim, thu nhieu bien cung luc thi khong bien nao du mau."""
+    return [n for n in enabled_vars(cfg) if cfg["bien"][n].get("thu", True)]

@@ -40,6 +40,7 @@
       "ai_quyet": "chu-de",
       "do": "views_7d",
       "bat": true,
+      "thu": false,
       "cot_ledger": null
     },
     "thumb_sang": {
@@ -49,6 +50,7 @@
       "ai_quyet": "dung",
       "do": "views_7d",
       "bat": true,
+      "thu": false,
       "cot_ledger": "thumb_brightness"
     },
     "thumb_chu": {
@@ -58,6 +60,7 @@
       "ai_quyet": "dung",
       "do": "views_7d",
       "bat": true,
+      "thu": false,
       "cot_ledger": null
     },
     "hook": {
@@ -67,16 +70,18 @@
       "ai_quyet": "dung",
       "do": "apv_pct",
       "bat": true,
+      "thu": false,
       "cot_ledger": null
     },
     "gio_dang": {
       "nhanh": ["19-22h", "02-05h"],
       "mac_dinh": "19-22h",
-      "can_cu": "29/36 phim đăng 18-22h giờ VN (ledger 2026-11-21); chưa bật vì publishAt chưa được chấp nhận (bật ở Task 10).",
+      "can_cu": "29/36 phim đăng 18-22h giờ VN (ledger 2026-11-21). Bật 2026-11-24 theo lệnh chủ kênh 2026-11-22 'Máy tự hẹn giờ': push_to_pending --publish-at auto hẹn 19:00, mỗi ngày một phim; YouTube từ chối thì uploader đăng private và heart tắt biến này 7 ngày. Không làm biến thử (thu = false).",
       "ai_quyet": "dang",
       "do": "views_7d",
-      "bat": false,
-      "khong_kha_dung": true,
+      "bat": true,
+      "thu": false,
+      "khong_kha_dung": false,
       "cot_ledger": "hour"
     }
   }

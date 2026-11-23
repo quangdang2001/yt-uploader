@@ -16,7 +16,38 @@ TODAY = date(2026, 11, 22)
 
 @pytest.fixture
 def cfg():
-    return hc.load_config(ROOT / "loop" / "heart_config.json")
+    """May thu nghiem o trang thai goc: moi bien deu la bien thu, gio_dang tat. File shipped co the dat `thu: false`
+    va bat gio_dang (test_heart_config kiem rieng); cac test o day kiem dong co, khong kiem lua chon cua file."""
+    c = hc.load_config(ROOT / "loop" / "heart_config.json")
+    for v in c["bien"].values():
+        v.pop("thu", None)
+    c["bien"]["gio_dang"]["bat"] = False
+    c["bien"]["gio_dang"]["khong_kha_dung"] = True
+    return c
+
+
+def test_untested_variable_stays_in_directive_but_is_never_drawn(cfg):
+    fixed = copy.deepcopy(cfg)
+    for name in ("thumb_sang", "thumb_chu", "hook", "ten_quen"):
+        fixed["bien"][name]["thu"] = False
+    assert hc.testable_vars(fixed) == ["dong", "khuon_tieu_de"]
+    assert set(hc.enabled_vars(fixed)) >= {"thumb_sang", "thumb_chu", "hook", "ten_quen"}
+    d = h.build_directive([f"s{i}" for i in range(3)], empty_stats(fixed), fixed, TODAY, {}, "v")
+    for m in d["muc"]:
+        assert m["bien_thu"] in ("", "khuon_tieu_de")          # slug co ke hoach: dong da chot o buoc chu de
+        assert m["gia_tri"]["thumb_sang"] == hc.default(fixed, "thumb_sang")
+        assert m["gia_tri"]["hook"] == hc.default(fixed, "hook")
+    assert all(draw(fixed, f"g{i}")["bien"] in ("", "dong", "khuon_tieu_de") for i in range(200))
+
+
+def test_fixed_gio_dang_rides_every_directive_until_refused(cfg, tmp_path):
+    on = copy.deepcopy(cfg)
+    on["bien"]["gio_dang"].update({"bat": True, "khong_kha_dung": False, "thu": False})
+    d = h.build_directive(["a"], empty_stats(on), on, TODAY, {}, "v")
+    assert d["muc"][0]["gia_tri"]["gio_dang"] == hc.default(on, "gio_dang")
+    assert all(draw(on, f"g{i}")["bien"] != "gio_dang" for i in range(200))
+    off = h.apply_publish_rejected(on)
+    assert "gio_dang" not in h.build_directive(["a"], empty_stats(off), off, TODAY, {}, "v")["muc"][0]["gia_tri"]
 
 
 def scored_rows(var, arm, values, start=0, metric="views_7d"):

@@ -163,7 +163,7 @@ def choose_test(slug: str, stats: dict, cfg: dict, last_tested: dict, today: dat
     (dong, ten_quen) da chot o buoc chu de, khong lam bien thu. `ti_le_thu` (neu co) thay cfg["ti_le_thu"]
     cho lan chay nay."""
     rng = random.Random(seed(slug, today))
-    valid = {v: [a for a in hc.arms(cfg, v) if a not in cam.get(v, ())] for v in hc.enabled_vars(cfg)
+    valid = {v: [a for a in hc.arms(cfg, v) if a not in cam.get(v, ())] for v in hc.testable_vars(cfg)
              if not (has_plan and cfg["bien"][v].get("ai_quyet") == "chu-de")}
     cands = [v for v, a in valid.items() if len(a) >= 2]
     if not cands:

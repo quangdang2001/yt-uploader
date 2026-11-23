@@ -25,15 +25,24 @@ def test_loads_shipped_config():
     assert sorted(cfg["bien"]) == sorted(
         ["dong", "khuon_tieu_de", "ten_quen", "thumb_sang", "thumb_chu", "hook", "gio_dang"])
     assert len(cfg["bien"]) == 7
-    assert "gio_dang" not in hc.enabled_vars(cfg)
-    assert len(hc.enabled_vars(cfg)) == 6
+    # 2026-11-24: gio_dang bat (may tu hen gio) nhung khong lam bien thu; chi dong + khuon_tieu_de duoc thu
+    assert len(hc.enabled_vars(cfg)) == 7
+    assert hc.testable_vars(cfg) == ["dong", "khuon_tieu_de"]
+    assert cfg["bien"]["gio_dang"]["bat"] is True and cfg["bien"]["gio_dang"]["thu"] is False
     assert hc.arms(cfg, "dong") == ["gia-chuyen-hang", "lineup", "xep-hang"]
     assert hc.default(cfg, "dong") == "gia-chuyen-hang"
     assert hc.default(cfg, "khuon_tieu_de") == "price-sacrifice"
     assert "moi" in hc.arms(cfg, "khuon_tieu_de")
     assert len(hc.arms(cfg, "khuon_tieu_de")) == 12
     assert cfg["bien"]["hook"]["do"] == "apv_pct"
-    assert cfg["bien"]["gio_dang"]["khong_kha_dung"] is True
+    assert cfg["bien"]["gio_dang"]["khong_kha_dung"] is False
+
+
+def test_thu_must_be_bool(tmp_path):
+    cfg = shipped()
+    cfg["bien"]["hook"]["thu"] = "no"
+    with pytest.raises(hc.ConfigError):
+        hc.load_config(write(tmp_path, cfg))
 
 
 def test_default_must_be_an_arm(tmp_path):
