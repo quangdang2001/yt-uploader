@@ -188,3 +188,34 @@ def test_pushed_video_uses_its_own_count_and_deadline(cfg):
     assert by["abc123"]["so_chu_de"] == 3 and "ly_do" not in by["abc123"]
     md = "\n".join(h._goal_md(d))
     assert "CTR 8,4%" in md and "87.015 hiển thị" in md
+
+
+# Heart now runs every ~3 h (owner 2026-11-23): the clone deadline must not slide forward each run,
+# and a newly caught video is announced once.
+
+def test_clone_deadline_fixed_at_first_sight(cfg, tmp_path):
+    first = directive(cfg, "thieu")["nhan_ban"]
+    assert first[0]["han"] == "2026-12-13T06:10"
+    h.record_seen(tmp_path, first, tmp_path / "alerts.md", NOW)
+    later = NOW.replace(hour=9)
+    d = h.build_directive(["s0"], h.arm_stats([], {}, cfg), cfg, TODAY, {}, "v", last_tested={},
+                          goal=prog("thieu", (HOT,)), goals_cfg=GOALS, now=later, book_rows=[],
+                          seen=h.load_seen(tmp_path))
+    assert d["nhan_ban"][0]["han"] == "2026-12-13T06:10"
+
+
+def test_new_hot_video_is_alerted_once(cfg, tmp_path):
+    items = directive(cfg, "thieu")["nhan_ban"]
+    alerts = tmp_path / "alerts.md"
+    h.record_seen(tmp_path, items, alerts, NOW)
+    h.record_seen(tmp_path, items, alerts, NOW.replace(hour=9))
+    text = alerts.read_text(encoding="utf-8")
+    assert text.count("abc123") == 1 and "Hot one" in text and "2026-12-13T06:10" in text
+
+
+def test_record_seen_never_raises(tmp_path, capsys):
+    bad = tmp_path / "not-a-dir"
+    bad.write_text("x", encoding="utf-8")
+    h.record_seen(bad, [{"video_id": "v1", "tieu_de": "t", "han": "x"}], tmp_path / "a.md", NOW)
+    assert "heart:" in capsys.readouterr().out
+    assert h.load_seen(bad) == {}
