@@ -703,6 +703,34 @@ def _page_gone(page, exc: BaseException) -> bool:
         return True
 
 
+MISSING_CARD = "missing metric "
+
+
+def _read_video(deps, page, vid, sf):
+    """Chup + parse mot video. The bat buoc VANG HAN trong body (khong phai gia tri "—")
+    thi chup lai mot lan ngay: 11-23 mot video da doc tot 3 ngay mat ca the Impressions
+    trong mot lan chay. Lan hai van thieu thi ghi payload loi vao raw/ (FAIL_<video>) de
+    xem lai, va them so body / so the vao ly do. Blocked, NavError van nem ra nhu cu."""
+    for attempt in (1, 2):
+        payloads = deps.capture(page, vid)
+        try:
+            return sp.parse_snapshot(payloads, vid), payloads
+        except sp.ParseError as e:
+            if not str(e).startswith(MISSING_CARD):
+                raise
+            diag = sp.card_census(payloads)
+            if attempt == 1:
+                log.warning("  %s: %s [%s], chup lai mot lan", vid, e, diag)
+                continue
+            if sf is not None:
+                cap = deps.now()
+                try:
+                    ss.put_raw(deps.drive, sf, utc_day(cap), "FAIL_" + vid, stamp_z(cap), payloads)
+                except Exception as we:
+                    log.warning("  %s: khong ghi duoc raw/ cua lan loi (%s)", vid, we)
+            raise sp.ParseError(f"{e} [twice; {diag}]") from e
+
+
 def _capture_loop(args, deps, page, due, by_id, rows, failures, attempts, notes, sf) -> str | None:
     """Doc lan luot. Tra ve ly do neu gap dang nhap/thu thach (dung ngay), nguoc lai None."""
     streak = 0
@@ -723,8 +751,7 @@ def _capture_loop(args, deps, page, due, by_id, rows, failures, attempts, notes,
         log.info("Doc %s (%d/%d)", vid, i + 1, len(due))
         tried = deps.now()
         try:
-            payloads = deps.capture(page, vid)
-            row = sp.parse_snapshot(payloads, vid)
+            row, payloads = _read_video(deps, page, vid, sf)
         except sb.Blocked as e:
             return str(e)
         except Exception as e:

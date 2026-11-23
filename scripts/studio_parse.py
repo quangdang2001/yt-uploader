@@ -129,6 +129,13 @@ def _first_value(node):
     return None
 
 
+def card_census(payloads):
+    """'<n> bodies, <k>/<m> cards' : bao nhieu the trong KEEP_IDS co mat (chan doan loi doc)."""
+    payloads = payloads or []
+    seen = {n.get("accessibilityId") for p in payloads for n in _nodes(p)}
+    return "%d bodies, %d/%d cards" % (len(payloads), sum(1 for k in KEEP_IDS if k in seen), len(KEEP_IDS))
+
+
 def _metric_text(payloads, aid, name):
     node = _find(payloads, aid)
     if node is None:

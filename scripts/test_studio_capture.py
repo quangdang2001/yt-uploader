@@ -69,6 +69,28 @@ def with_period(payloads, value):
     return copy
 
 
+def without_impressions_card(payloads):
+    """The Impressions card absent from every body (the 11-23 NgdZGgDbpys read)."""
+    copy = json.loads(json.dumps(payloads))
+    for p in copy:
+        for node in sp._nodes(p):
+            if str(node.get("accessibilityId", "")).startswith(sp.ID_IMPRESSIONS_CARD):
+                node["accessibilityId"] = "gone"
+    return copy
+
+
+def with_impressions_value(payloads, text):
+    copy = json.loads(json.dumps(payloads))
+    for p in copy:
+        for node in sp._nodes(p):
+            if node.get("accessibilityId") == sp.ID_IMPRESSIONS:
+                for n in sp._nodes(node):
+                    vm = n.get("simpleMetricViewModel")
+                    if isinstance(vm, dict) and isinstance(vm.get("value"), dict):
+                        vm["value"]["content"] = text
+    return copy
+
+
 def dt(text):
     return datetime.fromisoformat(text.replace("Z", "+00:00"))
 
@@ -1119,6 +1141,49 @@ class RunTest(unittest.TestCase):
         self.assertEqual(self.run_it(drive=None, youtube=None, connect=connect), 1)
         self.assertEqual(self.health()["status"], "FAIL api")
         self.assertIn("TransportError", self.health()["detail"])
+
+    # -- 11-23: a whole card absent from one read is retried once in the same run
+
+    def raw_names(self):
+        _, sf = self.folders()
+        days = [f["id"] for f in self.drive.items.values() if sf["raw"] in f["parents"]]
+        return sorted(f["name"] for f in self.drive.items.values()
+                      if any(d in f["parents"] for d in days))
+
+    def test_missing_card_then_ok_is_read_in_same_run(self):
+        self.capture_plan = {"vidA0000001": [without_impressions_card(fixture_payloads())]}
+        self.assertEqual(self.run_it(), 0)
+        self.assertEqual(self.captured.count("vidA0000001"), 2)
+        self.assertIn("vidA0000001", self.snapshot_text())
+        h = self.health()
+        self.assertEqual((h["status"], h["videos_failed"]), ("PASS", 0))
+        self.assertEqual(self.state()["failed"], {})
+        self.assertFalse(any(n.startswith("FAIL_") for n in self.raw_names()))
+
+    def test_missing_card_twice_is_one_failure_with_evidence(self):
+        gone = without_impressions_card(fixture_payloads())
+        self.capture_plan = {"vidA0000001": [gone, gone]}
+        self.assertEqual(self.run_it(), 0)
+        self.assertEqual(self.captured.count("vidA0000001"), 2)
+        h = self.health()
+        self.assertEqual((h["status"], h["videos_failed"]), ("FAIL read", 1))
+        self.assertIn("missing metric impressions", h["detail"])
+        self.assertRegex(h["detail"], r"\[twice; \d+ bodies, \d+/\d+ cards\]")
+        self.assertEqual(self.state()["failed"], {"vidA0000001": 1})
+        self.assertEqual(len([n for n in self.raw_names() if n.startswith("FAIL_vidA0000001__")]), 1)
+
+    def test_dash_value_is_not_retried(self):
+        self.capture_plan = {"vidA0000001": [with_impressions_value(fixture_payloads(), "—")]}
+        self.assertEqual(self.run_it(), 0)
+        self.assertEqual(self.captured.count("vidA0000001"), 1)
+        self.assertEqual(self.health()["status"], "FAIL read")
+        self.assertEqual(self.state()["failed"], {"vidA0000001": 1})
+
+    def test_blocked_on_retry_still_stops_the_run(self):
+        self.capture_plan = {"vidB0000002": [without_impressions_card(fixture_payloads()),
+                                             sb.Blocked("trang co o nhap mat khau")]}
+        self.assertEqual(self.run_it(), 3)
+        self.assertEqual(self.health()["status"], "FAIL auth")
 
     def test_write_failure_keeps_failure_bookkeeping(self):
         self.capture_plan = {"vidA0000001": [sp.ParseError("missing metric ctr")]}
