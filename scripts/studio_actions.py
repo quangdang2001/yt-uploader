@@ -116,6 +116,92 @@ def _validate(req) -> str | None:
     return None
 
 
+# ----------------------------------------------------------------- tieu de
+# Chu kenh 2026-11-24: "build the same way to update the title also". Yeu cau doi tieu de co kind = "title" va
+# KHONG bao gio co to_variant (ban executor cu doc to_variant la doi thumbnail).
+
+KIND_TITLE = "title"
+TITLE_MAX = 100
+# videos.update(part=snippet) XOA moi thuoc tinh sua duoc ma body khong gui (tai lieu API, doc 2026-11-24):
+# gui lai dung cac truong nay tu snippet dang co, chi doi title. Khong bao gio gui part status.
+SNIPPET_KEEP = ("description", "tags", "categoryId", "defaultLanguage", "defaultAudioLanguage")
+SNIPPET_CHECK = ("description", "tags", "categoryId")
+
+
+def is_title(req) -> bool:
+    return isinstance(req, dict) and req.get("kind") == KIND_TITLE
+
+
+def _validate_title(req: dict) -> str | None:
+    if "to_variant" in req:
+        return "title request must not carry to_variant"
+    for field in ("video_id", "base"):
+        v = req.get(field)
+        if not isinstance(v, str) or not v.strip():
+            return f"missing {field}"
+        req[field] = v.strip()
+    if not VIDEO_ID_RE.match(req["video_id"]):
+        return f"invalid video_id {req['video_id']!r}"
+    if req.get("to_title_variant") not in VARIANTS:
+        return f"unknown to_title_variant {req.get('to_title_variant')!r}"
+    title = req.get("to_title")
+    if not isinstance(title, str) or not title.strip():
+        return "missing to_title"
+    title = req["to_title"] = " ".join(title.split())
+    if len(title) > TITLE_MAX:
+        return f"to_title longer than {TITLE_MAX} characters"
+    if "<" in title or ">" in title:
+        return "to_title contains < or >"
+    low = title.lower()
+    if "http" in low or "www." in low or ".com" in low:
+        return "to_title contains a link"
+    expect = req.get("expect_title")
+    if not isinstance(expect, str) or not expect.strip():
+        return "missing expect_title"
+    return None
+
+
+def get_snippet(youtube, video_id: str) -> dict | None:
+    res = youtube.videos().list(part="snippet", id=video_id).execute()
+    items = res.get("items") or []
+    return items[0].get("snippet") or {} if items else None
+
+
+def apply_title(youtube, req: dict) -> tuple[bool, str]:
+    """Dat tieu de moi. Tra ve (ok, detail). Raise khi API loi (ben goi phan biet quota).
+
+    Rao chan: tieu de dang live phai dung la expect_title (khac -> chu kenh da doi tay, tu choi). Da la to_title
+    roi (lan truoc ghi duoc ma mat ket noi) -> ok, khong ghi lai. Sau khi ghi doc lai va so description/tags/
+    categoryId voi truoc khi ghi."""
+    vid, title = req["video_id"], req["to_title"]
+    before = get_snippet(youtube, vid)
+    if before is None:
+        return False, "video not found"
+    cur = before.get("title") or ""
+    if cur == title:
+        return True, f"title already set to {title!r}"
+    if cur != req["expect_title"]:
+        return False, f"title changed since request (live: {cur!r})"
+    if not before.get("categoryId"):
+        return False, "live snippet has no categoryId, not updated"
+    snippet = {"title": title}
+    for k in SNIPPET_KEEP:
+        if before.get(k) not in (None, "", []):
+            snippet[k] = before[k]
+    youtube.videos().update(part="snippet", body={"id": vid, "snippet": snippet}).execute()
+    detail = f"set title to {title!r} (was {cur!r})"
+    try:
+        after = get_snippet(youtube, vid) or {}
+    except Exception as exc:                      # tieu de da doi roi: khong bao loi, chi ghi la chua kiem lai duoc
+        return True, detail + f"; WARNING read-back failed ({type(exc).__name__})"
+    lost = [k for k in SNIPPET_CHECK if (after.get(k) or None) != (before.get(k) or None)]
+    if (after.get("title") or "") != title:
+        lost.insert(0, "title")
+    if lost:
+        detail += "; WARNING differs after write: " + ", ".join(lost)
+    return True, detail
+
+
 def _target_name(req: dict) -> str:
     if req["to_variant"] == "main":
         return f"{req['base']}.jpg"
@@ -237,10 +323,15 @@ def run_actions(drive, youtube, chan_folder: str, done_folder: str,
             continue
 
         req = item["req"]
-        label = (f"Swap {req.get('video_id', '?')} -> {req.get('to_variant', '?')}"
-                 if isinstance(req, dict) else f"Swap {item['file']['name']}")
+        title_req = is_title(req)
+        kind = req.get("kind") if isinstance(req, dict) else None
+        if title_req:
+            label = f"Title {req.get('video_id', '?')} -> {req.get('to_title_variant', '?')}"
+        else:
+            label = (f"Swap {req.get('video_id', '?')} -> {req.get('to_variant', '?')}"
+                     if isinstance(req, dict) else f"Swap {item['file']['name']}")
 
-        if fid in state["applied"] and isinstance(req, dict) and not _validate(req):
+        if not title_req and fid in state["applied"] and isinstance(req, dict) and not _validate(req):
             # Thumbnail da dat o lan truoc, chi chuyen file chua duoc: chi thu chuyen lai,
             # khong dat lai (va giu luc dat that).
             if _finish(drive, folders, item, "ok", f"set thumbnail from {_target_name(req)}",
@@ -252,7 +343,12 @@ def run_actions(drive, youtube, chan_folder: str, done_folder: str,
                 failed += 1
             continue
 
-        err = item["parse_error"] or _validate(req)
+        if item["parse_error"]:
+            err = item["parse_error"]
+        elif kind not in (None, "thumbnail", KIND_TITLE):
+            err = f"unknown kind {kind!r}"
+        else:
+            err = _validate_title(req) if title_req else _validate(req)
         if not err:
             requested = _parse_utc(req.get("requested_utc"))
             if requested is None:
@@ -268,8 +364,29 @@ def run_actions(drive, youtube, chan_folder: str, done_folder: str,
             failed += 1
             continue
 
+        if title_req:
+            # Khong dung state["applied"]: apply_title tu nhan ra "da dat roi" o lan chay sau.
+            try:
+                done_ok, detail = apply_title(youtube, req)
+            except Exception as exc:
+                if yu.is_quota_error(exc):
+                    return quota_stop(left, label)
+                done_ok, detail = False, f"{type(exc).__name__}: {exc}"
+            moved = _finish(drive, folders, item, "ok" if done_ok else "error", detail)
+            if done_ok and moved:
+                ok += 1
+                yu.notify(f"{label}: ok" + (f" ({detail.split('; ', 1)[1]})" if "WARNING" in detail else ""))
+            else:
+                failed += 1
+                if moved:
+                    yu.notify(f"{label}: FAILED {detail}")
+                else:
+                    _notify_once(state, fid, f"{label}: {'set OK' if done_ok else 'FAILED ' + detail}, "
+                                             f"request file not moved")
+            continue
+
         name = _target_name(req)
-        src_folder = done_folder if req["to_variant"] == "main" else folders["thumb_alts"]
+        src_folder =done_folder if req["to_variant"] == "main" else folders["thumb_alts"]
         expect = req.get("expect_hash")
         if isinstance(expect, str) and expect:
             cur = thumb_hash(req["video_id"])
