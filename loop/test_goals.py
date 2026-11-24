@@ -86,6 +86,20 @@ def test_progress_pacing_and_need():
     assert p["rpm_7_ngay"] == round(70.0 / 210000 * 1000, 2)
 
 
+def test_studio_month_revenue_replaces_a_short_daily_sum():
+    # Studio fills the newest revenue days late: 8 of 10 December days have revenue (80), Studio's month says 140.
+    daily = _daily(1, [30000] * 10)
+    daily[-1]["doanh_thu"] = daily[-2]["doanh_thu"] = None
+    p = g.progress(GOALS, daily, {}, [], date(2026, 12, 11), month_revenue={"2026-12": 140.0, "2026-11": 999.0})
+    assert p["doanh_thu_thang"] == 140.0 and p["du_bao_doanh_thu_thang"] == 434.0   # 140 / 10 view days * 31
+    rows = {r["ma"]: r for r in p["chi_so"]}
+    assert rows["doanh_thu_thang"]["hien_tai"] == 140.0
+    # a smaller or missing Studio figure never lowers the daily sum
+    low = g.progress(GOALS, daily, {}, [], date(2026, 12, 11), month_revenue={"2026-12": 50.0})
+    assert low["doanh_thu_thang"] == 80.0
+    assert g.progress(GOALS, daily, {}, [], date(2026, 12, 11))["doanh_thu_thang"] == 80.0
+
+
 def test_need_per_day_is_ceiling():
     p = g.progress(GOALS, _daily(1, [30000] * 10), {}, [], date(2026, 12, 11))
     assert p["view_can_moi_ngay"] == 33334

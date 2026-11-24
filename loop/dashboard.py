@@ -327,13 +327,19 @@ def build_changes(improve_dir):
         if not m:
             continue
         def field(name):
-            mm = re.search(rf"^[-*]\s*\**{name}\**\s*[:：]\s*(.+)$", block, re.M | re.I)
-            return mm.group(1).strip() if mm else ""
+            # "- **File:** `x`" va "- **File 1:** `x`" (nhieu file); dau ** dong sau dau hai cham, gia tri co the
+            # xuong dong (dong thut vao, khong phai gach dau dong con). Bo dau markdown: bang chi hien chu.
+            mm = re.search(rf"(?:^[-*]\s*|·\s*)\**{name}(?:\s+\d+)?\**\s*[:：]\s*\**\s*(.+(?:\n {{2,}}(?![-*] ).+)*)",
+                           block, re.M | re.I)
+            if not mm:
+                return ""
+            val = re.sub(r"\s+", " ", mm.group(1)).split(" · ")[0]
+            return re.sub(r"[*`]", "", val).strip()[:200]
         rows.append({
             "ma": m.group(1),
             "ngay": m.group(1)[3:13],
             "file": field("file") or field("tệp"),
-            "noi_dung": (m.group(2).strip(" —-:") or field("tóm tắt"))[:200],
+            "noi_dung": (re.sub(r"[*`]", "", m.group(2)).strip(" ·—-:") or field("tóm tắt"))[:200],
             "trang_thai": field("trạng thái") or "đang chạy",
         })
     return rows
@@ -379,10 +385,20 @@ def _tn_arms(directive: dict, cfg: dict) -> list:
         for v, a in (m.get("gia_tri") or {}).items():
             using.setdefault(v, set()).add(a)
     rows = []
+    # Chi bien trai tim THAT SU thu (bat va `thu` khong tat): bien giu mac dinh co dinh khong phai "dang thu",
+    # va nhanh da go khoi cau hinh (chi-thi.json cu) khong hien nua.
+    try:
+        from loop import heart_config as hc
+    except ImportError:
+        import heart_config as hc
+    tested = set(hc.testable_vars(cfg)) if cfg.get("bien") else None
     full = directive.get("thong_ke_nhanh")
     if isinstance(full, dict):
         for var, by_arm in full.items():
             spec = cfg.get("bien", {}).get(var)
+            if tested is not None and var not in tested:
+                continue
+            by_arm = {a: s for a, s in by_arm.items() if not spec or a in spec.get("nhanh", ())}
             for arm, s in by_arm.items():
                 do = s.get("do") or (spec or {}).get("do", "views_7d")
                 rows.append({
@@ -394,7 +410,7 @@ def _tn_arms(directive: dict, cfg: dict) -> list:
         return rows
     for var, w in wins.items():
         spec = cfg.get("bien", {}).get(var)
-        if not spec:
+        if not spec or (tested is not None and var not in tested):
             continue
         for arm in spec["nhanh"]:
             is_win = arm == w.get("nhanh")

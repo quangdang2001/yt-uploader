@@ -8,6 +8,7 @@ from __future__ import annotations
 import glob
 import json
 import os
+import re
 
 # (khoa trong dashboard, tab, id the) cua cac chuoi 28 ngay theo tung ngay
 SERIES = (
@@ -91,6 +92,25 @@ def _card(doc, tab, cid):
 
 def _num(v):
     return v if isinstance(v, (int, float)) else None
+
+
+def month_revenue(doc) -> dict:
+    """{"YYYY-MM": US$} tu the "Doanh thu hang thang" (hub_revenue/months_revenue). Nhan chi co "Tháng 11", khong
+    co nam: nam suy tu ngay doc, thang lon hon thang doc la cua nam truoc. Khong doc duoc thi {}."""
+    c = _card(doc, "hub_revenue", "months_revenue")
+    day = (doc.get("captured_at_utc") or "")[:10]
+    if not c or len(day) < 7 or not day[:4].isdigit() or not day[5:7].isdigit():
+        return {}
+    y, m_now = int(day[:4]), int(day[5:7])
+    out = {}
+    for r in c.get("rows") or []:
+        mm = re.match(r"\s*(?:Tháng|Thg|Month)\s*(\d{1,2})\b", r.get("label") or "", re.I)
+        v = _num(r.get("value"))
+        if not mm or v is None or not 1 <= int(mm.group(1)) <= 12:
+            continue
+        mo = int(mm.group(1))
+        out.setdefault(f"{y if mo <= m_now else y - 1}-{mo:02d}", v)
+    return out
 
 
 def totals(doc) -> dict:

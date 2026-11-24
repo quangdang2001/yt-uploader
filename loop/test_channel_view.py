@@ -96,5 +96,17 @@ class ChannelViewTest(unittest.TestCase):
         self.assertIn("Chưa có dữ liệu", cv.markdown(v))
 
 
+class MonthRevenue(unittest.TestCase):
+    def test_month_rows_get_their_year_from_the_read_date(self):
+        doc = {"captured_at_utc": "2027-01-05T11:00:00Z", "tabs": {"hub_revenue": [card("months_revenue", rows=[
+            ("Tháng 1 (đang diễn ra)", "40,00 US$", 40.0), ("Tháng 12", "900 US$", 900.0),
+            ("Tháng 11", "437,37 US$", 437.37), ("Tổng", "x", None)])]}}
+        self.assertEqual(cv.month_revenue(doc), {"2027-01": 40.0, "2026-12": 900.0, "2026-11": 437.37})
+
+    def test_missing_card_or_date_gives_nothing(self):
+        self.assertEqual(cv.month_revenue({"captured_at_utc": "2026-11-23T11:00:00Z", "tabs": {}}), {})
+        self.assertEqual(cv.month_revenue({"tabs": {"hub_revenue": [card("months_revenue", rows=[("Tháng 11", "", 1.0)])]}}), {})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -169,8 +169,11 @@ def _pushed_reading(r: dict, snaps: dict | None, vn: dict):
     return None
 
 
-def progress(goals, daily, totals, ledger_rows, today: date, snaps: dict | None = None) -> dict:
-    """`snaps` = video_id -> snapshot since_published (loop.state.since_published), cho nguong video dang de xuat."""
+def progress(goals, daily, totals, ledger_rows, today: date, snaps: dict | None = None,
+             month_revenue: dict | None = None) -> dict:
+    """`snaps` = video_id -> snapshot since_published (loop.state.since_published), cho nguong video dang de xuat.
+    `month_revenue` = {"YYYY-MM": US$} tu bang doanh thu hang thang cua Studio (channel_view.month_revenue)."""
+    month_revenue_by = month_revenue or {}
     with_data = [r for r in daily or [] if _num(r.get("luot_xem")) is not None and r.get("ngay")]
     with_data.sort(key=lambda r: r["ngay"])
     if not with_data:
@@ -183,7 +186,8 @@ def progress(goals, daily, totals, ledger_rows, today: date, snaps: dict | None 
     y, m = int(ym[:4]), int(ym[5:7])
     dim = calendar.monthrange(y, m)[1]
     target = target_for_month(goals, ym)
-    mine = [r for r in with_data if r["ngay"].startswith(ym)]
+    month_revenue = month_revenue_by.get(ym)
+    mine =[r for r in with_data if r["ngay"].startswith(ym)]
     n_days = len(mine)
     view_m = round(sum(_num(r["luot_xem"]) for r in mine))
     forecast = round(view_m / n_days * dim)
@@ -203,6 +207,11 @@ def progress(goals, daily, totals, ledger_rows, today: date, snaps: dict | None 
     rev_days = [r for r in mine if _num(r.get("doanh_thu")) is not None]
     rev_m = round(sum(_num(r["doanh_thu"]) for r in rev_days), 2) if rev_days else None
     rev_fc = round(rev_m / len(rev_days) * dim, 2) if rev_days else None
+    # Studio dien doanh thu theo ngay cham 1-2 ngay (va la nhung ngay moi nhat, thuong lon nhat), nen tong cac
+    # ngay thieu so that. So thang cua chinh Studio (bang "Doanh thu hang thang") day du hon: lon hon thi dung no.
+    if _is_num(month_revenue) and (rev_m is None or month_revenue > rev_m):
+        rev_m = round(month_revenue, 2)
+        rev_fc = round(rev_m / n_days * dim, 2)
     rev7 = [r for r in with_data if _num(r.get("doanh_thu")) is not None][-PACE_DAYS:]
     v7 = sum(_num(r["luot_xem"]) for r in rev7)
     rpm = round(sum(_num(r["doanh_thu"]) for r in rev7) / v7 * 1000, 2) if rev7 and v7 > 0 else None

@@ -27,6 +27,7 @@ from loop import heart_config as hc
 from loop import goals as goals_mod
 from loop.channel_view import latest_doc
 from loop.channel_view import totals as channel_totals
+from loop.channel_view import month_revenue as channel_month_revenue
 from loop.state import since_published
 
 HERE = Path(__file__).resolve().parent
@@ -41,7 +42,8 @@ GOC_AGE_H = (7 * 24, 8 * 7 * 24)
 # spec 5.1, doan duoi bang cac bien
 CONSTRAINTS = (
     "Xoay loại súng: không 3 phim cùng loại liên tiếp.",
-    "Không lặp chủ đề trong 8 tuần.",
+    "Được trùng chủ đề (chủ kênh 2026-11-24): chủ đề, hãng, khẩu kênh đã làm vẫn chọn lại được, miễn có khả năng viral "
+    "(qua cổng lượt bấm và có bằng chứng thị trường: từ 3× trung vị, lặp từ 2 kênh).",
     "Khuôn tiêu đề tối đa 2 lần trong 8 tuần.",
     "Ba trần hình.",
     "Footage từ 50% trở lên và giữ nhịp cảnh.",
@@ -819,7 +821,8 @@ def goal_progress(tim: Path, cache: Path, ledger: list[dict], today: date, snaps
             return None, None
         doc, _ = latest_doc(str(cache))
         totals = channel_totals(doc) if doc else {}
-        prog = goals_mod.progress(goals, goals_mod.channel_daily(cache), totals, ledger, today, snaps=snaps)
+        prog = goals_mod.progress(goals, goals_mod.channel_daily(cache), totals, ledger, today, snaps=snaps,
+                                  month_revenue=channel_month_revenue(doc) if doc else None)
         json.dumps(prog)
         return prog, goals
     except Exception as e:  # noqa: BLE001

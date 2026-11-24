@@ -91,12 +91,11 @@ class ExperimentDataTest(unittest.TestCase):
         }
         out = db.build_experiment(self._tim(directive))
         rows = out["tn_nhanh"]
-        self.assertEqual({r["bien"] for r in rows}, {"Kiểu video", "Kiểu mở đầu", "Thumbnail sáng hay tối"})
+        # only the variables the heart really tests (heart_config `thu` not false); fixed defaults are left out
+        self.assertEqual({r["bien"] for r in rows}, {"Kiểu video"})
         win = [r for r in rows if r["bien"] == "Kiểu video" and r["nhanh"] == "lineup"][0]
         self.assertEqual((win["n"], win["trung_vi"], win["trang_thai"], win["dang_dung"]),
                          (4, "6,4% tỉ lệ bấm 24 giờ", "Đang thắng", True))
-        hook = [r for r in rows if r["bien"] == "Kiểu mở đầu" and r["nhanh"] == "su-viec-hang"][0]
-        self.assertEqual(hook["trung_vi"], "42,0% thời lượng xem")
         other = [r for r in rows if r["bien"] == "Kiểu video" and r["nhanh"] != "lineup"][0]
         self.assertEqual(other["trang_thai"], "Chưa đủ số")
         self.assertFalse(other["dang_dung"])
@@ -105,17 +104,50 @@ class ExperimentDataTest(unittest.TestCase):
 
     def test_tn_nhanh_reads_full_arm_stats(self):
         directive = {
-            "nhanh_thang": {"thumb_sang": {"nhanh": "sang", "n": 5, "trung_vi": math.log(3000), "du_so": True}},
-            "thong_ke_nhanh": {"thumb_sang": {
-                "sang": {"n": 5, "trung_vi": math.log(3000), "p25": 0, "p75": 0, "trang_thai": "thang", "do": "views_7d"},
-                "toi": {"n": 6, "trung_vi": math.log(10), "p25": 0, "p75": 0, "trang_thai": "loai", "do": "views_7d"},
-            }},
+            "nhanh_thang": {"dong": {"nhanh": "lineup", "n": 5, "trung_vi": 0.07, "du_so": True}},
+            "thong_ke_nhanh": {
+                "dong": {
+                    "lineup": {"n": 5, "trung_vi": 0.07, "p25": 0, "p75": 0, "trang_thai": "thang", "do": "ctr_24h"},
+                    "xep-hang": {"n": 6, "trung_vi": 0.031, "p25": 0, "p75": 0, "trang_thai": "loai", "do": "ctr_24h"},
+                    # an arm since removed from heart_config (an older chi-thi.json) is not shown
+                    "kieu-da-go": {"n": 2, "trung_vi": 0.05, "p25": 0, "p75": 0, "trang_thai": "chua-du", "do": "ctr_24h"},
+                },
+                # a variable the heart keeps on its default and never tests is not shown
+                "thumb_sang": {"sang": {"n": 5, "trung_vi": math.log(3000), "p25": 0, "p75": 0,
+                                        "trang_thai": "thang", "do": "views_7d"}},
+            },
             "muc": [],
         }
         rows = db.build_experiment(self._tim(directive))["tn_nhanh"]
-        toi = [r for r in rows if r["nhanh"] == "toi"][0]
-        self.assertEqual((toi["trang_thai"], toi["n"], toi["trung_vi"]), ("Đã loại", 6, "10 lượt xem"))
-        self.assertEqual(len(rows), 2)
+        loai = [r for r in rows if r["nhanh"] == "xep-hang"][0]
+        self.assertEqual((loai["trang_thai"], loai["n"], loai["trung_vi"]), ("Đã loại", 6, "3,1% tỉ lệ bấm 24 giờ"))
+        self.assertEqual({(r["bien"], r["nhanh"]) for r in rows}, {("Kiểu video", "lineup"), ("Kiểu video", "xep-hang")})
+
+    def test_changes_strip_markdown_and_read_numbered_files(self):
+        import tempfile
+        from pathlib import Path
+        d = Path(tempfile.mkdtemp())
+        (d / "thay-doi.md").write_text(
+            "\n".join([
+                "# Nhật ký", "",
+                "## TD-2026-11-21-1 · Luật hình: `ship_gate` thành cảnh báo", "",
+                "- **Ngày:** 2026-11-21 · **Quyền:** chủ kênh",
+                "- **File:** `a/ship_gate.py` (khối `ADVISORY`, vòng chấm",
+                "  trong `main`); `a/SKILL.md`.",
+                "- **Đoạn trước:** x",
+                "- **Ngày đánh giá:** sau 5 video · **Trạng thái:** đang chạy", "",
+                "## TD-2026-11-22-1 · Tạm ngưng kiểu xếp hạng", "",
+                "- **File 1:** `raw/ho-so-kenh.md`, bảng chọn chủ đề.",
+                "  - Đoạn trước: y",
+                "- **File 2:** `tim/chi-thi.md`", ""]), encoding="utf-8")
+        a, b = db.build_changes(str(d))
+        self.assertEqual(a["noi_dung"], "Luật hình: ship_gate thành cảnh báo")
+        self.assertEqual(a["file"], "a/ship_gate.py (khối ADVISORY, vòng chấm trong main); a/SKILL.md.")
+        self.assertEqual(a["trang_thai"], "đang chạy")
+        self.assertEqual(b["file"], "raw/ho-so-kenh.md, bảng chọn chủ đề.")
+        self.assertEqual(b["trang_thai"], "đang chạy")
+        for r in (a, b):
+            self.assertNotRegex(" ".join(r.values()), r"[*`]")
 
     def test_tn_so_latest_14_with_results(self):
         book_head = "id,thoi_diem,tac_vu,slug,bien_thu,nhanh_thu,du_doan_7d\n"
