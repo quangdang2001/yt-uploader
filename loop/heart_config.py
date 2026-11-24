@@ -22,7 +22,7 @@ _ROOT_PAIR = ("cua_so_ctr_gio", "cua_so_view_gio", "gio_nhan_vps")
 _ROOT_KEYS = set(_ROOT_NUM) | set(_ROOT_PAIR) | {"bien"}
 
 _VAR_REQUIRED = {"nhanh", "mac_dinh", "can_cu", "ai_quyet", "do", "bat"}
-_VAR_OPTIONAL = {"khong_kha_dung", "cot_ledger", "thu"}
+_VAR_OPTIONAL = {"khong_kha_dung", "cot_ledger", "thu", "chi_voi_dong"}
 _AI_QUYET = {"chu-de", "dung", "dang"}
 _DO = {"views_7d", "apv_pct", "ctr_24h"}   # ctr_24h: cham sau ~1,5 ngay thay vi 6-9 ngay (2026-11-24)
 
@@ -54,6 +54,15 @@ def _check_var(name: str, v) -> None:
         raise ConfigError(f"bien {name}: khong_kha_dung phai la true/false")
     if "thu" in v and not isinstance(v["thu"], bool):
         raise ConfigError(f"bien {name}: thu phai la true/false")
+    cvd = v.get("chi_voi_dong")
+    if cvd is not None:
+        if not isinstance(cvd, dict):
+            raise ConfigError(f"bien {name}: chi_voi_dong phai la object nhanh -> danh sach dong")
+        for arm, dongs in cvd.items():
+            if arm not in nhanh:
+                raise ConfigError(f"bien {name}: chi_voi_dong co nhanh la {arm!r}")
+            if not isinstance(dongs, list) or not dongs or not all(isinstance(d, str) and d for d in dongs):
+                raise ConfigError(f"bien {name}: chi_voi_dong[{arm!r}] phai la danh sach chuoi khong rong")
     cl = v.get("cot_ledger")
     if cl is not None and not isinstance(cl, str):
         raise ConfigError(f"bien {name}: cot_ledger phai la chuoi hoac null")
@@ -88,6 +97,14 @@ def load_config(path: Path) -> dict:
         raise ConfigError("thieu bien")
     for name, v in bien.items():
         _check_var(name, v)
+    dong_arms = set(bien["dong"]["nhanh"]) if "dong" in bien else None
+    for name, v in bien.items():
+        for arm, dongs in (v.get("chi_voi_dong") or {}).items():
+            if dong_arms is None:
+                raise ConfigError(f"bien {name}: chi_voi_dong can bien dong")
+            la = [d for d in dongs if d not in dong_arms]
+            if la:
+                raise ConfigError(f"bien {name}: chi_voi_dong[{arm!r}] co dong la {la}")
     return cfg
 
 
@@ -108,6 +125,17 @@ def default(cfg: dict, var: str) -> str:
 
 def enabled_vars(cfg: dict) -> list[str]:
     return [n for n, v in cfg["bien"].items() if v["bat"] and not v.get("khong_kha_dung", False)]
+
+
+def compatible(cfg: dict, var: str, arm: str, dong: str | None) -> bool:
+    """Nhanh `arm` cua bien `var` co di duoc voi kieu video `dong` khong. Bien co `chi_voi_dong` = {nhanh: [dong, ...]}:
+    nhanh co ten trong do chi hop le khi dong nam trong danh sach; nhanh khong co ten thi di voi moi dong.
+    Vi sao: khuon tieu de gia ("The $N ...") khong the dat cho phim lineup, va nguoc lai - truoc 2026-11-24 may da
+    giao price-plea cho mot phim lineup va price-copy cho mot phim lineup khac."""
+    if dong is None:
+        return True
+    only = (_var(cfg, var).get("chi_voi_dong") or {}).get(arm)
+    return only is None or dong in only
 
 
 def testable_vars(cfg: dict) -> list[str]:

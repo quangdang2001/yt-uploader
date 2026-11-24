@@ -33,7 +33,10 @@ def test_loads_shipped_config():
     assert hc.default(cfg, "dong") == "gia-chuyen-hang"
     assert hc.default(cfg, "khuon_tieu_de") == "price-sacrifice"
     assert "moi" in hc.arms(cfg, "khuon_tieu_de")
-    assert len(hc.arms(cfg, "khuon_tieu_de")) == 12
+    # 2026-11-24: 12 -> 8 khuon dang dung + moi; khuon gia chi di voi gia-chuyen-hang, lineup-nam chi di voi lineup
+    assert len(hc.arms(cfg, "khuon_tieu_de")) == 9
+    assert {"lineup-nam", "origin-today"} <= set(hc.arms(cfg, "khuon_tieu_de"))
+    assert cfg["bien"]["khuon_tieu_de"]["chi_voi_dong"]["lineup-nam"] == ["lineup"]
     assert cfg["bien"]["hook"]["do"] == "apv_pct"
     # 2026-11-24: hai bien dang thu cham bang CTR 24 gio (ket qua sau ~1,5 ngay), khong cho view 7 ngay
     assert cfg["bien"]["dong"]["do"] == "ctr_24h" and cfg["bien"]["khuon_tieu_de"]["do"] == "ctr_24h"

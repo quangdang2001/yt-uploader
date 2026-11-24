@@ -168,12 +168,14 @@ def _gap(var_stats: dict, valid: list[str]) -> float:
 
 
 def choose_test(slug: str, stats: dict, cfg: dict, last_tested: dict, today: date, cam: dict,
-                has_plan: bool = False, ti_le_thu: float | None = None) -> dict:
+                has_plan: bool = False, ti_le_thu: float | None = None, dong: str | None = None) -> dict:
     """Biet slug da co dong `ke-hoach` (has_plan) thi chi boc trong cac bien build quyet: bien `chu-de`
     (dong, ten_quen) da chot o buoc chu de, khong lam bien thu. `ti_le_thu` (neu co) thay cfg["ti_le_thu"]
     cho lan chay nay."""
     rng = random.Random(seed(slug, today))
-    valid = {v: [a for a in hc.arms(cfg, v) if a not in cam.get(v, ())] for v in hc.testable_vars(cfg)
+    # `dong` (kieu video cua slug nay): chi boc nhanh di duoc voi kieu do (heart_config.compatible)
+    valid = {v: [a for a in hc.arms(cfg, v) if a not in cam.get(v, ()) and hc.compatible(cfg, v, a, dong)]
+             for v in hc.testable_vars(cfg)
              if not (has_plan and cfg["bien"][v].get("ai_quyet") == "chu-de")}
     cands = [v for v, a in valid.items() if len(a) >= 2]
     if not cands:
@@ -296,7 +298,11 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
         # moi slug trong hang cho da qua buoc chu de (dong, ten_quen da chot, co hay chua co dong ke-hoach);
         # chi `_tu-chon` (hang cho trong) chua co chu de
         has_plan = slug != TU_CHON
-        t = choose_test(slug, stats, cfg, last, today, cam or {}, has_plan=has_plan, ti_le_thu=rate)
+        slug_dong = ((planned or {}).get(slug) or {}).get("dong") or win.get("dong")
+        if slug_dong not in hc.arms(cfg, "dong"):
+            slug_dong = win.get("dong")
+        t = choose_test(slug, stats, cfg, last, today, cam or {}, has_plan=has_plan, ti_le_thu=rate,
+                        dong=slug_dong if "dong" in on else None)
         gia_tri = {v: win[v] for v in on}
         for v, val in ((planned or {}).get(slug) or {}).items():
             if v not in gia_tri or v == t["bien"]:
@@ -312,6 +318,14 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
                 print(f"heart: kế hoạch {slug}: {v}={val} không phải nhánh (bỏ qua)")
         if t["kieu"] == "thu":
             gia_tri[t["bien"]] = t["nhanh"]
+        # nhanh thang / mac dinh khong di duoc voi kieu video cua slug nay -> nhanh hop le dau tien (khong bi cam)
+        for v in list(gia_tri):
+            if v != "dong" and not hc.compatible(cfg, v, gia_tri[v], gia_tri.get("dong")):
+                ok = [a for a in hc.arms(cfg, v)
+                      if hc.compatible(cfg, v, a, gia_tri.get("dong")) and a not in cam.get(v, ())] or \
+                     [a for a in hc.arms(cfg, v) if hc.compatible(cfg, v, a, gia_tri.get("dong"))]
+                if ok:
+                    gia_tri[v] = ok[0]
         track = t["bien"] if t["bien"] in gia_tri else ("dong" if "dong" in gia_tri else None)
         if t["bien"]:
             last[t["bien"]] = today

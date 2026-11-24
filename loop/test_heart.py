@@ -21,6 +21,7 @@ def cfg():
     c = hc.load_config(ROOT / "loop" / "heart_config.json")
     for v in c["bien"].values():
         v.pop("thu", None)
+        v.pop("chi_voi_dong", None)             # dong co goc: moi nhanh di voi moi kieu video
     for name in ("dong", "khuon_tieu_de"):     # file shipped cham hai bien nay bang ctr_24h; dong co thi kiem views_7d
         c["bien"][name]["do"] = "views_7d"
     c["bien"]["gio_dang"]["bat"] = False
@@ -55,11 +56,11 @@ def test_ctr_24h_metric_scores_without_waiting_for_day_seven(cfg):
     c = copy.deepcopy(cfg)
     c["bien"]["khuon_tieu_de"]["do"] = "ctr_24h"
     scored, merged = combine(ctr_rows("price-spec", [(0.081, 9000), (0.074, 4000), (0.069, 2500)]),
-                             ctr_rows("price-plea", [(0.031, 3000), (0.036, 2800), (0.029, 3500)]))
+                             ctr_rows("price-killed", [(0.031, 3000), (0.036, 2800), (0.029, 3500)]))
     st = h.arm_stats(scored, merged, c)["khuon_tieu_de"]
     assert st["price-spec"]["n"] == 3 and st["price-spec"]["trang_thai"] == "thang"     # views_7d con trong
     assert abs(st["price-spec"]["trung_vi"] - 0.074) < 1e-9
-    assert st["price-plea"]["n"] == 3 and st["price-plea"]["trung_vi"] < st["price-spec"]["p25"]
+    assert st["price-killed"]["n"] == 3 and st["price-killed"]["trung_vi"] < st["price-spec"]["p25"]
     assert h.winners(h.arm_stats(scored, merged, c), c)["khuon_tieu_de"] == "price-spec"
     assert "tỉ lệ bấm 24 giờ" in h._show(c, "khuon_tieu_de", 0.074) and "7,4%" in h._show(c, "khuon_tieu_de", 0.074)
 
@@ -79,6 +80,59 @@ def test_ctr_metric_gives_no_view_forecast_and_falls_back_to_the_plan(cfg):
     stats = h.arm_stats(scored, merged, c)
     assert h.predict(stats, c, "khuon_tieu_de", "price-spec", 3650, plan="4400-13300") == "4400-13300"
     assert h.predict(stats, c, "khuon_tieu_de", "price-spec", 3650) == "1800-5500"      # goc x 0,5-1,5, khong exp(ctr)
+
+
+@pytest.fixture
+def shipped_cfg():
+    return hc.load_config(ROOT / "loop" / "heart_config.json")
+
+
+def test_lineup_film_only_gets_the_lineup_title_shape(shipped_cfg):
+    c = shipped_cfg
+    assert hc.compatible(c, "khuon_tieu_de", "lineup-nam", "lineup")
+    assert not hc.compatible(c, "khuon_tieu_de", "price-copy", "lineup")
+    assert not hc.compatible(c, "khuon_tieu_de", "lineup-nam", "gia-chuyen-hang")
+    assert hc.compatible(c, "khuon_tieu_de", "moi", "lineup") and hc.compatible(c, "khuon_tieu_de", "moi", "xep-hang")
+    for i in range(200):
+        slug = f"l{i}"
+        e = h.build_directive([slug], empty_stats(c), c, TODAY, {}, "v", last_tested={},
+                              planned={slug: {"dong": "lineup"}})["muc"][0]
+        assert e["gia_tri"]["dong"] == "lineup"
+        assert e["gia_tri"]["khuon_tieu_de"] in ("lineup-nam", "moi"), e      # never a price shape
+        if e["kieu"] == "thu":
+            assert e["nhanh_thu"] in ("lineup-nam", "moi")
+
+
+def test_price_film_never_gets_the_lineup_shape_and_dead_shapes_are_gone(shipped_cfg):
+    c = shipped_cfg
+    arms = hc.arms(c, "khuon_tieu_de")
+    assert not {"price-plea", "price-resold", "every-x", "why-hard", "amazon-list"} & set(arms)
+    seen = set()
+    for i in range(400):
+        slug = f"g{i}"
+        e = h.build_directive([slug], empty_stats(c), c, TODAY, {}, "v", last_tested={},
+                              planned={slug: {"dong": "gia-chuyen-hang"}})["muc"][0]
+        assert e["gia_tri"]["khuon_tieu_de"] != "lineup-nam", e
+        seen.add(e["gia_tri"]["khuon_tieu_de"])
+    assert "origin-today" in seen and "price-maker-fact" in seen           # live shapes do get drawn
+
+
+def test_incompatible_winner_is_replaced_by_the_first_arm_that_fits(shipped_cfg):
+    c = shipped_cfg                      # default khuon is a price shape; the slug is a lineup
+    d = h.build_directive(["a"], empty_stats(c), c, TODAY, {}, "v",
+                          last_tested={v: TODAY for v in c["bien"]}, planned={"a": {"dong": "lineup"}})
+    assert d["muc"][0]["gia_tri"]["khuon_tieu_de"] in ("lineup-nam", "moi")
+
+
+def test_chi_voi_dong_is_validated(tmp_path):
+    raw = json.loads((ROOT / "loop" / "heart_config.json").read_text(encoding="utf-8"))
+    for bad in ({"khong-co": ["lineup"]}, {"lineup-nam": ["khong-phai-dong"]}, {"lineup-nam": []}, ["lineup"]):
+        cfg2 = copy.deepcopy(raw)
+        cfg2["bien"]["khuon_tieu_de"]["chi_voi_dong"] = bad
+        p = tmp_path / "c.json"
+        p.write_text(json.dumps(cfg2), encoding="utf-8")
+        with pytest.raises(hc.ConfigError):
+            hc.load_config(p)
 
 
 def test_fixed_gio_dang_rides_every_directive_until_refused(cfg, tmp_path):
@@ -436,7 +490,7 @@ def row(slug, khuon, days_ago, tac_vu="dung"):
 
 
 def test_forbidden_arms_from_book():
-    rows = [row("a", "price-plea", 10), row("a", "price-plea", 10, "ke-hoach"),   # cung video: 1 lan
+    rows = [row("a", "price-killed", 10), row("a", "price-killed", 10, "ke-hoach"),   # cung video: 1 lan
             row("b", "price-copy", 5), row("c", "price-copy", 40),               # 2 lan/56 ngay
             row("d", "price-spec", 5), row("e", "price-spec", 60),               # mot lan trong 56 ngay
             row("f", "moi", 3), row("g", "moi", 6)]                              # moi 2 lan/7 ngay
