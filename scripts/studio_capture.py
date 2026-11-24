@@ -504,7 +504,7 @@ def _run_locked(args, deps: Deps) -> int:
             log.warning("Van FAIL auth tu %s, profile chua doi: khong mo Studio. %s",
                         held.get("at_utc"), AUTH_MSG)
             if not args.dry_run:
-                copy_history(drive, folders["channel"], sf)
+                copy_history(drive, history_folder(drive, args, folders), sf)
                 if not args.no_actions:
                     _run_actions(deps, drive, youtube, folders, ch, state, persist)
             return 3
@@ -683,7 +683,7 @@ def _capture_phase(args, deps, state, persist, drive, youtube, folders, sf) -> i
     ss.write_health(drive, sf, status, detail[:2000], len(rows), len(failures))
     log.info("Health %s: %d doc, %d loi", status, len(rows), len(failures))
 
-    copy_history(drive, folders["channel"], sf)
+    copy_history(drive, history_folder(drive, args, folders), sf)
     if not args.no_actions:
         _run_actions(deps, drive, youtube, folders, ch, state, persist)
 
@@ -807,8 +807,29 @@ def _print_rows(rows: list[dict]) -> None:
         print(",".join(yu.csv_cell(r.get(c)) for c in sp.SNAPSHOT_COLS))
 
 
-def copy_history(drive, chan_folder: str, sf: dict) -> None:
+def history_folder(drive, args, folders: dict):
+    """Folder kenh co upload-history.csv. Uploader co the chay voi ten kenh khac (`history_channel` trong config):
+    tren VPS uploader chay `--channel ten-kenh` con luot doc Studio chay 'Bare Skull', nen file nam o folder khac
+    va chua bao gio toi studio/ (2026-11-24). Chi tim, khong tao folder; khong thay thi tra None."""
+    other = getattr(args, "history_channel", None)
+    if not other or other == args.channel:
+        return folders["channel"]
+    try:
+        root = yu.find_child(drive, args.drive_root, "root", folder_only=True)
+        chan = yu.find_child(drive, other, root["id"], folder_only=True) if root else None
+    except Exception as e:
+        log.warning("Khong tim duoc folder kenh %s cua uploader: %s", other, e)
+        return None
+    if not chan:
+        log.warning("Khong co folder kenh %s (history_channel) trong %s.", other, args.drive_root)
+        return None
+    return chan["id"]
+
+
+def copy_history(drive, chan_folder: str | None, sf: dict) -> None:
     """Chep upload-history.csv cua folder kenh vao studio/ (may chu kenh chi thay studio/)."""
+    if not chan_folder:
+        return
     try:
         found = yu.find_child(drive, yu.HISTORY_NAME, chan_folder)
         if not found:
@@ -881,6 +902,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     a.channel = a.channel or cfg.get("channel")
     if not a.channel:
         p.error("can --channel (hoac 'channel' trong config)")
+    # ten kenh ma UPLOADER chay (folder co upload-history.csv); mac dinh cung ten voi luot doc Studio
+    a.history_channel = str(cfg.get("history_channel") or a.channel)
     a.profile = a.profile or cfg.get("profile_dir") or DEFAULT_PROFILE
     try:
         a.daily_hour = int(cfg.get("daily_hour", DEFAULT_DAILY_HOUR))

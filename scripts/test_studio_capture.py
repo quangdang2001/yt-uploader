@@ -1472,3 +1472,46 @@ class RunTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HistoryFolderTest(unittest.TestCase):
+    """2026-11-24: the uploader on the VPS runs as --channel ten-kenh while the Studio read runs as 'Bare Skull', so
+    upload-history.csv sits in another channel folder and never reached studio/."""
+
+    def _args(self, **kw):
+        return mock.Mock(channel="Bare Skull", history_channel=kw.get("history_channel", "Bare Skull"),
+                         drive_root="YouTube-Upload")
+
+    def test_same_channel_uses_the_channel_folder(self):
+        with mock.patch.object(yu, "find_child") as fc:
+            self.assertEqual(sc.history_folder(object(), self._args(), {"channel": "CH"}), "CH")
+            fc.assert_not_called()
+
+    def test_other_channel_is_looked_up_and_never_created(self):
+        def fake(drive, name, parent, folder_only=False):
+            return {("YouTube-Upload", "root"): {"id": "ROOT"}, ("ten-kenh", "ROOT"): {"id": "UP"}}.get((name, parent))
+        with mock.patch.object(yu, "find_child", side_effect=fake), mock.patch.object(yu, "ensure_folder") as ens:
+            a = self._args(history_channel="ten-kenh")
+            self.assertEqual(sc.history_folder(object(), a, {"channel": "CH"}), "UP")
+            self.assertIsNone(sc.history_folder(object(), self._args(history_channel="khong-co"), {"channel": "CH"}))
+            ens.assert_not_called()
+
+    def test_copy_reads_the_history_folder_and_writes_studio(self):
+        with mock.patch.object(yu, "find_child", return_value={"id": "F"}) as fc, \
+                mock.patch.object(yu, "download_text", return_value="a,b\n"), \
+                mock.patch.object(ss, "put_text") as put:
+            sc.copy_history(object(), "UP", {"studio": "ST"})
+            self.assertEqual(fc.call_args[0][1:], (yu.HISTORY_NAME, "UP"))
+            self.assertEqual(put.call_args[0][1:], ("ST", yu.HISTORY_NAME, "a,b\n"))
+        with mock.patch.object(yu, "find_child") as fc, mock.patch.object(ss, "put_text") as put:
+            sc.copy_history(object(), None, {"studio": "ST"})         # folder not found: skip, never raise
+            fc.assert_not_called()
+            put.assert_not_called()
+
+    def test_history_channel_comes_from_config_and_defaults_to_channel(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "c.json"
+            p.write_text(json.dumps({"channel": "Bare Skull", "history_channel": "ten-kenh"}), encoding="utf-8")
+            self.assertEqual(sc.parse_args(["--config", str(p)]).history_channel, "ten-kenh")
+            p.write_text(json.dumps({"channel": "Bare Skull"}), encoding="utf-8")
+            self.assertEqual(sc.parse_args(["--config", str(p)]).history_channel, "Bare Skull")
