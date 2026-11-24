@@ -22,7 +22,7 @@ _ROOT_PAIR = ("cua_so_ctr_gio", "cua_so_view_gio", "gio_nhan_vps")
 _ROOT_KEYS = set(_ROOT_NUM) | set(_ROOT_PAIR) | {"bien"}
 
 _VAR_REQUIRED = {"nhanh", "mac_dinh", "can_cu", "ai_quyet", "do", "bat"}
-_VAR_OPTIONAL = {"khong_kha_dung", "cot_ledger", "thu", "chi_voi_dong"}
+_VAR_OPTIONAL = {"khong_kha_dung", "cot_ledger", "thu", "chi_voi_dong", "tam_ngung"}
 _AI_QUYET = {"chu-de", "dung", "dang"}
 _DO = {"views_7d", "apv_pct", "ctr_24h"}   # ctr_24h: cham sau ~1,5 ngay thay vi 6-9 ngay (2026-11-24)
 
@@ -63,6 +63,12 @@ def _check_var(name: str, v) -> None:
                 raise ConfigError(f"bien {name}: chi_voi_dong co nhanh la {arm!r}")
             if not isinstance(dongs, list) or not dongs or not all(isinstance(d, str) and d for d in dongs):
                 raise ConfigError(f"bien {name}: chi_voi_dong[{arm!r}] phai la danh sach chuoi khong rong")
+    tn = v.get("tam_ngung")
+    if tn is not None:
+        if not isinstance(tn, list) or not all(isinstance(a, str) and a in nhanh for a in tn):
+            raise ConfigError(f"bien {name}: tam_ngung phai la danh sach nhanh cua bien")
+        if v["mac_dinh"] in tn:
+            raise ConfigError(f"bien {name}: mac_dinh {v['mac_dinh']!r} dang tam ngung")
     cl = v.get("cot_ledger")
     if cl is not None and not isinstance(cl, str):
         raise ConfigError(f"bien {name}: cot_ledger phai la chuoi hoac null")
@@ -117,6 +123,13 @@ def _var(cfg: dict, var: str) -> dict:
 
 def arms(cfg: dict, var: str) -> list[str]:
     return list(_var(cfg, var)["nhanh"])
+
+
+def suspended(cfg: dict, var: str) -> list[str]:
+    """Nhanh tam ngung: van la nhanh hop le cua so (phim cu, phim ton kho van ghi duoc) nhung chi thi khong bao gio
+    boc de thu va khong xep vao co cau tuan. Vi sao: tac vu cai tien tam ngung kieu xep-hang 2026-11-22
+    (TD-2026-11-22-1) ma co cau tuan cua trai tim van xep moi tuan mot phim xep-hang."""
+    return list(_var(cfg, var).get("tam_ngung") or [])
 
 
 def default(cfg: dict, var: str) -> str:

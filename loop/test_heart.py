@@ -22,6 +22,7 @@ def cfg():
     for v in c["bien"].values():
         v.pop("thu", None)
         v.pop("chi_voi_dong", None)             # dong co goc: moi nhanh di voi moi kieu video
+        v.pop("tam_ngung", None)                # ... va khong nhanh nao tam ngung
     for name in ("dong", "khuon_tieu_de"):     # file shipped cham hai bien nay bang ctr_24h; dong co thi kiem views_7d
         c["bien"][name]["do"] = "views_7d"
     c["bien"]["gio_dang"]["bat"] = False
@@ -666,3 +667,66 @@ def test_forbidden_arms_dropped_and_changed_topics():
     assert h.forbidden_arms(changed, TODAY) == {}
     built = rows + [row("g", "moi", 1), bo]                                    # built films always count
     assert h.forbidden_arms(built, TODAY) == {"khuon_tieu_de": {"moi"}}
+
+
+# ---------- 2026-11-24: nhanh tam ngung, khuon ke hoach, dau thu bi sua ----------
+
+def test_suspended_kind_of_film_is_never_planned_or_drawn(shipped_cfg):
+    c = shipped_cfg                       # TD-2026-11-22-1: ranked films are suspended
+    assert hc.suspended(c, "dong") == ["xep-hang"]
+    d = h.build_directive(["a"], empty_stats(c), c, TODAY, {}, "v")
+    assert d["co_cau_tuan"]["dong"]["xep-hang"] == 0
+    assert sum(d["co_cau_tuan"]["dong"].values()) == 7
+    for i in range(400):                  # empty queue: `dong` itself can be the tested variable
+        t = h.choose_test(h.TU_CHON, empty_stats(c), c, {}, TODAY + timedelta(days=i), {})
+        assert t["nhanh"] != "xep-hang", t
+
+
+def test_suspended_arm_is_validated(tmp_path):
+    raw = json.loads((ROOT / "loop" / "heart_config.json").read_text(encoding="utf-8"))
+    for bad in (["khong-co"], ["gia-chuyen-hang"], "xep-hang"):      # unknown arm, the default, not a list
+        c = copy.deepcopy(raw)
+        c["bien"]["dong"]["tam_ngung"] = bad
+        p = tmp_path / "c.json"
+        p.write_text(json.dumps(c), encoding="utf-8")
+        with pytest.raises(hc.ConfigError):
+            hc.load_config(p)
+
+
+def test_planned_shape_is_kept_while_no_shape_has_a_measured_winner(shipped_cfg):
+    c = shipped_cfg                       # no data: the "winner" is only the config default
+    for i in range(200):
+        slug = f"p{i}"
+        e = h.build_directive([slug], empty_stats(c), c, TODAY, {}, "v", last_tested={},
+                              planned={slug: {"dong": "gia-chuyen-hang", "khuon_tieu_de": "price-killed"}})["muc"][0]
+        if e["kieu"] == "khai-thac":
+            assert e["gia_tri"]["khuon_tieu_de"] == "price-killed", e
+        else:
+            assert e["gia_tri"]["khuon_tieu_de"] == e["nhanh_thu"]
+
+
+def test_measured_winner_still_beats_the_plan_on_the_tested_variable(shipped_cfg):
+    c = shipped_cfg
+    stats = h.arm_stats(*combine(ctr_rows("price-spec", [(0.081, 9000), (0.074, 4000), (0.069, 2500)])), c)
+    assert stats["khuon_tieu_de"]["price-spec"]["trang_thai"] == "thang"
+    hit = 0
+    for i in range(200):
+        slug = f"w{i}"
+        e = h.build_directive([slug], stats, c, TODAY, {}, "v", last_tested={},
+                              planned={slug: {"dong": "gia-chuyen-hang", "khuon_tieu_de": "price-killed"}})["muc"][0]
+        if e["kieu"] == "khai-thac" and e["bien_thu"] == "khuon_tieu_de":
+            assert e["gia_tri"]["khuon_tieu_de"] == "price-spec", e
+            hit += 1
+    assert hit
+
+
+def test_corrected_test_row_does_not_stamp_the_variable_as_tested():
+    def r(slug, khuon, bien="", nhanh=""):
+        return {"tac_vu": "dung", "slug": slug, "khuon_tieu_de": khuon, "bien_thu": bien, "nhanh_thu": nhanh,
+                "thoi_diem": "2026-11-24T06:43:41"}
+    rows = [r("sw", "price-plea", "khuon_tieu_de", "price-plea"),      # wrong row ...
+            r("sw", "lineup-nam"),                                     # ... corrected: the film used lineup-nam
+            r("ok", "price-spec", "khuon_tieu_de", "price-spec")]
+    from loop import book as bk
+    assert h.last_tested(rows[:2], bk.merged(rows[:2])) == {}
+    assert h.last_tested(rows, bk.merged(rows)) == {"khuon_tieu_de": date(2026, 11, 24)}

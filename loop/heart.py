@@ -174,7 +174,8 @@ def choose_test(slug: str, stats: dict, cfg: dict, last_tested: dict, today: dat
     cho lan chay nay."""
     rng = random.Random(seed(slug, today))
     # `dong` (kieu video cua slug nay): chi boc nhanh di duoc voi kieu do (heart_config.compatible)
-    valid = {v: [a for a in hc.arms(cfg, v) if a not in cam.get(v, ()) and hc.compatible(cfg, v, a, dong)]
+    valid = {v: [a for a in hc.arms(cfg, v) if a not in cam.get(v, ()) and a not in hc.suspended(cfg, v)
+                 and hc.compatible(cfg, v, a, dong)]
              for v in hc.testable_vars(cfg)
              if not (has_plan and cfg["bien"][v].get("ai_quyet") == "chu-de")}
     cands = [v for v, a in valid.items() if len(a) >= 2]
@@ -264,8 +265,9 @@ def _week_mix(var: str, stats: dict, cfg: dict) -> dict:
     arms = hc.arms(cfg, var)
     win = winners(stats, cfg)[var]
     main = round(WEEK_VIDEOS * WEEK_SPLIT)
-    others = [a for a in arms if a != win and stats[var][a]["trang_thai"] != "loai"] or \
-             [a for a in arms if a != win]
+    live = [a for a in arms if a not in hc.suspended(cfg, var)]      # nhanh tam ngung: 0 phim trong tuan
+    others = [a for a in live if a != win and stats[var][a]["trang_thai"] != "loai"] or \
+             [a for a in live if a != win]
     mix = {a: 0 for a in arms}
     mix[win] = main if others else WEEK_VIDEOS
     for i in range(WEEK_VIDEOS - mix[win]):
@@ -305,7 +307,11 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
                         dong=slug_dong if "dong" in on else None)
         gia_tri = {v: win[v] for v in on}
         for v, val in ((planned or {}).get(slug) or {}).items():
-            if v not in gia_tri or v == t["bien"]:
+            # Bien dang theo doi: nhanh thu, hoac nhanh thang DA DO, moi de len ke hoach. Chua nhanh nao du so thi
+            # "nhanh thang" chi la mac dinh cua config - giu khuon cua ke hoach (2026-11-24: may giao price-sacrifice
+            # cho moi phim gia, hai phim dau deu phai lech vi khuon do noi sai ve khau sung).
+            measured = (stats.get(v) or {}).get(win.get(v), {}).get("trang_thai") == "thang"
+            if v not in gia_tri or (v == t["bien"] and (t["kieu"] == "thu" or measured)):
                 continue
             if cfg["bien"][v].get("ai_quyet") != "chu-de" and v != "khuon_tieu_de":
                 continue
@@ -585,6 +591,24 @@ def read_queue_plan(path: Path) -> dict:
     return out
 
 
+def last_tested(rows: list[dict], merged: dict) -> dict:
+    """bien -> ngay gan nhat mot phim that su dung nhanh thu cua no. Dong `dung` ghi nham bien_thu roi duoc sua
+    bang dong sau (gia tri gop cua slug khac nhanh_thu) khong tinh: so chi them dong, khong xoa duoc dau cu."""
+    last: dict = {}
+    for r in rows:
+        if r.get("tac_vu") != "dung" or not r.get("bien_thu"):
+            continue
+        var = r["bien_thu"]
+        if (merged.get(r.get("slug")) or {}).get(var) != r.get("nhanh_thu"):
+            continue
+        try:
+            d = date.fromisoformat(str(r.get("thoi_diem", ""))[:10])
+        except ValueError:
+            continue
+        last[var] = max(d, last.get(var, d))
+    return last
+
+
 def planned_values(rows: list[dict], cfg: dict) -> dict:
     """slug -> {bien: nhanh} tu cac dong `ke-hoach` cua so (dong sau de dong truoc, bo o rong)."""
     out: dict = {}
@@ -779,14 +803,7 @@ def main(argv=None) -> int:
         heart_score.write_results(tim / heart_score.RESULT_NAME, scored)
         graded = [r for r in scored if r["slug"] in dung]
         stats = arm_stats(graded, {s: m for s, m in merged.items() if s in dung}, cfg, rows=rows)
-        last = {}
-        for r in rows:
-            if r["tac_vu"] == "dung" and r["bien_thu"]:
-                try:
-                    d = date.fromisoformat(r["thoi_diem"][:10])
-                except ValueError:
-                    continue
-                last[r["bien_thu"]] = max(d, last.get(r["bien_thu"], d))
+        last = last_tested(rows, merged)
         signals = {"cum": hot_clusters(report_dir), "tu_khoa": search_terms(cache)}
         qpath = vault / "van-hanh" / "ke-hoach" / "hang-cho.md"
         queue = read_queue(qpath)
