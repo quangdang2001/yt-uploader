@@ -492,6 +492,12 @@ def log_history(drive, chan_folder, **kw) -> None:
 # -------------------------------------------------------------------- youtube
 
 
+def fallback_privacy(meta: dict) -> str:
+    """Che do khi gio hen bi YouTube tu choi hoac da qua. Chu kenh 2026-11-24: mac dinh unlisted thay private -
+    push_to_pending ghi "unlisted" cho phim da qua het cong, "private" cho phim con cong mo. Khong bao gio public."""
+    return "unlisted" if meta.get("privacyStatus") == "unlisted" else "private"
+
+
 def build_body(meta: dict) -> dict:
     title = str(meta.get("title", "")).strip()
     if not title:
@@ -659,21 +665,21 @@ def process_one(drive, youtube, folders: dict, item: dict, state: State,
             notify_subs = meta.get("notifySubscribers") is not False
             passed = publish_at_passed(body)
             if passed:
-                log.warning("  publishAt %s da qua (hoac con < 15 phut): dang o che do private.", passed)
+                log.warning("  publishAt %s da qua (hoac con < 15 phut): dang o che do %s.", passed, fallback_privacy(meta))
                 publish_note = f"publishAt passed: {passed}; "
                 body["status"].pop("publishAt")
-                body["status"]["privacyStatus"] = "private"
+                body["status"]["privacyStatus"] = fallback_privacy(meta)
             try:
                 video_id = upload_video(youtube, local_video, body, notify=notify_subs)
             except HttpError as exc:
                 if "publishAt" not in body["status"] or not is_publish_at_rejection(exc):
                     raise
                 reason = " ".join(_error_text(exc).split())[:120]
-                log.warning("  YouTube tu choi publishAt (%s): dang lai o che do private.",
-                            reason)
+                log.warning("  YouTube tu choi publishAt (%s): dang lai o che do %s.",
+                            reason, fallback_privacy(meta))
                 publish_note = f"publishAt rejected: {reason}; "
                 body["status"].pop("publishAt")
-                body["status"]["privacyStatus"] = "private"
+                body["status"]["privacyStatus"] = fallback_privacy(meta)
                 video_id = upload_video(youtube, local_video, body, notify=notify_subs)
             state.set(base, videoId=video_id, at=datetime.now(timezone.utc).isoformat(),
                       publishNote=publish_note)

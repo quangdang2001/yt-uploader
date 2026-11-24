@@ -219,6 +219,28 @@ class TestPublishAtFallback(Base):
         self.assertTrue(note.startswith("publishAt passed: " + past), note)
         self.assertNotIn("rejected", note)
 
+    # owner 2026-11-24: default is unlisted; a refused or passed publish time falls back to the JSON's own setting
+    def test_publish_at_rejection_falls_back_to_unlisted_when_the_json_says_so(self):
+        h = Harness(self.tmp, meta=meta_json(publishAt=self.PUBLISH, privacyStatus="unlisted"))
+        h.upload_script = [http_error(403, "invalidPublishAt: publishAt is bad"), "YTID999"]
+        self.assertTrue(self.run_one(h))
+        self.assertEqual(h.bodies[0]["status"]["privacyStatus"], "private")     # scheduling needs private
+        self.assertEqual(h.bodies[1]["status"]["privacyStatus"], "unlisted")
+        self.assertNotIn("publishAt", h.bodies[1]["status"])
+
+    def test_publish_at_already_past_falls_back_to_unlisted_when_the_json_says_so(self):
+        past = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        h = Harness(self.tmp, meta=meta_json(publishAt=past, privacyStatus="unlisted"))
+        self.assertTrue(self.run_one(h))
+        self.assertEqual(h.bodies[0]["status"]["privacyStatus"], "unlisted")
+        self.assertNotIn("publishAt", h.bodies[0]["status"])
+
+    def test_fallback_is_never_public(self):
+        past = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        h = Harness(self.tmp, meta=meta_json(publishAt=past, privacyStatus="public"))
+        self.assertTrue(self.run_one(h))
+        self.assertEqual(h.bodies[0]["status"]["privacyStatus"], "private")
+
     def test_publish_at_within_15_minutes_counts_as_passed(self):
         soon = (datetime.now(timezone.utc) + timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
         h = Harness(self.tmp, meta=meta_json(publishAt=soon))
