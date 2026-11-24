@@ -24,6 +24,7 @@ from pathlib import Path
 from statistics import median
 
 from loop import fetch as lf
+from loop import titles as tl
 from zoneinfo import ZoneInfo
 
 from loop.rules import (BASE_BAR, KEEP_CTR, MIN_IMPR, Verdict, age_bucket, decide, revert_target,
@@ -316,6 +317,8 @@ def analyse(cache: Path, cfg: dict, now: datetime, drive=None, folders: dict | N
     health = _health(cache)
     stale = _stale_line(health["at"], snaps_all, now)   # du lieu cu: van phan quyet, khong ghi yeu cau
     fmap_all = {(f.get("base"), f.get("variant")) for f in features}
+    title_alts = tl.load_alts(cache)
+    title_done, title_manual = tl.ok_actions(actions), tl.manual_videos(actions)
     rows, bars, requests = [], {}, []
     for vid in sorted(latest):
         snap, st = latest[vid], states[vid]
@@ -330,8 +333,38 @@ def analyse(cache: Path, cfg: dict, now: datetime, drive=None, folders: dict | N
             target = st.alts_left[0]
         elif verdict is Verdict.REVERT:
             target = revert_target(st)
+        # Duong tieu de (loop/titles.py). Sau mot lan doi tieu de thi khong ghi yeu cau thumbnail nua: so sau do la
+        # cua tieu de moi, khong phai cua thumbnail dang chay.
+        talts = title_alts.get(bases.get(vid))
+        tstate = None
+        if talts or vid in title_done:
+            tstate = tl.build_state(by_vid[vid], title_done.get(vid, []), talts, st.last_swap_utc,
+                                    manual=vid in title_manual)
+            if tstate.touched and target:
+                target = None
+                reason += " (title changed: thumbnail left as is)"
+        title_move = None
+        if tstate is not None and not target and st.variant != "manual":
+            title_move = tl.decide(snap, tstate, verdict, reason, now, st.last_swap_utc, st.pending_action,
+                                   bool(snap.get("test_running")))
         requested = False
-        if target and verdict is Verdict.SWAP and (bases.get(vid), target) not in fmap_all:
+        if title_move:
+            kind, to, why = title_move
+            word = "title swap" if kind == "swap" else "title revert"
+            rq = tl.request(vid, bases.get(vid, ""), talts, tstate, to, "%s to %s: %s" % (word, to, why), _fmt_utc(now))
+            if rq is None:
+                reason = "%s (%s to %s: no text for it)" % (reason, word, to)
+            elif alert:
+                reason = "would %s to %s: %s" % (word, to, why)
+            elif stale:
+                reason = "%s to %s: %s (stale data - no request)" % (word, to, why)
+            elif tl.failed_recently(actions, vid, to, now):
+                reason = "%s to %s failed within 24 h, not retried: %s" % (word, to, why)
+            else:
+                reason = rq["reason"]
+                requests.append(rq)
+                requested = live
+        elif target and verdict is Verdict.SWAP and (bases.get(vid), target) not in fmap_all:
             reason += " (no alt available)"     # khong co dong dac trung cho alt: khong ghi yeu cau
         elif target:
             word = "swap" if verdict is Verdict.SWAP else "revert"

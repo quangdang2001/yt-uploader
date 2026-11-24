@@ -30,6 +30,7 @@ import studio_store as ss  # noqa: E402
 
 DEFAULT_CACHE = REPO / "loop" / "cache"
 FEATURES_NAME = "thumbnail-features.csv"
+TITLE_ALTS_DIR = "title-alts"       # trung voi loop.titles.ALTS_DIR
 HISTORY_NAME = "upload-history.csv"
 
 INT_COLS = {"impressions", "views", "unique_viewers"}
@@ -126,6 +127,22 @@ def fetch(drive, chan_folder: str | None, cache: Path, studio_id: str | None = N
         if not dest.exists() or state.get(name) != f["modifiedTime"]:
             _write(dest, ss.read_text(drive, f["id"]))
             state[name] = f["modifiedTime"]
+    # Tieu de du phong (loop/titles.py): studio/title-alts/<base>.json do push_to_pending ghi. Chua co folder thi
+    # thoi; loi o day khong bao gio lam hong lan keo (duong tieu de chi la them).
+    try:
+        tdir = root_files.get(TITLE_ALTS_DIR)
+        for f in ss.list_files(drive, tdir["id"]) if tdir else []:
+            if not f["name"].endswith(".json"):
+                continue
+            key = f"{TITLE_ALTS_DIR}/{f['name']}"
+            dest = cache / key
+            if dest.exists() and state.get(key) == f["modifiedTime"] and _parses(dest):
+                continue
+            _write(dest, ss.read_text(drive, f["id"]))
+            state[key] = f["modifiedTime"]
+    except Exception as exc:  # noqa: BLE001
+        log.warning("khong keo duoc %s: %s", TITLE_ALTS_DIR, exc)
+
     health = cache / ss.HEALTH_NAME
     if ss.HEALTH_NAME in root_files and health.exists():
         try:
