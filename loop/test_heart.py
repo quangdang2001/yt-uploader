@@ -492,11 +492,11 @@ def row(slug, khuon, days_ago, tac_vu="dung"):
 
 def test_forbidden_arms_from_book():
     rows = [row("a", "price-killed", 10), row("a", "price-killed", 10, "ke-hoach"),   # cung video: 1 lan
-            row("b", "price-copy", 5), row("c", "price-copy", 40),               # 2 lan/56 ngay
-            row("d", "price-spec", 5), row("e", "price-spec", 60),               # mot lan trong 56 ngay
+            row("b", "price-copy", 5), row("c", "price-copy", 40),               # 2 lan/56 ngay: khong con cam
+            row("d", "price-spec", 5), row("e", "price-spec", 60),
             row("f", "moi", 3), row("g", "moi", 6)]                              # moi 2 lan/7 ngay
     cam = h.forbidden_arms(rows, TODAY)
-    assert cam == {"khuon_tieu_de": {"price-copy", "moi"}}
+    assert cam == {"khuon_tieu_de": {"moi"}}                                    # owner 2026-11-24 "Gỡ luôn"
     assert h.forbidden_arms([row("f", "moi", 3)], TODAY) == {}
     assert h.forbidden_arms([row("f", "moi", 3), row("g", "moi", 23)], TODAY) == {}   # 20 ngay cach nhau
 
@@ -597,11 +597,12 @@ def test_tu_chon_without_plan_can_test_dong(cfg):
     assert d["muc"][0]["slug"] == "_tu-chon" and d["muc"][0]["bien_thu"] == "dong"
 
 
-def test_forbidden_plan_still_falls_back_for_planned_khuon(cfg, capsys):
+def test_planned_khuon_held_by_others_is_kept_with_its_dong(cfg, capsys):
+    # owner 2026-11-24 "Gỡ luôn": a third film on one measured shape is no longer pushed off the plan
     rows = [row("a", "price-copy", 5, "ke-hoach"), row("b", "price-copy", 6), row("c", "price-copy", 7)]
     d = h.build_directive(["a"], empty_stats(cfg), cfg, TODAY, {}, "v", last_tested=_only_overdue(cfg, "thumb_sang"),
                           planned={"a": {"khuon_tieu_de": "price-copy", "dong": "lineup"}}, book_rows=rows)
-    assert d["muc"][0]["gia_tri"]["khuon_tieu_de"] == hc.default(cfg, "khuon_tieu_de")
+    assert d["muc"][0]["gia_tri"]["khuon_tieu_de"] == "price-copy"
     assert d["muc"][0]["gia_tri"]["dong"] == "lineup"
 
 
@@ -643,12 +644,13 @@ def test_plan_kept_when_held_by_self_and_one_other(cfg, capsys):
     assert "đã có 2 video khác" not in capsys.readouterr().out
 
 
-def test_plan_rejected_when_held_by_two_others(cfg, capsys):
+def test_plan_kept_even_when_held_by_two_others(cfg, capsys):
+    # owner 2026-11-24 "Gỡ luôn": no cap on a measured title shape
     rows = [row("a", "price-copy", 5, "ke-hoach"), row("b", "price-copy", 6), row("c", "price-copy", 7)]
     d = h.build_directive(["a"], empty_stats(cfg), cfg, TODAY, {}, "v", last_tested=_only_overdue(cfg, "thumb_sang"),
                           planned={"a": {"khuon_tieu_de": "price-copy"}}, book_rows=rows)
-    assert d["muc"][0]["gia_tri"]["khuon_tieu_de"] == hc.default(cfg, "khuon_tieu_de")
-    assert "heart: kế hoạch a: khuon_tieu_de=price-copy đã có 2 video khác dùng" in capsys.readouterr().out
+    assert d["muc"][0]["gia_tri"]["khuon_tieu_de"] == "price-copy"
+    assert "đã có 2 video khác" not in capsys.readouterr().out
 
 
 def test_queued_slug_without_book_row_never_tests_topic_variable(cfg):
@@ -752,13 +754,13 @@ def led(slug, ctr, impr, age_h=80, shape=""):
             "title_shape": shape}
 
 
-def test_shape_of_a_pushed_film_is_exempt_from_the_cap(shipped_cfg):
+def test_a_measured_shape_has_no_cap(shipped_cfg):
     c = shipped_cfg
     assert c["bien"]["khuon_tieu_de"]["phim_cu"]["ruger_2027"] == "lineup-nam"
     ledger = [led("ruger_2027", 0.086, 285382), led("bear_creek_2027", 0.034, 9159)]
     assert h.hot_shapes(ledger, {}, c, GOALS) == {"lineup-nam"}
     rows = [row("sw_2027", "lineup-nam", 0), row("taurus_2027", "lineup-nam", 0, "ke-hoach")]
-    assert h.forbidden_arms(rows, TODAY) == {"khuon_tieu_de": {"lineup-nam"}}
+    assert h.forbidden_arms(rows, TODAY) == {}                          # owner 2026-11-24 "Gỡ luôn"
     assert h.forbidden_arms(rows, TODAY, hot={"lineup-nam"}) == {}
 
 
@@ -777,18 +779,17 @@ def test_hot_shape_needs_ctr_impressions_and_a_recent_film(shipped_cfg):
     assert h.hot_shapes([led("ruger_2027", 0.09, 90000)], {}, c, None) == {"lineup-nam"}    # default thresholds
 
 
-def test_directive_names_the_exempt_shape(shipped_cfg):
+def test_third_lineup_goes_through_without_a_hit(shipped_cfg):
     c = shipped_cfg
     rows = [row("sw_2027", "lineup-nam", 0), row("taurus_2027", "lineup-nam", 0, "ke-hoach")]
     kw = dict(last_tested={}, planned={"l3": {"dong": "lineup", "khuon_tieu_de": "lineup-nam"}}, book_rows=rows)
     d = h.build_directive(["l3"], empty_stats(c), c, TODAY, {}, "v", cam=h.forbidden_arms(rows, TODAY), **kw)
-    assert d["muc"][0]["gia_tri"]["khuon_tieu_de"] != "lineup-nam"          # cap full, no hit: third lineup blocked
+    assert d["muc"][0]["gia_tri"]["khuon_tieu_de"] == "lineup-nam"          # no cap, no hit needed
     hot = {"lineup-nam"}
     d = h.build_directive(["l3"], empty_stats(c), c, TODAY, {}, "v", cam=h.forbidden_arms(rows, TODAY, hot=hot),
                           hot=hot, **kw)
     assert d["muc"][0]["gia_tri"]["khuon_tieu_de"] == "lineup-nam"
     assert d["khuon_mien_tran"] == ["lineup-nam"]
-    assert any("lineup-nam" in x for x in d["rang_buoc"])
 
 
 def test_directive_allows_a_repeated_topic_when_it_can_go_viral(shipped_cfg):
@@ -796,6 +797,13 @@ def test_directive_allows_a_repeated_topic_when_it_can_go_viral(shipped_cfg):
     d = h.build_directive([], empty_stats(shipped_cfg), shipped_cfg, TODAY, {}, "v")
     assert not any("Không lặp chủ đề" in x for x in d["rang_buoc"])
     assert any(x.startswith("Được trùng chủ đề") and "viral" in x for x in d["rang_buoc"])
+
+
+def test_directive_has_no_shape_cap_and_no_gun_rotation(shipped_cfg):
+    # owner 2026-11-24 "Gỡ luôn": title-shape cap and gun-class rotation removed
+    d = h.build_directive([], empty_stats(shipped_cfg), shipped_cfg, TODAY, {}, "v")
+    assert not any("Xoay loại súng: không" in x or "tối đa 2 lần trong 8 tuần" in x for x in d["rang_buoc"])
+    assert any(x.startswith("Không trần khuôn tiêu đề, không xoay loại súng") for x in d["rang_buoc"])
 
 
 def test_new_shape_with_a_full_cap_is_said_plainly_not_replaced_by_the_default(shipped_cfg, tmp_path):

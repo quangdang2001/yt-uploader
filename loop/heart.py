@@ -41,10 +41,11 @@ _RANGE = re.compile(r"^\d+-\d+$")
 GOC_AGE_H = (7 * 24, 8 * 7 * 24)
 # spec 5.1, doan duoi bang cac bien
 CONSTRAINTS = (
-    "Xoay loại súng: không 3 phim cùng loại liên tiếp.",
     "Được trùng chủ đề (chủ kênh 2026-11-24): chủ đề, hãng, khẩu kênh đã làm vẫn chọn lại được, miễn có khả năng viral "
     "(qua cổng lượt bấm và có bằng chứng thị trường: từ 3× trung vị, lặp từ 2 kênh).",
-    "Khuôn tiêu đề tối đa 2 lần trong 8 tuần.",
+    "Không trần khuôn tiêu đề, không xoay loại súng (chủ kênh 2026-11-24 \"Gỡ luôn\"): dùng lại khuôn đang thắng bao "
+    "nhiêu lần cũng được, làm liên tiếp cùng loại súng cũng được.",
+    "Khuôn mới (chưa đo trên kênh) tối đa 2 phim trong 7 ngày.",
     "Ba trần hình.",
     "Footage từ 50% trở lên và giữ nhịp cảnh.",
 )
@@ -367,11 +368,8 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
         "tin_hieu": {"cum": signals.get("cum"), "tu_khoa": signals.get("tu_khoa")},
         "rang_buoc": list(CONSTRAINTS),
     }
-    if hot:
+    if hot:   # khuon co phim dang duoc day: chi de doc (tran khuon da bo 2026-11-24)
         out["khuon_mien_tran"] = sorted(hot)
-        out["rang_buoc"].append(
-            "Miễn trần khuôn (chủ kênh 2026-11-24): khuôn có phim tối đa 7 ngày tuổi đang được đẩy (CTR từ 7%, từ 30.000 "
-            "lượt hiển thị) không tính trần 2 lần/8 tuần — hiện là: " + ", ".join(sorted(hot)) + ".")
     if goal:
         out["muc_tieu"] = goal
         out["che_do"] = che_do
@@ -670,9 +668,9 @@ def hot_shapes(ledger_rows: list[dict], merged: dict, cfg: dict, goals_cfg: dict
 
 
 def forbidden_arms(rows: list[dict], today: date, exclude: str = "", hot=()) -> dict:
-    """Khuon toi da 2 lan/56 ngay; `moi` toi da 2 lan/7 ngay (moi video tinh mot lan); `moi` chi theo gioi han 7 ngay.
-    Chu de da bo (dong `bo`) tra lai suat; chu de doi khuon trong hang cho chi tinh dong `ke-hoach` moi nhat.
-    `hot` (hot_shapes): khuon co phim dang duoc day, khong tinh tran."""
+    """Chi con `moi` toi da 2 lan/7 ngay (moi video tinh mot lan). Chu kenh 2026-11-24 "Gỡ luôn": bo tran khuon da do
+    2 lan/56 ngay - khuon dang thang dung lai bao nhieu lan cung duoc. `hot` giu cho tuong thich, khong con tac dung.
+    Chu de da bo (dong `bo`) tra lai suat; chu de doi khuon trong hang cho chi tinh dong `ke-hoach` moi nhat."""
     gone = bk.dropped(rows)
     last_plan = {}
     for i, r in enumerate(rows):
@@ -699,9 +697,7 @@ def forbidden_arms(rows: list[dict], today: date, exclude: str = "", hot=()) -> 
         except ValueError:
             continue
         seen.setdefault(arm, {})[r["slug"]] = min(age, seen.get(arm, {}).get(r["slug"], age))
-    hot = hot or ()
-    bad = {a for a, by in seen.items()
-           if a != "moi" and a not in hot and sum(1 for g in by.values() if g <= 56) >= 2}
+    bad = set()
     if sum(1 for g in seen.get("moi", {}).values() if g <= 7) >= 2:
         bad.add("moi")
     return {"khuon_tieu_de": bad} if bad else {}
