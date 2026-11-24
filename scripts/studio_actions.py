@@ -188,12 +188,16 @@ def apply_title(youtube, req: dict) -> tuple[bool, str]:
     for k in SNIPPET_KEEP:
         if before.get(k) not in (None, "", []):
             snippet[k] = before[k]
-    youtube.videos().update(part="snippet", body={"id": vid, "snippet": snippet}).execute()
+    resp = youtube.videos().update(part="snippet", body={"id": vid, "snippet": snippet}).execute()
     detail = f"set title to {title!r} (was {cur!r})"
-    try:
-        after = get_snippet(youtube, vid) or {}
-    except Exception as exc:                      # tieu de da doi roi: khong bao loi, chi ghi la chua kiem lai duoc
-        return True, detail + f"; WARNING read-back failed ({type(exc).__name__})"
+    # So voi chinh ban ghi ma lenh update tra ve. Doc lai bang videos.list ngay sau khi ghi tra ve ban CU trong vai
+    # giay (2026-11-24: 4/7 lan doi that bao "differs after write: title" trong khi tieu de da doi dung).
+    after = resp.get("snippet") if isinstance(resp, dict) else None
+    if not isinstance(after, dict):
+        try:
+            after = get_snippet(youtube, vid) or {}
+        except Exception as exc:                  # tieu de da doi roi: khong bao loi, chi ghi la chua kiem lai duoc
+            return True, detail + f"; WARNING read-back failed ({type(exc).__name__})"
     lost = [k for k in SNIPPET_CHECK if (after.get(k) or None) != (before.get(k) or None)]
     if (after.get("title") or "") != title:
         lost.insert(0, "title")

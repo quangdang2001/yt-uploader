@@ -179,6 +179,25 @@ class TitleActionsTest(unittest.TestCase):
         self.assertIn("tags", self.result_of(fid)["detail"])
         self.assertTrue(any("tags" in m for m in self.sent))
 
+    def test_stale_read_right_after_the_write_is_not_a_warning(self):
+        # 2026-11-24, live: videos.list straight after videos.update still returned the old title 4 times out of 7
+        real_update = self.yt.update
+
+        def update_then_serve_stale(part, body):
+            call = real_update(part, body)
+
+            def run():
+                old = dict(self.yt.snippets[body["id"]])
+                resp = call.execute()
+                self.yt.snippets[body["id"]] = old            # later reads see the pre-write snippet
+                return resp
+            return _Call(run)
+        self.yt.update = update_then_serve_stale
+        fid = self.request()
+        self.assertEqual(self.run_it(), (1, 0))
+        self.assertNotIn("WARNING", self.result_of(fid)["detail"])
+        self.assertEqual(self.sent, ["Title vid001 -> alt1: ok"])
+
     def test_update_error_moves_to_failed_and_quota_leaves_pending(self):
         self.yt.update_error = http_error(400, b'{"error": {"errors": [{"reason": "invalidTitle"}]}}')
         fid = self.request()
