@@ -791,6 +791,13 @@ def test_directive_names_the_exempt_shape(shipped_cfg):
     assert any("lineup-nam" in x for x in d["rang_buoc"])
 
 
+def test_directive_allows_a_repeated_topic_when_it_can_go_viral(shipped_cfg):
+    # owner 2026-11-24: "loại bỏ luật này luôn đi, cho đăng trùng miễn sao có thể viral"
+    d = h.build_directive([], empty_stats(shipped_cfg), shipped_cfg, TODAY, {}, "v")
+    assert not any("Không lặp chủ đề" in x for x in d["rang_buoc"])
+    assert any(x.startswith("Được trùng chủ đề") and "viral" in x for x in d["rang_buoc"])
+
+
 def test_new_shape_with_a_full_cap_is_said_plainly_not_replaced_by_the_default(shipped_cfg, tmp_path):
     c = shipped_cfg
     rows = [row("a", "moi", 1, "ke-hoach"), row("b", "moi", 2, "ke-hoach"), row("pc", "moi", 1, "ke-hoach")]
