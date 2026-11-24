@@ -740,3 +740,79 @@ def test_relabelled_film_frees_the_shape_slot_it_first_took():
     assert h.forbidden_arms(rows, TODAY) == {}                       # only x still holds a `moi` slot
     rows.append(row("y", "moi", 0, "ke-hoach"))
     assert h.forbidden_arms(rows, TODAY) == {"khuon_tieu_de": {"moi"}}
+
+
+# ---------- 2026-11-24 (chu kenh: "agree both"): khuon cua phim dang duoc day khong tinh tran; khuon moi het suat ----------
+
+GOALS = {"video_noi": {"ctr_toi_thieu": 0.07, "hien_thi_toi_thieu": 30000}}
+
+
+def led(slug, ctr, impr, age_h=80, shape=""):
+    return {"slug": slug, "ctr_latest": str(ctr), "impr_latest": str(impr), "age_h_latest": str(age_h),
+            "title_shape": shape}
+
+
+def test_shape_of_a_pushed_film_is_exempt_from_the_cap(shipped_cfg):
+    c = shipped_cfg
+    assert c["bien"]["khuon_tieu_de"]["phim_cu"]["ruger_2027"] == "lineup-nam"
+    ledger = [led("ruger_2027", 0.086, 285382), led("bear_creek_2027", 0.034, 9159)]
+    assert h.hot_shapes(ledger, {}, c, GOALS) == {"lineup-nam"}
+    rows = [row("sw_2027", "lineup-nam", 0), row("taurus_2027", "lineup-nam", 0, "ke-hoach")]
+    assert h.forbidden_arms(rows, TODAY) == {"khuon_tieu_de": {"lineup-nam"}}
+    assert h.forbidden_arms(rows, TODAY, hot={"lineup-nam"}) == {}
+
+
+def test_hot_shape_needs_ctr_impressions_and_a_recent_film(shipped_cfg):
+    c = shipped_cfg
+    assert h.hot_shapes([led("ruger_2027", 0.069, 285382)], {}, c, GOALS) == set()        # under 7%
+    assert h.hot_shapes([led("ruger_2027", 0.09, 29000)], {}, c, GOALS) == set()          # too few impressions
+    assert h.hot_shapes([led("ruger_2027", 0.09, 90000, age_h=57 * 24)], {}, c, GOALS) == set()   # outside 8 weeks
+    assert h.hot_shapes([led("x", 0.09, 90000)], {}, c, GOALS) == set()                    # shape unknown
+    assert h.hot_shapes([led("x", 0.09, 90000, shape="price-spec")], {}, c, GOALS) == {"price-spec"}
+    assert h.hot_shapes([led("x", 0.09, 90000)], {"x": {"khuon_tieu_de": "origin-today"}}, c, GOALS) == {"origin-today"}
+    assert h.hot_shapes([led("x", 0.09, 90000)], {"x": {"khuon_tieu_de": "moi"}}, c, GOALS) == set()   # `moi` never
+    assert h.hot_shapes([led("ruger_2027", 0.09, 90000)], {}, c, None) == {"lineup-nam"}    # default thresholds
+
+
+def test_directive_names_the_exempt_shape(shipped_cfg):
+    c = shipped_cfg
+    rows = [row("sw_2027", "lineup-nam", 0), row("taurus_2027", "lineup-nam", 0, "ke-hoach")]
+    kw = dict(last_tested={}, planned={"l3": {"dong": "lineup", "khuon_tieu_de": "lineup-nam"}}, book_rows=rows)
+    d = h.build_directive(["l3"], empty_stats(c), c, TODAY, {}, "v", cam=h.forbidden_arms(rows, TODAY), **kw)
+    assert d["muc"][0]["gia_tri"]["khuon_tieu_de"] != "lineup-nam"          # cap full, no hit: third lineup blocked
+    hot = {"lineup-nam"}
+    d = h.build_directive(["l3"], empty_stats(c), c, TODAY, {}, "v", cam=h.forbidden_arms(rows, TODAY, hot=hot),
+                          hot=hot, **kw)
+    assert d["muc"][0]["gia_tri"]["khuon_tieu_de"] == "lineup-nam"
+    assert d["khuon_mien_tran"] == ["lineup-nam"]
+    assert any("lineup-nam" in x for x in d["rang_buoc"])
+
+
+def test_new_shape_with_a_full_cap_is_said_plainly_not_replaced_by_the_default(shipped_cfg, tmp_path):
+    c = shipped_cfg
+    rows = [row("a", "moi", 1, "ke-hoach"), row("b", "moi", 2, "ke-hoach"), row("pc", "moi", 1, "ke-hoach")]
+    for i in range(60):
+        d = h.build_directive(["pc"], empty_stats(c), c, TODAY + timedelta(days=0), {}, f"v{i}",
+                              last_tested={"khuon_tieu_de": TODAY, "dong": TODAY},
+                              cam=h.forbidden_arms(rows, TODAY),
+                              planned={"pc": {"dong": "gia-chuyen-hang", "khuon_tieu_de": "moi"}}, book_rows=rows)
+        e = d["muc"][0]
+        if e["kieu"] == "khai-thac":
+            assert e["gia_tri"]["khuon_tieu_de"] == "moi", e                 # not price-sacrifice
+            assert e["khuon_het_suat"] is True
+            h.write_directive(tmp_path, d, c)
+            assert "hết suất" in (tmp_path / "chi-thi.md").read_text(encoding="utf-8")
+            return
+    pytest.fail("khong co lan khai-thac nao")
+
+
+def test_full_cap_still_yields_to_a_measured_winner(shipped_cfg):
+    c = shipped_cfg
+    stats = h.arm_stats(*combine(ctr_rows("price-spec", [(0.081, 9000), (0.074, 4000), (0.069, 2500)])), c)
+    rows = [row("a", "moi", 1, "ke-hoach"), row("b", "moi", 2, "ke-hoach")]
+    d = h.build_directive(["pc"], stats, c, TODAY, {}, "v", last_tested={"khuon_tieu_de": TODAY, "dong": TODAY},
+                          cam=h.forbidden_arms(rows, TODAY),
+                          planned={"pc": {"dong": "gia-chuyen-hang", "khuon_tieu_de": "moi"}}, book_rows=rows)
+    e = d["muc"][0]
+    if e["kieu"] == "khai-thac":
+        assert e["gia_tri"]["khuon_tieu_de"] == "price-spec" and not e.get("khuon_het_suat")

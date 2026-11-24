@@ -32,6 +32,7 @@
         "price-killed": ["gia-chuyen-hang"], "price-spec": ["gia-chuyen-hang"], "price-copy": ["gia-chuyen-hang"],
         "price-withheld": ["gia-chuyen-hang"], "origin-today": ["gia-chuyen-hang"], "lineup-nam": ["lineup"]
       },
+      "phim_cu": {"ruger_2027": "lineup-nam", "mossberg_lineup": "lineup-nam", "bear_creek_2027": "lineup-nam"},
       "mac_dinh": "price-sacrifice",
       "can_cu": "price-sacrifice có CTR đã đo cao nhất, 8,8% (1 phim). Cắt 2026-11-24 (chủ kênh: 'Yes, trim it') từ 12 xuống 8 khuôn đang dùng + moi: bỏ price-plea (chủ kênh cấm 11-08; 9 phim, 6,1%), price-resold (1 phim, 4,8%), every-x / why-hard / amazon-list (dạng cũ, 2,0-4,2%). Thêm lineup-nam ('[Hãng] Is Going CRAZY in 2027! (N Guns)': 8,6 / 6,0 / 3,4%) và origin-today ('[Hãng] Began With ... Today's Version Is $N'); trước đó 10/13 dòng sổ rơi vào 'moi' nên không khuôn nào có số. Khuôn giá chỉ đi với gia-chuyen-hang, lineup-nam chỉ đi với lineup (chi_voi_dong).",
       "ai_quyet": "dung",

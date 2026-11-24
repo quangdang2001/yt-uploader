@@ -22,7 +22,7 @@ _ROOT_PAIR = ("cua_so_ctr_gio", "cua_so_view_gio", "gio_nhan_vps")
 _ROOT_KEYS = set(_ROOT_NUM) | set(_ROOT_PAIR) | {"bien"}
 
 _VAR_REQUIRED = {"nhanh", "mac_dinh", "can_cu", "ai_quyet", "do", "bat"}
-_VAR_OPTIONAL = {"khong_kha_dung", "cot_ledger", "thu", "chi_voi_dong", "tam_ngung"}
+_VAR_OPTIONAL = {"khong_kha_dung", "cot_ledger", "thu", "chi_voi_dong", "tam_ngung", "phim_cu"}
 _AI_QUYET = {"chu-de", "dung", "dang"}
 _DO = {"views_7d", "apv_pct", "ctr_24h"}   # ctr_24h: cham sau ~1,5 ngay thay vi 6-9 ngay (2026-11-24)
 
@@ -69,6 +69,10 @@ def _check_var(name: str, v) -> None:
             raise ConfigError(f"bien {name}: tam_ngung phai la danh sach nhanh cua bien")
         if v["mac_dinh"] in tn:
             raise ConfigError(f"bien {name}: mac_dinh {v['mac_dinh']!r} dang tam ngung")
+    pc = v.get("phim_cu")
+    if pc is not None:      # slug -> nhanh cua phim dang truoc khi co so quyet dinh (chi dung cho mien tran khuon)
+        if not isinstance(pc, dict) or not all(isinstance(s, str) and s and a in nhanh for s, a in pc.items()):
+            raise ConfigError(f"bien {name}: phim_cu phai la object slug -> nhanh cua bien")
     cl = v.get("cot_ledger")
     if cl is not None and not isinstance(cl, str):
         raise ConfigError(f"bien {name}: cot_ledger phai la chuoi hoac null")

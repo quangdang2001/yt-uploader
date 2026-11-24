@@ -280,9 +280,9 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
                     plan: dict | None = None, planned: dict | None = None,
                     book_rows: list | None = None, goal: dict | None = None,
                     goals_cfg: dict | None = None, now: datetime | None = None,
-                    seen: dict | None = None) -> dict:
+                    seen: dict | None = None, hot: set | None = None) -> dict:
     """`goal` = tien do so voi goal (loop.goals.progress). Co goal: `che_do` va ti le thu theo goal,
-    them khoi `muc_tieu` va `nhan_ban`. Khong co: chi thi nhu cu."""
+    them khoi `muc_tieu` va `nhan_ban`. Khong co: chi thi nhu cu. `hot` = khuon mien tran (hot_shapes)."""
     che_do = mode_for(goal)
     rate = cfg.get("ti_le_thu_san", cfg["ti_le_thu"]) if che_do == "san-video-troi" else None
     win = winners(stats, cfg)
@@ -306,6 +306,7 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
         t = choose_test(slug, stats, cfg, last, today, cam or {}, has_plan=has_plan, ti_le_thu=rate,
                         dong=slug_dong if "dong" in on else None)
         gia_tri = {v: win[v] for v in on}
+        het_suat = False
         for v, val in ((planned or {}).get(slug) or {}).items():
             # Bien dang theo doi: nhanh thu, hoac nhanh thang DA DO, moi de len ke hoach. Chua nhanh nao du so thi
             # "nhanh thang" chi la mac dinh cua config - giu khuon cua ke hoach (2026-11-24: may giao price-sacrifice
@@ -315,8 +316,14 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
                 continue
             if cfg["bien"][v].get("ai_quyet") != "chu-de" and v != "khuon_tieu_de":
                 continue
-            others = forbidden_arms(book_rows or [], today, exclude=slug)
-            if val in hc.arms(cfg, v) and val in others.get(v, ()):
+            others = forbidden_arms(book_rows or [], today, exclude=slug, hot=hot)
+            if val == "moi" and v == "khuon_tieu_de" and val in others.get(v, ()) and not measured:
+                # Chu kenh 2026-11-24 ("agree both"): het suat khuon moi ma chua khuon nao du so thi noi thang
+                # "khuon moi, het suat" - khong gan mac dinh chua do (price-sacrifice) cho mot tieu de khac khuon.
+                gia_tri[v] = val
+                het_suat = True
+                print(f"heart: kế hoạch {slug}: khuôn mới, suất khuôn mới đã hết; giữ `moi` và ghi rõ trong chỉ thị")
+            elif val in hc.arms(cfg, v) and val in others.get(v, ()):
                 print(f"heart: kế hoạch {slug}: {v}={val} đã có 2 video khác dùng, giữ nhánh thắng")
             elif val in hc.arms(cfg, v):
                 gia_tri[v] = val
@@ -342,6 +349,8 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
                                   (plan or {}).get(slug, "")) if track else "",
             "con_han_toi": (today + timedelta(days=cfg["chi_thi_han_ngay"])).isoformat(),
         })
+        if het_suat and gia_tri.get("khuon_tieu_de") == "moi":
+            muc[-1]["khuon_het_suat"] = True
     out = {
         "ngay": today.isoformat(), "phien_ban": phien_ban,
         "nhanh_thang": {v: {"nhanh": win[v], "n": stats[v][win[v]]["n"],
@@ -356,6 +365,11 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
         "tin_hieu": {"cum": signals.get("cum"), "tu_khoa": signals.get("tu_khoa")},
         "rang_buoc": list(CONSTRAINTS),
     }
+    if hot:
+        out["khuon_mien_tran"] = sorted(hot)
+        out["rang_buoc"].append(
+            "Miễn trần khuôn (chủ kênh 2026-11-24): khuôn có phim đang được đẩy trong 8 tuần (CTR từ 7%, từ 30.000 "
+            "lượt hiển thị) không tính trần 2 lần/8 tuần — hiện là: " + ", ".join(sorted(hot)) + ".")
     if goal:
         out["muc_tieu"] = goal
         out["che_do"] = che_do
@@ -523,6 +537,9 @@ def render_md(d: dict, cfg: dict) -> str:
         else:
             L.append("- Dùng nhánh thắng của mọi biến.")
         L.append("- Giá trị: " + ", ".join(f"{k}=`{v}`" for k, v in e["gia_tri"].items()))
+        if e.get("khuon_het_suat"):
+            L.append("- Khuôn tiêu đề: khuôn mới (`moi`), nhưng suất khuôn mới (2 phim / 7 ngày) đã hết suất. Chưa khuôn "
+                     "nào đủ số để thay; giữ tiêu đề đã lên kế hoạch và ghi khuôn thật vào sổ khi dựng.")
         L.append(f"- Dự đoán lượt xem 7 ngày: {e['du_doan_7d'] or 'chưa đủ số để đoán'}")
         L.append(f"- Chỉ thị còn hạn tới {e['con_han_toi']}.")
         L.append("")
@@ -621,9 +638,36 @@ def planned_values(rows: list[dict], cfg: dict) -> dict:
     return out
 
 
-def forbidden_arms(rows: list[dict], today: date, exclude: str = "") -> dict:
+HOT_WINDOW_H = 56 * 24      # cung cua so 8 tuan voi tran khuon
+
+
+def hot_shapes(ledger_rows: list[dict], merged: dict, cfg: dict, goals_cfg: dict | None) -> set:
+    """Khuon tieu de mien tran: co it nhat mot phim trong 8 tuan dat nguong "video dang duoc day" cua muc-tieu.json
+    (video_noi: CTR >= 7% va >= 30.000 luot hien thi), tinh tren so moi nhat cua ledger.
+
+    Chu kenh 2026-11-24 ("agree both"): tran 2 lan/8 tuan chan dung khuon dang thang (lineup-nam sau sw_2027 va
+    taurus_2027), nguoc voi luat cuoi theo video dang duoc day. Khuon cua phim: so quyet dinh (slug) -> `phim_cu`
+    cua config (phim truoc khi co so) -> cot title_shape cua ledger. `moi` khong bao gio mien tran."""
+    vn = (goals_cfg or {}).get("video_noi") or {}
+    ctr_min, impr_min = vn.get("ctr_toi_thieu", 0.07), vn.get("hien_thi_toi_thieu", 30000)
+    var = cfg["bien"].get("khuon_tieu_de") or {}
+    old, arms = var.get("phim_cu") or {}, set(var.get("nhanh") or [])
+    out = set()
+    for r in ledger_rows or []:
+        age, ctr, impr = _num(r.get("age_h_latest")), _num(r.get("ctr_latest")), _num(r.get("impr_latest"))
+        if age is None or age > HOT_WINDOW_H or ctr is None or impr is None or ctr < ctr_min or impr < impr_min:
+            continue
+        slug = r.get("slug") or ""
+        shape = (merged.get(slug) or {}).get("khuon_tieu_de") or old.get(slug) or r.get("title_shape") or ""
+        if shape in arms and shape != "moi":
+            out.add(shape)
+    return out
+
+
+def forbidden_arms(rows: list[dict], today: date, exclude: str = "", hot=()) -> dict:
     """Khuon toi da 2 lan/56 ngay; `moi` toi da 2 lan/7 ngay (moi video tinh mot lan); `moi` chi theo gioi han 7 ngay.
-    Chu de da bo (dong `bo`) tra lai suat; chu de doi khuon trong hang cho chi tinh dong `ke-hoach` moi nhat."""
+    Chu de da bo (dong `bo`) tra lai suat; chu de doi khuon trong hang cho chi tinh dong `ke-hoach` moi nhat.
+    `hot` (hot_shapes): khuon co phim dang duoc day, khong tinh tran."""
     gone = bk.dropped(rows)
     last_plan = {}
     for i, r in enumerate(rows):
@@ -650,7 +694,9 @@ def forbidden_arms(rows: list[dict], today: date, exclude: str = "") -> dict:
         except ValueError:
             continue
         seen.setdefault(arm, {})[r["slug"]] = min(age, seen.get(arm, {}).get(r["slug"], age))
-    bad = {a for a, by in seen.items() if a != "moi" and sum(1 for g in by.values() if g <= 56) >= 2}
+    hot = hot or ()
+    bad = {a for a, by in seen.items()
+           if a != "moi" and a not in hot and sum(1 for g in by.values() if g <= 56) >= 2}
     if sum(1 for g in seen.get("moi", {}).values() if g <= 7) >= 2:
         bad.add("moi")
     return {"khuon_tieu_de": bad} if bad else {}
@@ -818,10 +864,11 @@ def main(argv=None) -> int:
         queue = read_queue(qpath)
         goal, goals = goal_progress(tim, cache, ledger, today, snaps)
         now = datetime.now()
+        hot = hot_shapes(ledger, merged, cfg, goals)
         directive = build_directive(queue, stats, cfg, today, signals,
                                     now.strftime("%Y-%m-%d-%H%M"), last_tested=last,
-                                    goc=goc_view(graded, ledger, today),
-                                    cam=forbidden_arms(rows, today), plan=read_queue_plan(qpath),
+                                    goc=goc_view(graded, ledger, today), hot=hot,
+                                    cam=forbidden_arms(rows, today, hot=hot), plan=read_queue_plan(qpath),
                                     planned=planned_values(rows, cfg), book_rows=rows,
                                     goal=goal, goals_cfg=goals, now=now, seen=load_seen(tim))
         write_directive(tim, directive, cfg)
