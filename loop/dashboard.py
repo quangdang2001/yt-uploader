@@ -356,6 +356,8 @@ def _tn_value(do: str, med) -> str:
         return ""
     if do == "apv_pct":
         return f"{med * 100:.1f}".replace(".", ",") + "% thời lượng xem"
+    if do == "ctr_24h":
+        return f"{med * 100:.1f}".replace(".", ",") + "% tỉ lệ bấm 24 giờ"
     return f"{round(math.exp(med)):,} lượt xem".replace(",", ".")
 
 

@@ -81,7 +81,7 @@ class ExperimentDataTest(unittest.TestCase):
     def test_tn_nhanh_labels_vietnamese(self):
         directive = {
             "nhanh_thang": {
-                "dong": {"nhanh": "lineup", "n": 4, "trung_vi": math.log(6350), "du_so": True},
+                "dong": {"nhanh": "lineup", "n": 4, "trung_vi": 0.064, "du_so": True},   # dong cham bang ctr_24h
                 "hook": {"nhanh": "su-viec-hang", "n": 3, "trung_vi": 0.42, "du_so": True},
                 "thumb_sang": {"nhanh": "sang", "n": 0, "trung_vi": None, "du_so": False},
             },
@@ -94,7 +94,7 @@ class ExperimentDataTest(unittest.TestCase):
         self.assertEqual({r["bien"] for r in rows}, {"Kiểu video", "Kiểu mở đầu", "Thumbnail sáng hay tối"})
         win = [r for r in rows if r["bien"] == "Kiểu video" and r["nhanh"] == "lineup"][0]
         self.assertEqual((win["n"], win["trung_vi"], win["trang_thai"], win["dang_dung"]),
-                         (4, "6.350 lượt xem", "Đang thắng", True))
+                         (4, "6,4% tỉ lệ bấm 24 giờ", "Đang thắng", True))
         hook = [r for r in rows if r["bien"] == "Kiểu mở đầu" and r["nhanh"] == "su-viec-hang"][0]
         self.assertEqual(hook["trung_vi"], "42,0% thời lượng xem")
         other = [r for r in rows if r["bien"] == "Kiểu video" and r["nhanh"] != "lineup"][0]

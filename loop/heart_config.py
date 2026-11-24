@@ -24,7 +24,7 @@ _ROOT_KEYS = set(_ROOT_NUM) | set(_ROOT_PAIR) | {"bien"}
 _VAR_REQUIRED = {"nhanh", "mac_dinh", "can_cu", "ai_quyet", "do", "bat"}
 _VAR_OPTIONAL = {"khong_kha_dung", "cot_ledger", "thu"}
 _AI_QUYET = {"chu-de", "dung", "dang"}
-_DO = {"views_7d", "apv_pct"}
+_DO = {"views_7d", "apv_pct", "ctr_24h"}   # ctr_24h: cham sau ~1,5 ngay thay vi 6-9 ngay (2026-11-24)
 
 
 def _check_var(name: str, v) -> None:

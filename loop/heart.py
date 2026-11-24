@@ -57,9 +57,19 @@ def _num(v):
         return None
 
 
+CTR_MIN_IMPR = 300   # ti le bam tren it luot hien thi hon the nay la nhieu, chua cham
+
+
 def _metric(cfg: dict, var: str, row: dict):
-    if cfg["bien"][var]["do"] == "apv_pct":
+    do = cfg["bien"][var]["do"]
+    if do == "apv_pct":
         return _num(row.get("apv_pct"))
+    if do == "ctr_24h":
+        # Ti le bam o anh chup 18-36 gio (heart_score.CTR_WINDOW). Chu kenh 2026-11-24: "Yes, do it" - cham bang CTR
+        # 24 gio thay vi view 7 ngay. Can cu: 29 video qua 7 ngay, CTR xep hang view gan nhu trung khop (Spearman
+        # 0,95); CTR >= 7% trung vi 48.750 view (8 video), < 5,7% trung vi 1.300 (13 video).
+        ctr, impr = _num(row.get("ctr_24h")), _num(row.get("impr_24h"))
+        return ctr if ctr is not None and impr is not None and impr >= CTR_MIN_IMPR else None
     v = _num(row.get("views_7d"))
     return None if v is None else math.log(max(v, 1.0))
 
@@ -465,6 +475,8 @@ def _goal_md(d: dict) -> list[str]:
 def _show(cfg: dict, var: str, med: float) -> str:
     if cfg["bien"][var]["do"] == "apv_pct":
         return f"{med * 100:.1f}".replace(".", ",") + "% thời lượng xem"
+    if cfg["bien"][var]["do"] == "ctr_24h":
+        return f"{med * 100:.1f}".replace(".", ",") + "% tỉ lệ bấm 24 giờ"
     return f"{round(math.exp(med)):,} lượt xem".replace(",", ".")
 
 

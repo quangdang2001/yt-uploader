@@ -35,6 +35,8 @@ def test_loads_shipped_config():
     assert "moi" in hc.arms(cfg, "khuon_tieu_de")
     assert len(hc.arms(cfg, "khuon_tieu_de")) == 12
     assert cfg["bien"]["hook"]["do"] == "apv_pct"
+    # 2026-11-24: hai bien dang thu cham bang CTR 24 gio (ket qua sau ~1,5 ngay), khong cho view 7 ngay
+    assert cfg["bien"]["dong"]["do"] == "ctr_24h" and cfg["bien"]["khuon_tieu_de"]["do"] == "ctr_24h"
     assert cfg["bien"]["gio_dang"]["khong_kha_dung"] is False
 
 

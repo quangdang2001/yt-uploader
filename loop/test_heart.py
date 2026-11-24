@@ -21,6 +21,8 @@ def cfg():
     c = hc.load_config(ROOT / "loop" / "heart_config.json")
     for v in c["bien"].values():
         v.pop("thu", None)
+    for name in ("dong", "khuon_tieu_de"):     # file shipped cham hai bien nay bang ctr_24h; dong co thi kiem views_7d
+        c["bien"][name]["do"] = "views_7d"
     c["bien"]["gio_dang"]["bat"] = False
     c["bien"]["gio_dang"]["khong_kha_dung"] = True
     return c
@@ -38,6 +40,45 @@ def test_untested_variable_stays_in_directive_but_is_never_drawn(cfg):
         assert m["gia_tri"]["thumb_sang"] == hc.default(fixed, "thumb_sang")
         assert m["gia_tri"]["hook"] == hc.default(fixed, "hook")
     assert all(draw(fixed, f"g{i}")["bien"] in ("", "dong", "khuon_tieu_de") for i in range(200))
+
+
+def ctr_rows(arm, pairs, var="khuon_tieu_de"):
+    scored, merged = [], {}
+    for i, (ctr, impr) in enumerate(pairs):
+        slug = f"{var}-{arm}-{i}"
+        scored.append({"slug": slug, "video_id": slug, "views_7d": "", "apv_pct": "", "ctr_24h": ctr, "impr_24h": impr})
+        merged[slug] = {var: arm}
+    return scored, merged
+
+
+def test_ctr_24h_metric_scores_without_waiting_for_day_seven(cfg):
+    c = copy.deepcopy(cfg)
+    c["bien"]["khuon_tieu_de"]["do"] = "ctr_24h"
+    scored, merged = combine(ctr_rows("price-spec", [(0.081, 9000), (0.074, 4000), (0.069, 2500)]),
+                             ctr_rows("price-plea", [(0.031, 3000), (0.036, 2800), (0.029, 3500)]))
+    st = h.arm_stats(scored, merged, c)["khuon_tieu_de"]
+    assert st["price-spec"]["n"] == 3 and st["price-spec"]["trang_thai"] == "thang"     # views_7d con trong
+    assert abs(st["price-spec"]["trung_vi"] - 0.074) < 1e-9
+    assert st["price-plea"]["n"] == 3 and st["price-plea"]["trung_vi"] < st["price-spec"]["p25"]
+    assert h.winners(h.arm_stats(scored, merged, c), c)["khuon_tieu_de"] == "price-spec"
+    assert "tỉ lệ bấm 24 giờ" in h._show(c, "khuon_tieu_de", 0.074) and "7,4%" in h._show(c, "khuon_tieu_de", 0.074)
+
+
+def test_ctr_24h_needs_enough_impressions_and_a_value(cfg):
+    c = copy.deepcopy(cfg)
+    c["bien"]["khuon_tieu_de"]["do"] = "ctr_24h"
+    scored, merged = ctr_rows("price-spec", [(0.20, h.CTR_MIN_IMPR - 1), ("", 5000), (0.07, ""), (0.06, h.CTR_MIN_IMPR)])
+    st = h.arm_stats(scored, merged, c)["khuon_tieu_de"]["price-spec"]
+    assert st["n"] == 1 and abs(st["trung_vi"] - 0.06) < 1e-9
+
+
+def test_ctr_metric_gives_no_view_forecast_and_falls_back_to_the_plan(cfg):
+    c = copy.deepcopy(cfg)
+    c["bien"]["khuon_tieu_de"]["do"] = "ctr_24h"
+    scored, merged = ctr_rows("price-spec", [(0.08, 9000), (0.07, 4000), (0.07, 2500)])
+    stats = h.arm_stats(scored, merged, c)
+    assert h.predict(stats, c, "khuon_tieu_de", "price-spec", 3650, plan="4400-13300") == "4400-13300"
+    assert h.predict(stats, c, "khuon_tieu_de", "price-spec", 3650) == "1800-5500"      # goc x 0,5-1,5, khong exp(ctr)
 
 
 def test_fixed_gio_dang_rides_every_directive_until_refused(cfg, tmp_path):

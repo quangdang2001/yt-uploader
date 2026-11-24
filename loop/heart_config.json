@@ -19,7 +19,7 @@
       "mac_dinh": "gia-chuyen-hang",
       "can_cu": "26/36 phim la phim giá, trung vị 6.350 lượt xem; 4/4 phim xếp hạng chỉ 222-1.500 lượt (ledger 2026-11-21).",
       "ai_quyet": "chu-de",
-      "do": "views_7d",
+      "do": "ctr_24h",
       "bat": true,
       "cot_ledger": "packaging"
     },
@@ -29,7 +29,7 @@
       "mac_dinh": "price-sacrifice",
       "can_cu": "price-sacrifice có CTR đã đo cao nhất, 8,8% (1 phim; ctr.json 2026-11-08); price-plea trung bình 5,98% trên 9 phim.",
       "ai_quyet": "dung",
-      "do": "views_7d",
+      "do": "ctr_24h",
       "bat": true,
       "cot_ledger": "title_shape"
     },
