@@ -730,3 +730,13 @@ def test_corrected_test_row_does_not_stamp_the_variable_as_tested():
     from loop import book as bk
     assert h.last_tested(rows[:2], bk.merged(rows[:2])) == {}
     assert h.last_tested(rows, bk.merged(rows)) == {"khuon_tieu_de": date(2026, 11, 24)}
+
+
+def test_relabelled_film_frees_the_shape_slot_it_first_took():
+    # ruger_mark_iv and sw_2027 were first written as `moi`, then relabelled; the book is append-only
+    rows = [row("mk", "moi", 2, "ke-hoach"), row("mk", "moi", 1), row("mk", "origin-today", 0),
+            row("sw", "moi", 0), row("sw", "lineup-nam", 0),
+            row("x", "moi", 1, "ke-hoach")]
+    assert h.forbidden_arms(rows, TODAY) == {}                       # only x still holds a `moi` slot
+    rows.append(row("y", "moi", 0, "ke-hoach"))
+    assert h.forbidden_arms(rows, TODAY) == {"khuon_tieu_de": {"moi"}}

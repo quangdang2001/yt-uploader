@@ -629,12 +629,21 @@ def forbidden_arms(rows: list[dict], today: date, exclude: str = "") -> dict:
     for i, r in enumerate(rows):
         if r.get("tac_vu") == "ke-hoach" and r.get("khuon_tieu_de") and r.get("slug"):
             last_plan[r["slug"]] = i
+    # Phim da dung: chi dong `dung` moi nhat co khuon moi tinh (so chi them dong; phim ghi `moi` roi gan lai nhan
+    # truoc day van giu mot suat `moi`), va dong `ke-hoach` cua no khong tinh nua.
+    last_built = {}
+    for i, r in enumerate(rows):
+        if r.get("tac_vu") == "dung" and r.get("khuon_tieu_de") and r.get("slug"):
+            last_built[r["slug"]] = i
     seen: dict = {}
     for i, r in enumerate(rows):
         arm = r.get("khuon_tieu_de") or ""
         if r.get("tac_vu") not in ("ke-hoach", "dung") or not arm or not r.get("slug") or r["slug"] == exclude:
             continue
-        if r["tac_vu"] == "ke-hoach" and (r["slug"] in gone or last_plan.get(r["slug"]) != i):
+        if r["tac_vu"] == "ke-hoach" and (r["slug"] in gone or last_plan.get(r["slug"]) != i
+                                          or r["slug"] in last_built):
+            continue
+        if r["tac_vu"] == "dung" and last_built.get(r["slug"]) != i:
             continue
         try:
             age = (today - date.fromisoformat(str(r.get("thoi_diem", ""))[:10])).days
