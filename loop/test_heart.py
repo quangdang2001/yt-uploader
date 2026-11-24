@@ -766,7 +766,10 @@ def test_hot_shape_needs_ctr_impressions_and_a_recent_film(shipped_cfg):
     c = shipped_cfg
     assert h.hot_shapes([led("ruger_2027", 0.069, 285382)], {}, c, GOALS) == set()        # under 7%
     assert h.hot_shapes([led("ruger_2027", 0.09, 29000)], {}, c, GOALS) == set()          # too few impressions
-    assert h.hot_shapes([led("ruger_2027", 0.09, 90000, age_h=57 * 24)], {}, c, GOALS) == set()   # outside 8 weeks
+    assert h.hot_shapes([led("ruger_2027", 0.09, 90000, age_h=7 * 24 + 1)], {}, c, GOALS) == set()   # older than 7 days
+    assert h.hot_shapes([led("ruger_2027", 0.09, 90000, age_h=7 * 24)], {}, c, GOALS) == {"lineup-nam"}
+    assert h.hot_shapes([led("ruger_2027", 0.09, 90000, age_h=60)], {}, c,
+                        {"video_noi": {"trong_ngay": 2}}) == set()                                   # window from goals
     assert h.hot_shapes([led("x", 0.09, 90000)], {}, c, GOALS) == set()                    # shape unknown
     assert h.hot_shapes([led("x", 0.09, 90000, shape="price-spec")], {}, c, GOALS) == {"price-spec"}
     assert h.hot_shapes([led("x", 0.09, 90000)], {"x": {"khuon_tieu_de": "origin-today"}}, c, GOALS) == {"origin-today"}

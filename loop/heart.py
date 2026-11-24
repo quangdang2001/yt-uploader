@@ -368,7 +368,7 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
     if hot:
         out["khuon_mien_tran"] = sorted(hot)
         out["rang_buoc"].append(
-            "Miễn trần khuôn (chủ kênh 2026-11-24): khuôn có phim đang được đẩy trong 8 tuần (CTR từ 7%, từ 30.000 "
+            "Miễn trần khuôn (chủ kênh 2026-11-24): khuôn có phim tối đa 7 ngày tuổi đang được đẩy (CTR từ 7%, từ 30.000 "
             "lượt hiển thị) không tính trần 2 lần/8 tuần — hiện là: " + ", ".join(sorted(hot)) + ".")
     if goal:
         out["muc_tieu"] = goal
@@ -638,24 +638,27 @@ def planned_values(rows: list[dict], cfg: dict) -> dict:
     return out
 
 
-HOT_WINDOW_H = 56 * 24      # cung cua so 8 tuan voi tran khuon
+HOT_DAYS = 7      # mac dinh; lay `video_noi.trong_ngay` cua muc-tieu.json neu co
 
 
 def hot_shapes(ledger_rows: list[dict], merged: dict, cfg: dict, goals_cfg: dict | None) -> set:
-    """Khuon tieu de mien tran: co it nhat mot phim trong 8 tuan dat nguong "video dang duoc day" cua muc-tieu.json
-    (video_noi: CTR >= 7% va >= 30.000 luot hien thi), tinh tren so moi nhat cua ledger.
+    """Khuon tieu de mien tran: co it nhat mot phim toi da 7 ngay tuoi dat nguong "video dang duoc day" cua
+    muc-tieu.json (video_noi: CTR >= 7%, >= 30.000 luot hien thi, trong_ngay 7), tinh tren so moi nhat cua ledger.
+    Chu kenh 2026-11-24 ("Yes"): 7 ngay, khong phai 8 tuan - phim trung tu thang truoc khong con duoc day, va tran
+    co la vi khuon mon di (khuon "Gun Counters Pray" dung lai con 487-8.523 view).
 
     Chu kenh 2026-11-24 ("agree both"): tran 2 lan/8 tuan chan dung khuon dang thang (lineup-nam sau sw_2027 va
     taurus_2027), nguoc voi luat cuoi theo video dang duoc day. Khuon cua phim: so quyet dinh (slug) -> `phim_cu`
     cua config (phim truoc khi co so) -> cot title_shape cua ledger. `moi` khong bao gio mien tran."""
     vn = (goals_cfg or {}).get("video_noi") or {}
     ctr_min, impr_min = vn.get("ctr_toi_thieu", 0.07), vn.get("hien_thi_toi_thieu", 30000)
+    window_h = vn.get("trong_ngay", HOT_DAYS) * 24
     var = cfg["bien"].get("khuon_tieu_de") or {}
     old, arms = var.get("phim_cu") or {}, set(var.get("nhanh") or [])
     out = set()
     for r in ledger_rows or []:
         age, ctr, impr = _num(r.get("age_h_latest")), _num(r.get("ctr_latest")), _num(r.get("impr_latest"))
-        if age is None or age > HOT_WINDOW_H or ctr is None or impr is None or ctr < ctr_min or impr < impr_min:
+        if age is None or age > window_h or ctr is None or impr is None or ctr < ctr_min or impr < impr_min:
             continue
         slug = r.get("slug") or ""
         shape = (merged.get(slug) or {}).get("khuon_tieu_de") or old.get(slug) or r.get("title_shape") or ""
