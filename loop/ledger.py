@@ -324,7 +324,7 @@ def compute_verdicts(cache: Path, cfg: dict, now: datetime) -> dict:
     snaps = lf.load_snapshots(cache)
     actions = lf.load_actions(cache)
     features = an.load_features(cache)
-    bases = lf.load_history(cache)
+    bases = lf.load_bases(cache, cfg.get("report_dir"))
     states = build_states(snaps, actions, features, now, bases=bases)
     by_vid = since_published(snaps)
     history = [s for rows in by_vid.values() for s in rows]

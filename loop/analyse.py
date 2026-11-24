@@ -301,7 +301,7 @@ def analyse(cache: Path, cfg: dict, now: datetime, drive=None, folders: dict | N
     snaps_all = lf.load_snapshots(cache)
     actions = lf.load_actions(cache)
     features = load_features(cache)
-    bases = lf.load_history(cache)
+    bases = lf.load_bases(cache, cfg.get("report_dir"))
     pending_file = cache / "actions" / "pending.txt"
     pending = pending_file.read_text(encoding="utf-8").split() if pending_file.exists() else []
     states = build_states(snaps_all, actions, features, now, bases=bases, pending=pending,

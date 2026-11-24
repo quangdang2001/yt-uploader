@@ -187,6 +187,30 @@ def load_history(cache: Path) -> dict:
     return out
 
 
+LEDGER_TRUSTED = ("history", "id-in-md", "title")   # how the ledger tied a video to a film; never "videos-json"/"none"
+
+
+def load_bases(cache: Path, report_dir=None) -> dict:
+    """video_id -> base for the swap loop: upload-history.csv first, then - for videos it does not know - the slug the
+    ledger already matched by an exact source (the video id written in the film's own notes, or an exact title).
+
+    Why (2026-11-24): the VPS has never delivered upload-history.csv to studio/, so `bases` was empty, every video's
+    alternates were unknown and every verdict read "no swap left". The ledger row is written by the previous loop run;
+    a video with no trusted row simply stays unmapped, exactly as before."""
+    out = dict(load_history(cache))
+    if not report_dir:
+        return out
+    try:
+        with (Path(report_dir) / "ledger.csv").open(encoding="utf-8", newline="") as fh:
+            for r in csv.DictReader(fh):
+                vid, slug = (r.get("video_id") or "").strip(), (r.get("slug") or "").strip()
+                if vid and slug and vid not in out and (r.get("match_source") or "") in LEDGER_TRUSTED:
+                    out[vid] = slug
+    except OSError:
+        pass
+    return out
+
+
 def load_actions(cache: Path) -> list:
     out = []
     for state in ("done", "failed"):

@@ -154,6 +154,23 @@ class FetchTest(unittest.TestCase):
         lf.fetch(self.drive, "CHAN", self.cache)
         self.assertEqual(lf.load_history(self.cache), {})
 
+    def test_bases_fall_back_to_trusted_ledger_rows_only(self):
+        self.cache.mkdir(parents=True, exist_ok=True)
+        (self.cache / "upload-history.csv").write_text("ten_goc,video_id\nfrom_history,v1\n", encoding="utf-8")
+        rep = self.cache / "report"
+        rep.mkdir()
+        (rep / "ledger.csv").write_text(
+            "video_id,slug,match_source\n"
+            "v1,ledger_says_other,id-in-md\n"       # the history wins
+            "v2,by_id,id-in-md\n"
+            "v3,by_title,title\n"
+            "v4,old_guess,videos-json\n"            # not an exact source: stays unmapped
+            "v5,,none\n"
+            ",no_video,title\n", encoding="utf-8")
+        self.assertEqual(lf.load_bases(self.cache, rep), {"v1": "from_history", "v2": "by_id", "v3": "by_title"})
+        self.assertEqual(lf.load_bases(self.cache), {"v1": "from_history"})                  # no report dir
+        self.assertEqual(lf.load_bases(self.cache, self.cache / "nowhere"), {"v1": "from_history"})
+
     def test_by_id_reads_history_from_studio_and_never_touches_channel(self):
         drive = FakeDrive()
         studio = drive._add("studio", ["SHARED"], "application/vnd.google-apps.folder")
