@@ -1515,3 +1515,47 @@ class HistoryFolderTest(unittest.TestCase):
             self.assertEqual(sc.parse_args(["--config", str(p)]).history_channel, "ten-kenh")
             p.write_text(json.dumps({"channel": "Bare Skull"}), encoding="utf-8")
             self.assertEqual(sc.parse_args(["--config", str(p)]).history_channel, "Bare Skull")
+
+
+class UploaderChannelTest(unittest.TestCase):
+    """2026-11-24: reverts read the original thumbnail from the UPLOADER's done/ and the busy check reads the
+    UPLOADER's lock; both sit under history_channel ('ten-kenh' on the VPS), not under the Studio read's channel."""
+
+    def _args(self, hist):
+        return mock.Mock(channel="Bare Skull", history_channel=hist, drive_root="YouTube-Upload")
+
+    def test_uploader_channel_name(self):
+        self.assertEqual(sc.uploader_channel(self._args("ten-kenh")), "ten-kenh")
+        self.assertEqual(sc.uploader_channel(self._args("Bare Skull")), "Bare Skull")
+        self.assertEqual(sc.uploader_channel(mock.Mock(spec=["channel"], channel="Bare Skull")), "Bare Skull")
+
+    def test_done_folder_is_the_uploaders(self):
+        folders = {"channel": "CH", "done": "CH_DONE"}
+        self.assertEqual(sc.uploader_done_folder(object(), self._args("Bare Skull"), folders), "CH_DONE")
+
+        def fake(drive, name, parent, folder_only=False):
+            return {("YouTube-Upload", "root"): {"id": "ROOT"}, ("ten-kenh", "ROOT"): {"id": "UP"},
+                    ("done", "UP"): {"id": "UP_DONE"}}.get((name, parent))
+        with mock.patch.object(yu, "find_child", side_effect=fake), mock.patch.object(yu, "ensure_folder") as ens:
+            self.assertEqual(sc.uploader_done_folder(object(), self._args("ten-kenh"), folders), "UP_DONE")
+            # uploader folder missing: fall back to the old folder, never create one
+            self.assertEqual(sc.uploader_done_folder(object(), self._args("khong-co"), folders), "CH_DONE")
+            ens.assert_not_called()
+
+    def test_run_actions_gets_the_uploaders_done_folder(self):
+        with tempfile.TemporaryDirectory() as td:
+            seen = {}
+
+            def run_actions(drive, youtube, chan, done, tmp, state=None):
+                seen.update(chan=chan, done=done)
+                return 0, 0
+            deps = mock.Mock(home=Path(td), run_actions=run_actions)
+            sc._run_actions(deps, object(), object(), {"channel": "CH", "done": "CH_DONE"}, "Bare Skull", {},
+                            lambda: None, done_folder="UP_DONE")
+            self.assertEqual(seen, {"chan": "CH", "done": "UP_DONE"})
+
+    def test_busy_check_reads_the_uploaders_lock(self):
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / ".uploader-ten-kenh.lock").write_text("1")
+            self.assertTrue(sc.uploader_busy(td, sc.uploader_channel(self._args("ten-kenh"))))
+            self.assertFalse(sc.uploader_busy(td, "Bare Skull"))

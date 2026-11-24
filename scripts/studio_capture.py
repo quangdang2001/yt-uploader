@@ -466,9 +466,9 @@ def _run_locked(args, deps: Deps) -> int:
         wait = deps.uniform(0, JITTER_S)
         log.info("Jitter %.0f s", wait)
         deps.sleep(wait)
-    if uploader_busy(deps.home, ch):
+    if uploader_busy(deps.home, uploader_channel(args)):
         log.info("Uploader dang chay (%s), bo qua lan doc nay; uu tien upload.",
-                 uploader_lock_path(deps.home, ch).name)
+                 uploader_lock_path(deps.home, uploader_channel(args)).name)
         return 0
 
     manual = bool(args.only or args.dry_run)
@@ -506,7 +506,8 @@ def _run_locked(args, deps: Deps) -> int:
             if not args.dry_run:
                 copy_history(drive, history_folder(drive, args, folders), sf)
                 if not args.no_actions:
-                    _run_actions(deps, drive, youtube, folders, ch, state, persist)
+                    _run_actions(deps, drive, youtube, folders, ch, state, persist,
+                                 done_folder=uploader_done_folder(drive, args, folders))
             return 3
         return _capture_phase(args, deps, state, persist, drive, youtube, folders, sf)
     except Exception as e:
@@ -685,7 +686,8 @@ def _capture_phase(args, deps, state, persist, drive, youtube, folders, sf) -> i
 
     copy_history(drive, history_folder(drive, args, folders), sf)
     if not args.no_actions:
-        _run_actions(deps, drive, youtube, folders, ch, state, persist)
+        _run_actions(deps, drive, youtube, folders, ch, state, persist,
+                     done_folder=uploader_done_folder(drive, args, folders))
 
     return 4 if browser_error or any(nav for _, nav in failures.values()) else 0
 
@@ -744,7 +746,7 @@ def _capture_loop(args, deps, page, due, by_id, rows, failures, attempts, notes,
             log.warning("Qua %d phut tu luc khoi dong, de %d video cho lan sau.",
                         cap_s // 60, left)
             break
-        if uploader_busy(deps.home, args.channel, min_age=UPLOADER_MIDRUN_MIN_AGE_S):
+        if uploader_busy(deps.home, uploader_channel(args), min_age=UPLOADER_MIDRUN_MIN_AGE_S):
             notes.append(f"uploader running: {left} video(s) left for next run")
             log.info("Uploader dang chay, dung doc; %d video de lan sau.", left)
             break
@@ -840,7 +842,26 @@ def copy_history(drive, chan_folder: str | None, sf: dict) -> None:
         log.warning("Khong chep duoc %s vao studio/: %s", yu.HISTORY_NAME, e)
 
 
-def _run_actions(deps, drive, youtube, folders, ch, state: dict, persist) -> None:
+def uploader_channel(args) -> str:
+    """Ten kenh ma UPLOADER chay: khoa .uploader-<ten>.lock va folder pending/done/ cua no nam duoi ten nay."""
+    return getattr(args, "history_channel", None) or args.channel
+
+
+def uploader_done_folder(drive, args, folders: dict) -> str:
+    """done/ cua uploader: noi co thumbnail goc <base>.jpg ma lenh hoan lai (to_variant=main) can. Khong tim thay
+    thi dung done/ cua kenh nhu cu (lenh hoan lai se bao 'not found', khong hong luot doc). Khong tao folder."""
+    chan = history_folder(drive, args, folders)
+    if not chan or chan == folders["channel"]:
+        return folders["done"]
+    try:
+        done = yu.find_child(drive, "done", chan, folder_only=True)
+    except Exception as e:
+        log.warning("Khong tim duoc done/ cua uploader: %s", e)
+        return folders["done"]
+    return done["id"] if done else folders["done"]
+
+
+def _run_actions(deps, drive, youtube, folders, ch, state: dict, persist, done_folder: str | None = None) -> None:
     """Bo thuc thi doi thumbnail. Loi o day khong doi exit code cua lan doc.
 
     Trang thai cua bo thuc thi (file da bao, ngay het quota, yeu cau da dat nhung chua chuyen)
@@ -852,7 +873,7 @@ def _run_actions(deps, drive, youtube, folders, ch, state: dict, persist) -> Non
     state["actions"] = sa.normalize_state(state.get("actions"))
     try:
         with tempfile.TemporaryDirectory(prefix="studiocap-") as td:
-            ok, failed = deps.run_actions(drive, youtube, folders["channel"], folders["done"],
+            ok, failed = deps.run_actions(drive, youtube, folders["channel"], done_folder or folders["done"],
                                           Path(td), state=state["actions"])
         log.info("Swap requests: %d ok, %d failed", ok, failed)
     except Exception as e:
