@@ -114,7 +114,7 @@ def test_nhan_ban_lists_hot_videos_and_dedupes_via_book(cfg):
     assert d["nhan_ban"] == [{"video_id": "abc123", "tieu_de": "Hot one", "view": 80000, "tuoi_ngay": 3,
                               "so_chu_de": 3, "han": "2026-12-13T06:10"}]
     done = [{"tac_vu": "nhan-ban", "slug": "video:abc123", "thoi_diem": "2026-12-10T06:00:00"}]
-    assert directive(cfg, "thieu", rows=done)["nhan_ban"] == []   # khong co ledger de do: giu hanh vi cu
+    assert directive(cfg, "thieu", rows=done)["nhan_ban"] == []
     other = [{"tac_vu": "ke-hoach", "slug": "video:abc123", "thoi_diem": "2026-12-10T06:00:00"}]
     assert len(directive(cfg, "thieu", rows=other)["nhan_ban"]) == 1
 
@@ -221,34 +221,10 @@ def test_record_seen_never_raises(tmp_path, capsys):
     assert h.load_seen(bad) == {}
 
 
-# Chu kenh 2026-11-27: van nhan ban cho den khi nhan ban khong con ra ket qua tot.
-
-def _led(slug, day, ctr):
-    return {"video_id": slug, "slug": slug, "published_local": f"2026-12-{day:02d} 10:00", "ctr_24h": ctr}
-
-
-def _book(*slugs):
-    return [{"tac_vu": "nhan-ban", "slug": "video:abc123", "ly_do": ",".join(slugs)}]
-
-
-def _rep(ledger, rows):
-    return h.replication_list(prog("thieu", (HOT,)), GOALS, rows, NOW, ledger=ledger)
-
-
-def test_replication_continues_while_children_do_well():
-    base = [_led(f"b{i}", 1, "0.026") for i in range(6)]
-    kids = [_led("k_1", 5, "0.02"), _led("k_2", 6, "0.064")]            # moi nhat tot
-    out = _rep(base + kids, _book("k_1", "k_2"))
-    assert len(out) == 1 and out[0]["vong"] == 2 and out[0]["seen_key"] == "abc123#2"
-
-
-def test_replication_stops_when_last_two_children_are_weak():
-    base = [_led(f"b{i}", 1, "0.026") for i in range(6)]
-    kids = [_led("k_1", 5, "0.064"), _led("k_2", 6, "0.02"), _led("k_3", 7, "0.03")]
-    assert _rep(base + kids, _book("k_1", "k_2", "k_3")) == []
-
-
-def test_replication_waits_while_enough_followups_are_pending():
-    base = [_led(f"b{i}", 1, "0.026") for i in range(6)]
-    assert _rep(base + [_led("k_1", 5, "0.064")], _book("k_1", "p_1", "p_2")) == []
-    assert len(_rep(base + [_led("k_1", 5, "0.064")], _book("k_1", "p_1"))) == 1
+def test_review_list_leaves_continue_or_stop_to_the_agent(cfg):
+    rows = [{"tac_vu": "nhan-ban", "slug": "video:abc123", "ly_do": "k_1,k_2"}]
+    d = directive(cfg, "thieu", rows=rows)
+    assert d["nhan_ban"] == [] and d["nhan_ban_xet"] == [
+        {"video_id": "abc123", "tieu_de": "Hot one", "so_dong_nhan_ban": 1, "phim_con": ["k_1,k_2"]}]
+    stop = rows + [{"tac_vu": "bo", "slug": "video:abc123"}]
+    assert directive(cfg, "thieu", rows=stop)["nhan_ban_xet"] == []

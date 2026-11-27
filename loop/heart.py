@@ -283,7 +283,7 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
                     plan: dict | None = None, planned: dict | None = None,
                     book_rows: list | None = None, goal: dict | None = None,
                     goals_cfg: dict | None = None, now: datetime | None = None,
-                    seen: dict | None = None, hot: set | None = None, ledger: list | None = None) -> dict:
+                    seen: dict | None = None, hot: set | None = None) -> dict:
     """`goal` = tien do so voi goal (loop.goals.progress). Co goal: `che_do` va ti le thu theo goal,
     them khoi `muc_tieu` va `nhan_ban`. Khong co: chi thi nhu cu. `hot` = khuon mien tran (hot_shapes)."""
     che_do = mode_for(goal)
@@ -373,8 +373,9 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
     if goal:
         out["muc_tieu"] = goal
         out["che_do"] = che_do
+        out["nhan_ban_xet"] = review_list(goal, book_rows or [])
         out["nhan_ban"] = replication_list(goal, goals_cfg or {}, book_rows or [], now or datetime.combine(
-            today, datetime.min.time()), seen=seen, ledger=ledger)
+            today, datetime.min.time()), seen=seen)
     return out
 
 
@@ -404,12 +405,11 @@ def record_seen(tim: Path, items: list, alerts_path: Path, now: datetime) -> Non
     canh bao trong alerts.md. Khong bao gio lam trai tim loi."""
     try:
         seen = load_seen(tim)
-        key = lambda x: x.get("seen_key") or x["video_id"]  # noqa: E731 - vong nhan ban tiep co khoa rieng
-        new = [x for x in items if x.get("video_id") and key(x) not in seen]
+        new = [x for x in items if x.get("video_id") and x["video_id"] not in seen]
         if not new:
             return
         for x in new:
-            seen[key(x)] = {"lan_dau": now.isoformat(timespec="minutes")}
+            seen[x["video_id"]] = {"lan_dau": now.isoformat(timespec="minutes")}
         (Path(tim) / SEEN_NAME).write_text(json.dumps(seen, ensure_ascii=False, indent=1), encoding="utf-8")
         alerts_path = Path(alerts_path)
         head = "" if alerts_path.is_file() and alerts_path.stat().st_size else "# Studio loop alerts\n\n"
@@ -418,43 +418,29 @@ def record_seen(tim: Path, items: list, alerts_path: Path, now: datetime) -> Non
             for x in new:
                 why = (f"CTR {x['ctr_pct']}%, {x.get('hien_thi')} hiển thị" if x.get("ly_do") == "ctr"
                        else f"{x.get('view')} view sau {x.get('tuoi_ngay')} ngày")
-                f.write(f"- {now:%Y-%m-%d %H:%M} heart: {'nhân bản tiếp' if x.get('vong') else 'video đang được đẩy'} \"{x.get('tieu_de')}\" "
+                f.write(f"- {now:%Y-%m-%d %H:%M} heart: video đang được đẩy \"{x.get('tieu_de')}\" "
                         f"({x['video_id']}): {why}. Cần {x.get('so_chu_de')} chủ đề nối tiếp trước {x.get('han')}.\n")
     except Exception as e:  # noqa: BLE001 - so ghi chep, khong dung trai tim
         print(f"heart: không ghi được danh sách video trội đã thấy ({type(e).__name__}: {e})")
 
 
-_SLUG_TOKEN = re.compile(r"[a-z0-9]+(?:_[a-z0-9]+)+")
-
-
-def _replication_round(vid: str, book_rows: list, ledger: list | None, vn: dict, now: datetime) -> int:
-    """Video da co dong `nhan-ban`: tra so vong tiep theo (>0) neu nhan ban van dang ra ket qua tot, 0 neu dung.
-    Phim con = slug ghi trong `ly_do` cac dong nhan-ban cua video (gia tri cu: chu kenh chi ghi slug trong ly do).
-    Dung khi hai phim con moi nhat da co CTR 24h deu duoi `ctr_tuong_doi` x trung vi kenh. Con >= so_chu_de phim
-    con chua dang (khong bi `bo`) thi chua can them. Khong doc duoc ledger/nen -> 0 (giu hanh vi cu)."""
-    gm = goals_mod
-    rows = [r for r in book_rows if r.get("tac_vu") == "nhan-ban" and r.get("slug") == f"video:{vid}"]
-    if not ledger or not rows:
-        return 0
-    base = gm._channel_ctr_base(ledger, now.date(), vn, skip=vid).get("ctr")
-    if base is None:
-        return 0
-    kids = {t for r in rows for t in _SLUG_TOKEN.findall(str(r.get("ly_do") or ""))}
-    dropped = {r.get("slug") for r in book_rows if r.get("tac_vu") == "bo"}
-    by_slug = {r.get("slug"): r for r in ledger}
-    pub = sorted((by_slug[t] for t in kids if t in by_slug), key=lambda r: str(r.get("published_local")))
-    scored = [r for r in pub if gm._pct(r.get("ctr_24h")) is not None]
-    bar = vn.get("ctr_tuong_doi", 2.0) * base
-    if len(scored) >= 2 and all(gm._pct(r["ctr_24h"]) < bar for r in scored[-2:]):
-        return 0
-    pending = [t for t in kids if t not in by_slug and t not in dropped]
-    if len(pending) >= vn.get("so_chu_de_noi_tiep", 2):
-        return 0
-    return len(rows) + 1
+def review_list(goal: dict, book_rows: list) -> list[dict]:
+    """Video troi DA co dong `nhan-ban` va chua bi dung (dong `bo`, slug `video:<id>`): chi liet ke, KHONG quyet.
+    Agent doc ket qua cac phim con (ledger.csv) roi quyet nhan ban tiep hay dung (chu kenh 2026-11-27)."""
+    rows = [r for r in book_rows if r.get("tac_vu") == "nhan-ban"]
+    stopped = {r.get("slug") for r in book_rows if r.get("tac_vu") == "bo"}
+    out = []
+    for v in goal.get("video_troi") or []:
+        slug = f"video:{v['video_id']}"
+        mine = [r for r in rows if r.get("slug") == slug]
+        if mine and slug not in stopped:
+            out.append({"video_id": v["video_id"], "tieu_de": v["tieu_de"], "so_dong_nhan_ban": len(mine),
+                        "phim_con": [r.get("ly_do") or "" for r in mine]})
+    return out
 
 
 def replication_list(goal: dict, goals_cfg: dict, book_rows: list, now: datetime,
-                     seen: dict | None = None, ledger: list | None = None) -> list[dict]:
+                     seen: dict | None = None) -> list[dict]:
     """Video troi chua co dong `nhan-ban` (slug `video:<id>`) trong so quyet dinh. Han tinh tu lan dau thay
     (`seen`), khong tu `now`, de han khong lui dan khi trai tim chay nhieu lan trong ngay."""
     vt = goals_cfg.get("video_troi") or {}
@@ -463,16 +449,11 @@ def replication_list(goal: dict, goals_cfg: dict, book_rows: list, now: datetime
     seen = seen or {}
     out = []
     for v in goal.get("video_troi") or []:
-        vong = 0
         if f"video:{v['video_id']}" in done:
-            # Chu kenh 2026-11-27: van nhan ban cho den khi nhan ban khong con ra ket qua tot
-            vong = _replication_round(v["video_id"], book_rows, ledger, vn, now)
-            if not vong:
-                continue
+            continue
         cfg = vn if v.get("ly_do") == "ctr" else vt
-        skey = f"{v['video_id']}#{vong}" if vong else v["video_id"]
         try:
-            base = datetime.fromisoformat((seen.get(skey) or {}).get("lan_dau") or "")
+            base = datetime.fromisoformat((seen.get(v["video_id"]) or {}).get("lan_dau") or "")
         except (TypeError, ValueError):
             base = now
         e = {"video_id": v["video_id"], "tieu_de": v["tieu_de"], "view": v["view"], "tuoi_ngay": v["tuoi_ngay"],
@@ -481,8 +462,6 @@ def replication_list(goal: dict, goals_cfg: dict, book_rows: list, now: datetime
         for k in ("ly_do", "ctr_pct", "hien_thi", "gio_doc"):
             if k in v:
                 e[k] = v[k]
-        if vong:
-            e["vong"], e["seen_key"] = vong, skey
         out.append(e)
     return out
 
@@ -909,7 +888,7 @@ def main(argv=None) -> int:
                                     goc=goc_view(graded, ledger, today), hot=hot,
                                     cam=forbidden_arms(rows, today, hot=hot), plan=read_queue_plan(qpath),
                                     planned=planned_values(rows, cfg), book_rows=rows,
-                                    goal=goal, goals_cfg=goals, now=now, seen=load_seen(tim), ledger=ledger)
+                                    goal=goal, goals_cfg=goals, now=now, seen=load_seen(tim))
         write_directive(tim, directive, cfg)
         record_seen(tim, directive.get("nhan_ban") or [], report_dir / "alerts.md", now)
     except Exception as e:  # noqa: BLE001 - khong bao gio dung phim, chi bao loi
