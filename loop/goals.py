@@ -148,11 +148,26 @@ def _pct(v):
     return None if x is None else (x / 100 if x > 1 else x)
 
 
-def _pushed_reading(r: dict, snaps: dict | None, vn: dict):
+def _channel_ctr_base(rows, ref, vn: dict, skip=None) -> dict:
+    """Trung vi CTR 24h cua cac video 28 ngay gan nhat (tru `skip`); None neu < `nen_toi_thieu_video` video."""
+    xs = []
+    for r in rows or []:
+        d = _pub_date(r)
+        if d is None or r.get("video_id") == skip or not 0 <= (ref - d).days <= WINDOW_DAYS:
+            continue
+        c = _pct(r.get("ctr_24h"))
+        if c is not None:
+            xs.append(c)
+    return {"ctr": _median(xs), "n": len(xs)} if len(xs) >= vn.get("nen_toi_thieu_video", 5) else {}
+
+
+def _pushed_reading(r: dict, snaps: dict | None, vn: dict, base_ctr: float | None = None):
     """Luot doc dau tien trong `trong_gio` gio dau ma CTR >= nguong va hien thi >= nguong (chu kenh 2026-11-22:
     "video dang de xuat"). Snapshot since_published truoc; khong co thi doc ledger (latest neu con trong cua so,
     roi moc 24 gio). Tra (ctr, hien_thi, gio) hoac None."""
     win, c_min, i_min = vn.get("trong_gio", 48), vn.get("ctr_toi_thieu", 0.07), vn.get("hien_thi_toi_thieu", 30000)
+    win_i = vn.get("trong_gio_hien_thi", 24)  # dieu kien 2: hien thi trong 24 gio dau
+    i_24 = vn.get("hien_thi_24h_toi_thieu", 20000)
     reads = []
     for s in (snaps or {}).get(r.get("video_id", ""), []):
         reads.append((_pct(s.get("ctr")), _num(s.get("impressions")), _num(s.get("age_hours"))))
@@ -162,10 +177,17 @@ def _pushed_reading(r: dict, snaps: dict | None, vn: dict):
             reads.append((_pct(r.get("ctr_latest")), _num(r.get("impr_latest")), age))
         reads.append((_pct(r.get("ctr_24h")), _num(r.get("impr_24h")), 24.0))
     for c, i, h in reads:
-        if None in (c, i, h) or h > win:
+        if c is None or h is None:
             continue
-        if c >= c_min and i >= i_min:
-            return round(c * 100, 1), round(i), round(h, 1)
+        # Dieu kien 1: CTR >= nguong VA hien thi >= nguong, trong 48 gio. Dieu kien 2: hien thi >= 20.000 trong 24 gio.
+        ok_1 = h <= win and c >= c_min and i is not None and i >= i_min
+        ok_2 = i is not None and h <= win_i and i >= i_24
+        # Dieu kien 3 (chu kenh 2026-11-27, "troi so voi kenh"): CTR >= k lan trung vi CTR 24h cua kenh va hien thi
+        # >= san nho, trong 48 gio. Chi bat khi co du video lam nen (base_ctr khac None).
+        ok_3 = (base_ctr is not None and h <= win and c >= vn.get("ctr_tuong_doi", 2.0) * base_ctr
+                and i is not None and i >= vn.get("hien_thi_tuong_doi_toi_thieu", 5000))
+        if ok_1 or ok_2 or ok_3:
+            return round(c * 100, 1), (round(i) if i is not None else None), round(h, 1)
     return None
 
 
@@ -218,8 +240,8 @@ def progress(goals, daily, totals, ledger_rows, today: date, snaps: dict | None 
 
     ref = today if (today.year, today.month) == (y, m) else date.fromisoformat(mine[-1]["ngay"])
     window, month_vids, vt = [], [], []
-    vtg = target.get("video_troi") or (goals or {}).get("video_troi") or {}
-    vng = target.get("video_noi") or (goals or {}).get("video_noi") or {}
+    vng =target.get("video_noi") or (goals or {}).get("video_noi") or {}
+    base = _channel_ctr_base(ledger_rows, ref, vng)
     for r in ledger_rows or []:
         d = _pub_date(r)
         if d is None:
@@ -231,15 +253,16 @@ def progress(goals, daily, totals, ledger_rows, today: date, snaps: dict | None 
             month_vids.append(r)
         v = _views(r)
         age_d = (today - d).days
-        by_view = bool(vtg) and 0 <= age_d <= vtg.get("trong_ngay", 7) and v is not None \
-            and v >= vtg.get("view_toi_thieu", math.inf)
-        pushed = _pushed_reading(r, snaps, vng) if vng and 0 <= age_d <= vng.get("trong_ngay", 7) else None
-        if by_view or pushed:
+        # Video da duoc day (dat nguong trong 48 gio dau) van giu co hieu luc sau khi tuoi hom nay vuot `trong_ngay`:
+        # Ruger 2027 dat nguong luc 13,9 gio (20/11) nhung bi roi khoi danh sach ngay 27/11 vi tuoi hom nay la 10 ngay.
+        rel = base.get("ctr") if base and 0 <= age_d <= vng.get("trong_ngay", 7) else None
+        if rel is not None:   # nen = cac video KHAC (trung vi khong tinh chinh no)
+            rel = _channel_ctr_base(ledger_rows, ref, vng, skip=r.get("video_id")).get("ctr")
+        pushed = _pushed_reading(r, snaps, vng, rel) if vng else None
+        if pushed:
             e = {"video_id": r.get("video_id", ""), "tieu_de": r.get("live_title", ""),
-                 "view": round(v or 0), "tuoi_ngay": age_d}
-            if pushed:
-                e.update(ly_do="view+ctr" if by_view else "ctr", ctr_pct=pushed[0], hien_thi=pushed[1],
-                         gio_doc=pushed[2])
+                 "view": round(v or 0), "tuoi_ngay": age_d, "ly_do": "ctr", "ctr_pct": pushed[0],
+                 "hien_thi": pushed[1], "gio_doc": pushed[2]}
             vt.append(e)
     vt.sort(key=lambda x: -x["view"])
     m7 = _median([x for x in (_num(r.get("views_7d")) for r in window) if x is not None])

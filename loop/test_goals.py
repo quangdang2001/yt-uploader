@@ -151,7 +151,7 @@ def test_video_troi():
             ledger_row("old", "2026-12-01 09:00", 900000),
             ledger_row("meh", "2026-12-19 09:00", 49999)]
     p = g.progress(GOALS, _daily(1, [30000] * 19), {}, rows, today)
-    assert p["video_troi"] == [{"video_id": "hot", "tieu_de": "Hot one", "view": 80000, "tuoi_ngay": 3}]
+    assert p["video_troi"] == []  # quy tac 50.000 view da bo (chu kenh 2026-11-27)
 
 
 def test_empty_inputs_are_no_base_not_errors():
@@ -197,15 +197,36 @@ def test_pushed_video_by_snapshot():
             ledger_row("old", "2026-12-10 10:00", 9000)]
     snaps = {"hot": [snap(13.9, 43494, 0.078), snap(31.6, 87015, 0.084)],
              "lowctr": [snap(40, 90000, 0.069)],
-             "late": [snap(40, 29999, 0.09), snap(60, 50000, 0.09)],     # crosses 30k only after 48 h
-             "old": [snap(20, 90000, 0.10)]}                              # 10 days old
+             "late": [snap(40, 29999, 0.06), snap(60, 50000, 0.06)],     # CTR < 7%; 30k only after 24 h
+             "old": [snap(20, 9000, 0.05)]}                               # khong dat nguong
     p = g.progress(VN, _daily(1, [30000] * 19), {}, rows, today, snaps=snaps)
     assert [x["video_id"] for x in p["video_troi"]] == ["hot"]
     assert p["video_troi"][0] == {"video_id": "hot", "tieu_de": "Ruger", "view": 21300, "tuoi_ngay": 1,
                                   "ly_do": "ctr", "ctr_pct": 7.8, "hien_thi": 43494, "gio_doc": 13.9}
 
 
-def test_pushed_video_ledger_fallback_and_both_reasons():
+def test_pushed_video_stays_flagged_after_it_ages_past_7_days():
+    # Ruger 2027 (mwKhntLxOlk): dat nguong 20/11 luc 13,9 gio; ngay 27/11 da 10 ngay tuoi van phai nam trong nhan_ban
+    today = date(2026, 12, 20)
+    rows = [ledger_row("ruger", "2026-12-10 10:00", 88200, title="Ruger")]
+    snaps = {"ruger": [snap(13.9, 43494, 0.078), snap(31.6, 87015, 0.084)]}
+    p = g.progress(VN, _daily(1, [30000] * 19), {}, rows, today, snaps=snaps)
+    assert [x["video_id"] for x in p["video_troi"]] == ["ruger"]
+    assert p["video_troi"][0]["tuoi_ngay"] == 10 and p["video_troi"][0]["gio_doc"] == 13.9
+
+
+def test_pushed_by_impressions_within_24h_or_ctr_within_48h():
+    today = date(2026, 12, 20)
+    rows = [ledger_row("impr24", "2026-12-19 10:00", 9000), ledger_row("impr30", "2026-12-19 10:00", 9000),
+            ledger_row("ctr_and", "2026-12-19 10:00", 9000)]
+    snaps = {"impr24": [snap(20, 25000, 0.05)],     # 20k+ trong 24 gio -> dang de xuat (dieu kien 2)
+             "impr30": [snap(30, 40000, 0.05)],     # 30k sau 24 gio, CTR < 7% -> khong
+             "ctr_and": [snap(30, 25000, 0.09)]}    # CTR 9% nhung 25k < 30k trong 48 gio -> khong (dieu kien 1 la VA)
+    p = g.progress(VN, _daily(1, [30000] * 19), {}, rows, today, snaps=snaps)
+    assert [x["video_id"] for x in p["video_troi"]] == ["impr24"]
+
+
+def test_pushed_video_ledger_fallback():
     today = date(2026, 12, 20)
     hot = {**ledger_row("hot", "2026-12-19 10:00", 21300), "age_h_latest": "31.63", "ctr_latest": "0.084",
            "impr_latest": "87015", "ctr_24h": "", "impr_24h": ""}
@@ -213,11 +234,25 @@ def test_pushed_video_ledger_fallback_and_both_reasons():
     p = g.progress(VN, _daily(1, [30000] * 19), {}, [hot, big], today)
     by = {x["video_id"]: x for x in p["video_troi"]}
     assert by["hot"]["ly_do"] == "ctr" and by["hot"]["hien_thi"] == 87015
-    assert by["big"]["ly_do"] == "view+ctr" and by["big"]["gio_doc"] == 24.0
+    assert by["big"]["ly_do"] == "ctr" and by["big"]["gio_doc"] == 24.0
 
 
 def test_no_video_noi_config_keeps_old_behaviour():
     today = date(2026, 12, 20)
     rows = [ledger_row("hot", "2026-12-19 10:00", 21300)]
     p = g.progress(GOALS, _daily(1, [30000] * 19), {}, rows, today, snaps={"hot": [snap(30, 90000, 0.09)]})
+    assert p["video_troi"] == []
+
+
+def test_pushed_relative_to_channel_ctr():
+    # Mossberg 2027: CTR 5,9% < 7% va 9k hien thi < 20k, nhung ~2 lan trung vi CTR kenh (2,6%) -> troi so voi kenh
+    today = date(2026, 12, 20)
+    base = [{**ledger_row(f"b{i}", "2026-12-12 10:00", 500), "ctr_24h": "0.026", "impr_24h": "3000"} for i in range(6)]
+    rel = {**ledger_row("rel", "2026-12-19 10:00", 5700), "ctr_24h": "0.059", "impr_24h": "9276"}
+    meh = {**ledger_row("meh", "2026-12-19 10:00", 900), "ctr_24h": "0.04", "impr_24h": "9000"}      # 1,5 lan
+    small = {**ledger_row("small", "2026-12-19 10:00", 90), "ctr_24h": "0.08", "impr_24h": "1200"}   # duoi san hien thi
+    vn = {**VN["video_noi"], "ctr_tuong_doi": 2.0, "hien_thi_tuong_doi_toi_thieu": 5000}
+    p = g.progress({**VN, "video_noi": vn}, _daily(1, [30000] * 19), {}, base + [rel, meh, small], today)
+    assert [x["video_id"] for x in p["video_troi"]] == ["rel"]
+    p = g.progress(VN, _daily(1, [30000] * 19), {}, base[:3] + [rel], today)   # < 5 video lam nen: khong bat
     assert p["video_troi"] == []
