@@ -224,6 +224,39 @@ def test_leader_with_two_videos_kills_nothing_and_is_not_counted_as_measured(cfg
     assert "`thumb_sang`: đang dẫn `toi`" in md and "2 video" in md
 
 
+def test_suspended_arm_never_leads(shipped_cfg):
+    c = copy.deepcopy(shipped_cfg)
+    assert "xep-hang" in hc.suspended(c, "dong")
+    hi, mh = scored_rows("dong", "xep-hang", [0.09, 0.09, 0.09], metric="ctr_24h")
+    for r in hi:
+        r["impr_24h"] = 5000
+    lo, ml = scored_rows("dong", "lineup", [0.05, 0.05, 0.05], metric="ctr_24h")
+    for r in lo:
+        r["impr_24h"] = 5000
+    stats = h.arm_stats(*combine((hi, mh), (lo, ml)), c)
+    assert h.winners(stats, c)["dong"] == "lineup"
+    assert stats["dong"]["xep-hang"]["trang_thai"] == "dang-thu"
+
+
+def test_films_made_before_the_book_count_for_dong_by_their_live_title():
+    # Chu kenh 2026-11-28: ruger_2027 (8,4%), mossberg_lineup (5,9%) lam truoc so quyet dinh -> tinh cho bien dong
+    merged = {"sw_2027": {"dong": "lineup", "tieu_de": "Smith & Wesson Is Going ALL-IN in 2027! (8 Guns)"}}
+    ledger = [
+        {"video_id": "a", "slug": "sw_2027", "live_title": "Smith & Wesson Is Going ALL-IN in 2027! (8 Guns)",
+         "packaging": "lineup"},
+        {"video_id": "b", "slug": "ruger_2027", "live_title": "Ruger Is Going CRAZY in 2027! (9 Guns)",
+         "packaging": "lineup"},
+        {"video_id": "c", "slug": "", "live_title": "The $289 Shotgun", "packaging": "gia"},
+        {"video_id": "d", "slug": "old_other", "live_title": "Something", "packaging": "other"},   # khong phai nhanh
+        {"video_id": "", "slug": "no_video", "live_title": "X (5 Guns)", "packaging": "lineup"},   # chua co video
+    ]
+    extra = h.pre_book_films(ledger, merged)
+    assert set(extra) == {"ruger_2027", "video:c"}           # khong dem lai phim da co trong so
+    assert extra["ruger_2027"] == {"dong": "lineup", "tieu_de": "Ruger Is Going CRAZY in 2027! (9 Guns)",
+                                   "phim_cu": True}
+    assert extra["video:c"]["dong"] == "gia-chuyen-hang"
+
+
 def test_live_title_style_overrides_the_planned_arm(cfg):
     scored, merged = scored_rows("dong", "gia-chuyen-hang", [100, 200, 300])
     scored[0]["dong_that"] = "lineup"     # tieu de that da doi sang lineup

@@ -132,7 +132,7 @@ def arm_stats(scored: list[dict], merged: dict, cfg: dict, rows: list[dict] | No
                 st.update(trung_vi=statistics.median(xs), p25=_pct(xs, 0.25), p75=_pct(xs, 0.75),
                           trang_thai="dang-thu")
             stats[var][arm] = st
-        win = _winner(stats[var], cfg)
+        win = _winner(stats[var], cfg, hc.suspended(cfg, var))
         if win is None:
             continue
         if stats[var][win]["n"] < cfg["n_thang"]:
@@ -149,13 +149,15 @@ def arm_stats(scored: list[dict], merged: dict, cfg: dict, rows: list[dict] | No
 N_DAN_DAU = 2   # it nhat bay nhieu phim da cham thi mot nhanh moi duoc dan dau
 
 
-def _winner(var_stats: dict, cfg: dict):
+def _winner(var_stats: dict, cfg: dict, skip=()):
     """Nhanh co trung vi cao nhat trong cac nhanh co >= N_DAN_DAU phim da cham (>= n_thang thi la `thang`, it hon
     la `dan-dau`). Chu kenh 2026-11-28: truoc day chi nhanh du n_thang moi duoc xet, nen gia-chuyen-hang (3 phim,
     2,1%) thang lineup (2 phim, 6,4 / 5,4%) chi vi du so truoc."""
     need = min(N_DAN_DAU, cfg["n_thang"])
     best = None
     for arm, st in var_stats.items():
+        if arm in skip:   # nhanh tam ngung (vd xep-hang) khong bao gio dan dau
+            continue
         if st["n"] >= need and st["trung_vi"] is not None and (
                 best is None or st["trung_vi"] > var_stats[best]["trung_vi"]):
             best = arm
@@ -163,7 +165,26 @@ def _winner(var_stats: dict, cfg: dict):
 
 
 def winners(stats: dict, cfg: dict) -> dict[str, str]:
-    return {var: _winner(stats[var], cfg) or hc.default(cfg, var) for var in cfg["bien"]}
+    return {var: _winner(stats[var], cfg, hc.suspended(cfg, var)) or hc.default(cfg, var) for var in cfg["bien"]}
+
+
+def pre_book_films(ledger_rows: list[dict], merged: dict) -> dict[str, dict]:
+    """Video tren kenh khong co trong so quyet dinh (lam truoc so, hoac khong qua buoc `dung`) -> muc gia chi mang
+    bien `dong`, lay tu kieu cua tieu de that (ledger `packaging`). Chu kenh 2026-11-28: ruger_2027 8,4%, mossberg 5,9%
+    bi bo qua nen lineup chi co 2 phim. Khoa: slug cua ledger, hoac `video:<id>` khi ledger chua noi slug."""
+    from loop.heart_score import PACKAGING_DONG
+    known_titles = {" ".join((m.get("tieu_de") or "").lower().split()) for m in merged.values()}
+    out = {}
+    for r in ledger_rows:
+        vid, slug = r.get("video_id"), r.get("slug") or ""
+        arm = PACKAGING_DONG.get(r.get("packaging", ""))
+        if not vid or not arm or slug in merged:
+            continue
+        title = r.get("live_title", "")
+        if not slug and " ".join(title.lower().split()) in known_titles:
+            continue
+        out[slug or f"video:{vid}"] = {"dong": arm, "tieu_de": title, "phim_cu": True}
+    return out
 
 
 # ---------- chon bien thu ----------
@@ -892,7 +913,10 @@ def main(argv=None) -> int:
         scored = heart_score.score(merged, ledger, snaps)
         heart_score.write_results(tim / heart_score.RESULT_NAME, scored)
         graded = [r for r in scored if r["slug"] in dung]
-        stats = arm_stats(graded, {s: m for s, m in merged.items() if s in dung}, cfg, rows=rows)
+        # phim lam truoc so: chi bien dong, khong ghi vao ket-qua.csv (chu kenh 2026-11-28)
+        old = pre_book_films(ledger, merged)
+        graded += heart_score.score(old, ledger, snaps)
+        stats = arm_stats(graded, {**{s: m for s, m in merged.items() if s in dung}, **old}, cfg, rows=rows)
         last = last_tested(rows, merged)
         signals = {"cum": hot_clusters(report_dir), "tu_khoa": search_terms(cache)}
         qpath = vault / "van-hanh" / "ke-hoach" / "hang-cho.md"
