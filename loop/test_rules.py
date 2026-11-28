@@ -219,17 +219,21 @@ class RulesTest(unittest.TestCase):
         v, _ = run(snap(ctr=0.060, impr=5000, ret=0.60), state(), typical=5000, med_ret=0.50)
         self.assertEqual(v, Verdict.KEEP)
 
-    def test_swap_bar_median(self):
-        def hist(n):
-            return [snap(ctr=0.050, age=30, vid="v%d" % i) for i in range(n)]
-        self.assertAlmostEqual(swap_bar(30, hist(10)), 0.040)
-        self.assertAlmostEqual(swap_bar(30, hist(9)), 0.053)
-        self.assertAlmostEqual(swap_bar(30, hist(10) + [snap(ctr=0.5, age=4, vid="x")]), 0.040)
+    def test_swap_bar_is_fixed_at_7_percent(self):
+        # owner 2026-11-28: the bar is 7%, whatever the channel median is (it used to be min(5.3%, 0.8 x median))
+        low = [snap(ctr=0.010, age=30, vid="v%d" % i) for i in range(12)]
+        high = [snap(ctr=0.100, age=30, vid="w%d" % i) for i in range(12)]
+        for hist in ([], low, high):
+            self.assertAlmostEqual(swap_bar(30, hist), 0.07)
 
-    def test_swap_bar_latest_per_video(self):
-        h = [snap(ctr=0.01, age=30, vid="v%d" % i) for i in range(10)]
-        h += [snap(ctr=0.100, age=36, vid="v%d" % i) for i in range(10)]  # later snapshots
-        self.assertAlmostEqual(swap_bar(30, h), 0.053)  # 0.8*0.1 = 0.08 > 0.053
+    def test_s_and_w_357_case_is_swapped_at_the_7_percent_bar(self):
+        # ZkbhVEiZmtc 2026-11-28: CTR 2.2% at 1,985 impr, 17.7 h. Under the old 2.5% bar the Wilson top (2.86%) kept it WATCH.
+        v, reason = run(snap(ctr=0.022, impr=1985, age=17.7), state(), bar=swap_bar(17.7, []))
+        self.assertEqual(v, Verdict.SWAP)
+        self.assertIn("bar 7.0%", reason)
+
+    def test_between_keep_and_bar_is_still_keep(self):
+        self.assertEqual(run(snap(ctr=0.062, impr=20000), state(), bar=0.07)[0], Verdict.KEEP)
 
     def test_age_bucket(self):
         self.assertEqual([age_bucket(h) for h in (0, 6, 12, 24, 48, 72, 500)],

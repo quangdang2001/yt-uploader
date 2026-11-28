@@ -610,7 +610,7 @@ class AnalyseTest(unittest.TestCase):
     # -- I8: NOT_PACKAGING peers at the same age
 
     def peers(self, ages):
-        self.snaps = [snap("s", "2026-11-19T10:00:00Z", 30, 2500, 0.06)]
+        self.snaps = [snap("s", "2026-11-19T10:00:00Z", 30, 2500, 0.075)]   # >= the 7% bar, else KEEP comes first
         for i, (age, impr) in enumerate(ages):
             self.snaps += [snap("p%d" % i, "2026-11-10T10:00:00Z", age, impr, 0.06),
                            snap("p%d" % i, "2026-11-19T09:00:00Z", 300, 200000, 0.06)]

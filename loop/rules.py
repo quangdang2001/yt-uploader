@@ -6,7 +6,7 @@ from math import sqrt
 from statistics import median
 
 KEEP_CTR = 0.057
-BASE_BAR = 0.053
+BASE_BAR = 0.07
 MEDIAN_FACTOR = 0.8
 OPENING_FACTOR = 0.85   # OPENING chi khi ret_30s < 0.85 x trung vi (chu kenh/controller 2026-11-20)
 MIN_VIDEOS_FOR_MEDIAN = 10
@@ -100,19 +100,10 @@ def age_bucket(age_hours: float) -> str:
 
 
 def swap_bar(age_hours: float, history: list[dict]) -> float:
-    """5.3% until 10+ videos have a snapshot in this age bucket; then min(5.3%, 0.8 x channel median)."""
-    bucket = age_bucket(age_hours)
-    latest: dict[str, dict] = {}
-    for s in history:
-        if age_bucket(s["age_hours"]) != bucket:
-            continue
-        cur = latest.get(s["video_id"])
-        if cur is None or s["age_hours"] >= cur["age_hours"]:
-            latest[s["video_id"]] = s
-    if len(latest) < MIN_VIDEOS_FOR_MEDIAN:
-        return BASE_BAR
-    med = median(s["ctr"] for s in latest.values())
-    return min(BASE_BAR, MEDIAN_FACTOR * med)
+    """Fixed at BASE_BAR (7%, owner 2026-11-28: "the bar ctr is 7%"). Before this it was 5.3% until 10+ videos had a
+    snapshot in the age bucket, then min(5.3%, 0.8 x channel median) - 2.2-4.2% in practice, which never flagged a
+    video the owner called bad. Videos at or above KEEP_CTR (5.7%) are still KEEP and never swapped."""
+    return BASE_BAR
 
 
 def _fmt(snap: dict, bar: float) -> str:
