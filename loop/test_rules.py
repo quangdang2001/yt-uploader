@@ -24,11 +24,17 @@ def run(s, st, bar=0.053, typical=None, med_ret=None):
 
 
 class RulesTest(unittest.TestCase):
-    def test_too_early_age(self):
-        self.assertEqual(run(snap(impr=50000, age=5.9), state())[0], Verdict.TOO_EARLY)
+    def test_too_early_needs_both_young_and_few_impressions(self):
+        v, reason = run(snap(impr=1499, age=5.9), state())
+        self.assertEqual(v, Verdict.TOO_EARLY)
+        self.assertIn("needs 6 h or 1,500 impr", reason)
 
-    def test_too_early_impressions(self):
-        self.assertEqual(run(snap(impr=1999, age=10), state())[0], Verdict.TOO_EARLY)
+    def test_judged_once_old_enough_even_with_few_impressions(self):
+        self.assertNotEqual(run(snap(impr=300, age=10), state())[0], Verdict.TOO_EARLY)
+
+    def test_judged_once_1500_impressions_even_when_young(self):
+        self.assertNotEqual(run(snap(impr=1500, age=2), state())[0], Verdict.TOO_EARLY)
+        self.assertNotEqual(run(snap(impr=50000, age=5.9), state())[0], Verdict.TOO_EARLY)
 
     def test_keep(self):
         self.assertEqual(run(snap(ctr=0.057, impr=3000), state())[0], Verdict.KEEP)

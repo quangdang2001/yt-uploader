@@ -11,6 +11,10 @@ class ReasonTest(unittest.TestCase):
         self.assertEqual(s, "CTR 7,9% >= vạch 4,8% với 3.730.114 lượt hiển thị")
 
     def test_too_early(self):
+        s = db.reason_vi("age 4.9 h, 1,100 impr (needs 6 h or 1,500 impr)")
+        self.assertEqual(s, "tuổi 4,9 giờ, 1.100 lượt hiển thị (cần 6 giờ hoặc 1.500 lượt hiển thị)")
+
+    def test_too_early_old_wording_still_translates(self):
         s = db.reason_vi("age 4.9 h, 15,153 impr (needs 6 h and 2,000 impr)")
         self.assertEqual(s, "tuổi 4,9 giờ, 15.153 lượt hiển thị (cần 6 giờ và 2.000 lượt hiển thị)")
 

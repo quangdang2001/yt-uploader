@@ -10,7 +10,8 @@ BASE_BAR = 0.053
 MEDIAN_FACTOR = 0.8
 OPENING_FACTOR = 0.85   # OPENING chi khi ret_30s < 0.85 x trung vi (chu kenh/controller 2026-11-20)
 MIN_VIDEOS_FOR_MEDIAN = 10
-MIN_IMPR = 2000
+MIN_IMPR = 2000          # swap comparisons: second swap, revert candidates
+MIN_IMPR_FIRST = 1500    # first verdict: a video is judged at MIN_AGE_H hours OR MIN_IMPR_FIRST impressions (owner 2026-11-28)
 MIN_AGE_H = 6
 MIN_GAP_H = 24
 MAX_SWAPS = 2
@@ -165,9 +166,9 @@ def _decide(snap: dict, state: VideoState, bar: float, now: datetime,
     impr, ctr = snap["impressions"], snap["ctr"]
     if state.manual_until is not None and state.manual_until > now:
         return Verdict.PAUSED, "manual thumbnail change, paused until %s" % state.manual_until.isoformat()
-    if snap["age_hours"] < MIN_AGE_H or impr < MIN_IMPR:
-        return Verdict.TOO_EARLY, "age %.1f h, %s impr (needs %d h and %s impr)" % (
-            snap["age_hours"], format(impr, ","), MIN_AGE_H, format(MIN_IMPR, ","))
+    if snap["age_hours"] < MIN_AGE_H and impr < MIN_IMPR_FIRST:
+        return Verdict.TOO_EARLY, "age %.1f h, %s impr (needs %d h or %s impr)" % (
+            snap["age_hours"], format(impr, ","), MIN_AGE_H, format(MIN_IMPR_FIRST, ","))
     if snap.get("test_running"):     # the owner's Test & Compare wins: no SWAP, no REVERT
         return Verdict.WATCH, "test running"
     rev = _should_revert(snap, state)

@@ -200,10 +200,13 @@ class SequenceTest(unittest.TestCase):
         st = state(snaps, acts, T0 + (steps + 1) * H)
         return log, st, verdict
 
-    def test_worse_alt1_reverts_to_main_then_stops(self):
+    def test_worse_alt1_tries_alt2_then_reverts_to_the_better_of_the_two_and_stops(self):
+        # Since 2026-11-28 a video is judged at 6 h OR 1,500 impr (rules.MIN_IMPR_FIRST). main is then judged on only
+        # 1,500 impr, too few for the revert check to call alt1 clearly worse, so the 24 h gap lets alt2 go first;
+        # the revert then lands on alt1 (2.5%), the better of the two worse variants.
         log, st, verdict = self.simulate({"main": 0.040, "alt1": 0.025, "alt2": 0.020})
-        self.assertEqual(log, ["alt1", "main"])
-        self.assertEqual((st.variant, st.swaps, st.reverts), ("main", 1, 1))
+        self.assertEqual(log, ["alt1", "alt2", "alt1"])
+        self.assertEqual((st.variant, st.swaps, st.reverts), ("alt1", 2, 1))
         self.assertEqual(verdict, Verdict.CHANGE_TITLE)
 
     def test_worst_alt2_reverts_to_best_of_three_not_change_title(self):

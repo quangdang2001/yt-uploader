@@ -89,7 +89,8 @@ def _pct(x, nd=1):
 def reason_vi(s: str) -> str:
     s = s or ""
     for a, b in [
-        ("needs 6 h and 2,000 impr", "cần 6 giờ và 2.000 lượt hiển thị"),
+        ("needs 6 h or 1,500 impr", "cần 6 giờ hoặc 1.500 lượt hiển thị"),
+        ("needs 6 h and 2,000 impr", "cần 6 giờ và 2.000 lượt hiển thị"),   # reasons written before 2026-11-28
         ("no swap left", "hết lượt đổi thumbnail"),
         (" impr", " lượt hiển thị"),
         ("typical", "mức thường"),
