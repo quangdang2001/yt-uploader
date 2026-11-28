@@ -72,6 +72,22 @@ def test_live_title_changed_still_matched_by_slug():
     assert "lech-tieu-de" in r["canh_bao"].split(";")
 
 
+def test_retitled_video_is_scored_under_the_style_of_its_live_title():
+    # Chu kenh 2026-11-28: colt_python_cz ghi `gia-chuyen-hang` trong so, tieu de that tren kenh la lineup
+    # ("... (10 Guns)") -> dem cho lineup, khong cho nhanh da len ke hoach.
+    r = one(book(dong="gia-chuyen-hang"), [led(title="New Title", packaging="lineup")], {"v1": [snap(24)]})
+    assert r["dong_that"] == "lineup"
+    r = one(book(dong="gia-chuyen-hang"), [led(title="New Title", packaging="gia")], {"v1": [snap(24)]})
+    assert r["dong_that"] == "gia-chuyen-hang"
+    # tieu de doi sang kieu khong phai nhanh nao: khong biet kieu that -> khong dem cho bien dong
+    r = one(book(dong="lineup"), [led(title="New Title", packaging="other")], {"v1": [snap(24)]})
+    assert r["dong_that"] == ""
+    # tieu de khong doi: giu nhanh cua so
+    r = one(book(dong="lineup"), [led(packaging="gia")], {"v1": [snap(24)]})
+    assert "dong_that" not in r
+    assert "dong_that" not in hs.RESULT_COLUMNS
+
+
 def test_ket_qua_bands():
     def kq(views, dd="1000-5000"):
         return one(book(du_doan_7d=dd), [led()], {"v1": [snap(168, views=views)]})["ket_qua"]

@@ -195,14 +195,46 @@ def test_stats_use_apv_for_hook(cfg):
     assert st["trung_vi"] == pytest.approx(math.log(1000))
 
 
-def test_winner_needs_n_thang(cfg):
+def test_higher_median_on_two_videos_leads_a_lower_arm_with_three(cfg):
+    # Chu kenh 2026-11-28: dong=gia-chuyen-hang "thang" voi 2,1% (3 phim) trong khi lineup 6,4 / 5,4% (2 phim).
+    # Nhanh du 3 phim truoc khong duoc thang mot nhanh cao hon ro chi vi nhanh kia moi co 2 phim.
     two, m2 = scored_rows("thumb_sang", "toi", [50000, 60000])
     three, m3 = scored_rows("thumb_sang", "sang", [100, 200, 300])
     stats = h.arm_stats(*combine((two, m2), (three, m3)), cfg)
-    assert h.winners(stats, cfg)["thumb_sang"] == "sang"   # toi cao hon nhung n=2
+    assert h.winners(stats, cfg)["thumb_sang"] == "toi"
+    assert stats["thumb_sang"]["toi"]["trang_thai"] == "dan-dau"   # dan dau, chua du n_thang de chac
+    assert stats["thumb_sang"]["sang"]["trang_thai"] == "dang-thu"
+    # chi mot phim thi chua duoc dan dau: nhanh du so van thang
+    one_, m1 = scored_rows("thumb_sang", "toi", [50000])
+    stats = h.arm_stats(*combine((one_, m1), (three, m3)), cfg)
+    assert h.winners(stats, cfg)["thumb_sang"] == "sang"
     assert stats["thumb_sang"]["sang"]["trang_thai"] == "thang"
-    assert stats["thumb_sang"]["toi"]["trang_thai"] == "dang-thu"
     assert h.winners(empty_stats(cfg), cfg)["thumb_sang"] == hc.default(cfg, "thumb_sang")
+
+
+def test_leader_with_two_videos_kills_nothing_and_is_not_counted_as_measured(cfg):
+    lead, ml = scored_rows("thumb_sang", "toi", [50000, 60000])
+    low, mlow = scored_rows("thumb_sang", "sang", [10] * 6)
+    stats = h.arm_stats(*combine((lead, ml), (low, mlow)), cfg)
+    assert stats["thumb_sang"]["sang"]["trang_thai"] == "dang-thu"   # loai chi khi nhanh thang da du so
+    d = h.build_directive(["a"], stats, cfg, TODAY, {}, "v")
+    w = d["nhanh_thang"]["thumb_sang"]
+    assert w["nhanh"] == "toi" and w["du_so"] is False and w["dan_dau"] is True
+    md = h.render_md(d, cfg)
+    assert "`thumb_sang`: đang dẫn `toi`" in md and "2 video" in md
+
+
+def test_live_title_style_overrides_the_planned_arm(cfg):
+    scored, merged = scored_rows("dong", "gia-chuyen-hang", [100, 200, 300])
+    scored[0]["dong_that"] = "lineup"     # tieu de that da doi sang lineup
+    scored[1]["dong_that"] = ""           # doi sang kieu khong ro: khong dem cho bien dong
+    stats = h.arm_stats(scored, merged, cfg)
+    assert stats["dong"]["gia-chuyen-hang"]["n"] == 1
+    assert stats["dong"]["lineup"]["n"] == 1
+    # bien khac van theo so
+    scored2, merged2 = scored_rows("thumb_sang", "sang", [100])
+    scored2[0]["dong_that"] = "lineup"
+    assert h.arm_stats(scored2, merged2, cfg)["thumb_sang"]["sang"]["n"] == 1
 
 
 def test_kill_rule_rank_based(cfg):

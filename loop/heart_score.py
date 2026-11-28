@@ -22,6 +22,8 @@ VIEW_WINDOW = (144, 216)
 CTR_TARGET_H = 24
 VIEW_TARGET_H = 168
 BRIGHT_CUT = 0.5
+# ledger `packaging` (tu tieu de live, loop.ledger.packaging) -> nhanh cua bien `dong`. 'other' khong phai nhanh nao.
+PACKAGING_DONG = {"gia": "gia-chuyen-hang", "lineup": "lineup", "xep-hang": "xep-hang"}
 
 
 def _f(v):
@@ -85,6 +87,10 @@ def score(merged: dict, ledger_rows: list[dict], snaps_by_vid: dict) -> list[dic
         row["ket_qua"] = _band(_f(row["views_7d"]), m.get("du_doan_7d", ""))
         if m.get("tieu_de") and norm_title(led.get("live_title", "")) != norm_title(m["tieu_de"]):
             warns.append("lech-tieu-de")
+            # Chu kenh 2026-11-28: tieu de da doi thi kieu video la kieu cua tieu de dang hien, khong phai nhanh
+            # da len ke hoach (colt_python_cz: so ghi gia-chuyen-hang, tieu de that la lineup). Khong ro kieu -> "".
+            if m.get("dong"):
+                row["dong_that"] = PACKAGING_DONG.get(led.get("packaging", ""), "")
         b = _f(led.get("thumb_brightness"))
         sang = m.get("thumb_sang", "")
         if b is not None and sang in ("sang", "toi") and (b >= BRIGHT_CUT) != (sang == "sang"):

@@ -351,7 +351,8 @@ VAR_VI = {
     "thumb_sang": "Thumbnail sáng hay tối", "thumb_chu": "Số chữ trên thumbnail",
     "hook": "Kiểu mở đầu", "gio_dang": "Giờ đăng",
 }
-STATE_VI = {"thang": "Đang thắng", "dang-thu": "Đang thử", "loai": "Đã loại", "chua-du": "Chưa đủ số"}
+STATE_VI = {"thang": "Đang thắng", "dan-dau": "Đang dẫn (chưa đủ số)", "dang-thu": "Đang thử", "loai": "Đã loại",
+            "chua-du": "Chưa đủ số"}
 KIND_VI = {"khai-thac": "Theo cái đang thắng", "thu": "Thử cái mới"}
 RESULT_VI = {"trong": "Đúng dự đoán", "tren": "Hơn dự đoán", "duoi": "Thấp hơn dự đoán", "": "Chưa có số"}
 TN_ROWS = 14
@@ -416,7 +417,8 @@ def _tn_arms(directive: dict, cfg: dict) -> list:
         for arm in spec["nhanh"]:
             is_win = arm == w.get("nhanh")
             n = w.get("n") if is_win else ""
-            state = ("thang" if w.get("du_so") else ("dang-thu" if n else "chua-du")) if is_win else "chua-du"
+            state = ("thang" if w.get("du_so") else "dan-dau" if w.get("dan_dau") else
+                     ("dang-thu" if n else "chua-du")) if is_win else "chua-du"
             rows.append({
                 "bien": VAR_VI.get(var, var), "nhanh": arm, "n": n,
                 "trung_vi": _tn_value(spec["do"], w.get("trung_vi")) if is_win else "",

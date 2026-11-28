@@ -95,6 +95,8 @@ def arm_stats(scored: list[dict], merged: dict, cfg: dict, rows: list[dict] | No
             continue
         for var in cfg["bien"]:
             arm = m.get(var, "")
+            if var == "dong" and "dong_that" in r:   # tieu de da doi: kieu cua tieu de that (heart_score)
+                arm = r["dong_that"]
             if not arm:
                 continue
             if arm not in vals[var]:
@@ -133,6 +135,9 @@ def arm_stats(scored: list[dict], merged: dict, cfg: dict, rows: list[dict] | No
         win = _winner(stats[var], cfg)
         if win is None:
             continue
+        if stats[var][win]["n"] < cfg["n_thang"]:
+            stats[var][win]["trang_thai"] = "dan-dau"   # cao nhat nhung chua du so: dung no, khong loai ai
+            continue
         stats[var][win]["trang_thai"] = "thang"
         ref = stats[var][win]["p25"]
         for arm, st in stats[var].items():
@@ -141,10 +146,18 @@ def arm_stats(scored: list[dict], merged: dict, cfg: dict, rows: list[dict] | No
     return stats
 
 
+N_DAN_DAU = 2   # it nhat bay nhieu phim da cham thi mot nhanh moi duoc dan dau
+
+
 def _winner(var_stats: dict, cfg: dict):
+    """Nhanh co trung vi cao nhat trong cac nhanh co >= N_DAN_DAU phim da cham (>= n_thang thi la `thang`, it hon
+    la `dan-dau`). Chu kenh 2026-11-28: truoc day chi nhanh du n_thang moi duoc xet, nen gia-chuyen-hang (3 phim,
+    2,1%) thang lineup (2 phim, 6,4 / 5,4%) chi vi du so truoc."""
+    need = min(N_DAN_DAU, cfg["n_thang"])
     best = None
     for arm, st in var_stats.items():
-        if st["n"] >= cfg["n_thang"] and (best is None or st["trung_vi"] > var_stats[best]["trung_vi"]):
+        if st["n"] >= need and st["trung_vi"] is not None and (
+                best is None or st["trung_vi"] > var_stats[best]["trung_vi"]):
             best = arm
     return best
 
@@ -358,7 +371,8 @@ def build_directive(queue: list[str], stats: dict, cfg: dict, today: date, signa
         "ngay": today.isoformat(), "phien_ban": phien_ban,
         "nhanh_thang": {v: {"nhanh": win[v], "n": stats[v][win[v]]["n"],
                             "trung_vi": stats[v][win[v]]["trung_vi"],
-                            "du_so": stats[v][win[v]]["trang_thai"] == "thang"} for v in on},
+                            "du_so": stats[v][win[v]]["trang_thai"] == "thang",
+                            "dan_dau": stats[v][win[v]]["trang_thai"] == "dan-dau"} for v in on},
         "thong_ke_nhanh": {v: {a: {"n": s["n"], "trung_vi": s["trung_vi"], "p25": s["p25"], "p75": s["p75"],
                                    "trang_thai": s["trang_thai"], "do": cfg["bien"][v]["do"]}
                                for a, s in stats[v].items()} for v in on},
@@ -538,6 +552,9 @@ def render_md(d: dict, cfg: dict) -> str:
         w = d["nhanh_thang"][v]
         if w["du_so"]:
             L.append(f"- `{v}`: đang dùng `{w['nhanh']}` vì {w['n']} video, trung vị {_show(cfg, v, w['trung_vi'])}.")
+        elif w.get("dan_dau"):
+            L.append(f"- `{v}`: đang dẫn `{w['nhanh']}` — {w['n']} video, trung vị {_show(cfg, v, w['trung_vi'])}, cao "
+                     f"nhất trong các nhánh đã đo nhưng chưa đủ {cfg['n_thang']} video để chắc; dùng nhánh này và đo tiếp.")
         else:
             L.append(f"- `{v}`: chưa đủ số, dùng mặc định `{w['nhanh']}` vì {cfg['bien'][v]['can_cu']}")
     for v, b in cfg["bien"].items():
